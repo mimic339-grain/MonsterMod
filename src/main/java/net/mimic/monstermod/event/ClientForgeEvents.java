@@ -81,13 +81,15 @@ public class ClientForgeEvents {
                 dummyMimicEntity.setDeltaMovement(player.getDeltaMovement());
                 dummyMimicEntity.tickCount = player.tickCount; // アニメーション同期のため
 
-                dummyMimicEntity.setOpen(true); // ミミックが変身時に開くアニメーションをトリガー
+                // ★ここを変更: ミミックが変身時に開くアニメーションをトリガー。
+                // 実際にはisMimicOpenの状態を反映させるべきなので、
+                // transformation.isMimicOpen() を使うのがより正確です。
+                dummyMimicEntity.setOpen(transformation.isMimicOpen());
 
                 Minecraft mc = Minecraft.getInstance();
                 EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
                 dispatcher.setRenderShadow(false); // 影を非表示にしたい場合
 
-                // ★ここを修正: dispatcher.render() の x, y, z 引数を 0, 0, 0 にする★
                 // PoseStackが既に正しい位置に設定されているため、相対座標として0を渡す
                 dispatcher.render(
                         dummyMimicEntity,

@@ -7,6 +7,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.mimic.monstermod.MonsterMod;
+import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
 import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
 
@@ -28,6 +29,12 @@ public class ModMessages {
                 .decoder(PlayerTransformC2SPacket::new)
                 .encoder(PlayerTransformC2SPacket::encode)
                 .consumerMainThread(PlayerTransformC2SPacket::handle)
+                .add();
+
+        INSTANCE.messageBuilder(MimicSwitchC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(MimicSwitchC2SPacket::new)
+                .encoder(MimicSwitchC2SPacket::encode)
+                .consumerMainThread(MimicSwitchC2SPacket::handle)
                 .add();
 
         INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)

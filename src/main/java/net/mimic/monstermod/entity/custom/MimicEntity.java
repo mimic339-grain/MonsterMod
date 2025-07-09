@@ -5,7 +5,6 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.*;
@@ -15,8 +14,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 public class MimicEntity extends Mob implements GeoEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    private boolean isOpen = false;      // 擬態解除状態かどうか
-    private boolean isBiting = false;    // 噛みつきアニメ中か
+    private boolean isOpen = false;
+    private boolean isBiting = false;
 
     public MimicEntity(EntityType<? extends MimicEntity> type, Level level) {
         super(type, level);
@@ -24,7 +23,7 @@ public class MimicEntity extends Mob implements GeoEntity {
 
     @Override
     protected void registerGoals() {
-        // 必要ならAI追加
+        // 必要ならAI追加 (プレイヤーの変身エンティティなので通常は不要)
     }
 
     public void setOpen(boolean open) {
@@ -52,17 +51,17 @@ public class MimicEntity extends Mob implements GeoEntity {
 
             boolean moving = this.getDeltaMovement().horizontalDistanceSqr() > 1e-6;
 
-            if (isOpen) { // 擬態解除状態
+            if (isOpen) {
                 if (moving) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("openjump"));
                 } else {
-                    return state.setAndContinue(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE)); // 一度だけ再生し、最終フレームで停止
+                    return state.setAndContinue(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
                 }
-            } else { // 擬態状態 (閉じた状態)
+            } else {
                 if (moving) {
                     return state.setAndContinue(RawAnimation.begin().thenLoop("closejump"));
                 } else {
-                    return state.setAndContinue(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE)); // 一度だけ再生し、最終フレームで停止
+                    return state.setAndContinue(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
                 }
             }
         }));

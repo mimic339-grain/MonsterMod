@@ -14,12 +14,12 @@ import org.jetbrains.annotations.Nullable;
 public class PlayerTransformationProvider implements ICapabilityProvider, INBTSerializable<CompoundTag> {
     public static final Capability<IPlayerTransformation> PLAYER_TRANSFORMATION = CapabilityManager.get(new CapabilityToken<IPlayerTransformation>() {});
 
-    private PlayerTransformationImpl transformation = null;
+    private PlayerTransformation transformation = null;
     private final LazyOptional<IPlayerTransformation> optional = LazyOptional.of(this::createPlayerTransformation);
 
     private IPlayerTransformation createPlayerTransformation() {
         if (this.transformation == null) {
-            this.transformation = new PlayerTransformationImpl();
+            this.transformation = new PlayerTransformation();
         }
         return this.transformation;
     }
@@ -34,11 +34,13 @@ public class PlayerTransformationProvider implements ICapabilityProvider, INBTSe
 
     @Override
     public CompoundTag serializeNBT() {
-        return createPlayerTransformation().serializeNBT();
+        CompoundTag nbt = new CompoundTag();
+        createPlayerTransformation().saveNBTData(nbt);
+        return nbt;
     }
 
     @Override
     public void deserializeNBT(CompoundTag nbt) {
-        createPlayerTransformation().deserializeNBT(nbt);
+        createPlayerTransformation().loadNBTData(nbt);
     }
 }
