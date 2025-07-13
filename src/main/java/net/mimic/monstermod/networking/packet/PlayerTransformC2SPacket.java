@@ -6,7 +6,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.networking.ModMessages;
 import net.mimic.monstermod.entity.custom.MimicEntity; // MimicEntityをインポート
 
 import java.util.function.Supplier;
@@ -36,7 +35,7 @@ public class PlayerTransformC2SPacket {
                 transformation.setTransformed(this.transform);
 
                 if (this.transform) {
-                    // 仮にMimicに変身するとする
+                    // ★Mod IDを含めて直接設定しているので、ここでの追加判定は不要
                     transformation.setTransformedMobId(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
                     // Mimicに変身する場合、初期状態をIDLEに設定
                     transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
@@ -48,10 +47,10 @@ public class PlayerTransformC2SPacket {
                     transformation.setBiting(false);
                 }
 
-                // クライアントへ同期
-                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
+                transformation.syncToClient(player);
             });
         });
+        context.setPacketHandled(true);
         return true;
     }
 }

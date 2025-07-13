@@ -4,17 +4,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkEvent;
+import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.event.ClientForgeEvents; // このインポート文が重要です
-import org.slf4j.Logger;
-import com.mojang.logging.LogUtils;
+import net.mimic.monstermod.event.ClientForgeEvents;
+import net.minecraft.network.chat.Component; // このimportがあることを確認
 
 import java.util.function.Supplier;
 
 public class S2CTransformSyncPacket {
-    private static final Logger LOGGER = LogUtils.getLogger();
-
     private final boolean isTransformed;
     private final ResourceLocation transformedMobId;
     private final String mimicStateName;
@@ -29,17 +27,14 @@ public class S2CTransformSyncPacket {
 
     public S2CTransformSyncPacket(FriendlyByteBuf buf) {
         this.isTransformed = buf.readBoolean();
-        this.transformedMobId = buf.readBoolean() ? buf.readResourceLocation() : null;
+        this.transformedMobId = buf.readNullable(FriendlyByteBuf::readResourceLocation);
         this.mimicStateName = buf.readUtf();
         this.isBiting = buf.readBoolean();
     }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(this.isTransformed);
-        buf.writeBoolean(this.transformedMobId != null);
-        if (this.transformedMobId != null) {
-            buf.writeResourceLocation(this.transformedMobId);
-        }
+        buf.writeNullable(this.transformedMobId, FriendlyByteBuf::writeResourceLocation);
         buf.writeUtf(this.mimicStateName);
         buf.writeBoolean(this.isBiting);
     }
@@ -55,20 +50,25 @@ public class S2CTransformSyncPacket {
                     try {
                         transformation.setMimicState(MimicEntity.MimicAnimationState.valueOf(this.mimicStateName));
                     } catch (IllegalArgumentException e) {
+                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: S2Cパケット: 無効なMimicAnimationStateを受信: " + this.mimicStateName + ". IDLEに設定。"));
                         transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
-                        LOGGER.error("Received invalid MimicAnimationState: " + this.mimicStateName + " for player " + Minecraft.getInstance().player.getName().getString() + ". Defaulting to IDLE.", e);
                     }
                     transformation.setBiting(this.isBiting);
 
-                    // クライアント側のダミーエンティティに状態を反映
-                    // ここで ClientForgeEvents.getDummyMimicEntity() が呼び出されます
+                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: S2Cパケット受信。変身中: " + this.isTransformed + ", 状態: " + this.mimicStateName + ", バイト: " + this.isBiting));
+
                     if (ClientForgeEvents.getDummyMimicEntity() != null) {
                         ClientForgeEvents.getDummyMimicEntity().setCurrentAnimationState(transformation.getMimicState());
                         ClientForgeEvents.getDummyMimicEntity().setBiting(transformation.isBiting());
+                        // ここがエラーになる行
+                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: ダミーMimicに状態をセット。状態: " + ClientForgeEvents.getDummyMimicEntity().getCurrentAnimationState() + ", バイト: " + ClientForgeEvents.getDummyMimicEntity().isBiting()));
+                    } else {
+                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: ダミーMimicエンティティがnullです。アニメーション更新不可。"));
                     }
                 });
             }
         });
+        context.setPacketHandled(true);
         return true;
     }
 }

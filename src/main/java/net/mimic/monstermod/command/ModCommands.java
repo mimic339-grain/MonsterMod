@@ -5,95 +5,99 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.networking.ModMessages;
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.item.ModItems;
 
 public class ModCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("monstermod")
-                .requires((commandSource) -> commandSource.hasPermission(2))
-                .then(Commands.literal("transform")
-                        .then(Commands.argument("mob_id", StringArgumentType.string())
-                                .executes(ModCommands::transformPlayer)))
-                .then(Commands.literal("untransform")
-                        .executes(ModCommands::untransformPlayer)));
+        dispatcher.register(
+                Commands.literal("monstermod")
+                        .then(Commands.literal("transform")
+                                .then(Commands.argument("mob_id", StringArgumentType.string())
+                                        .executes(ModCommands::transformPlayer)))
+                        .then(Commands.literal("untransform")
+                                .executes(ModCommands::untransformPlayer))
+        );
     }
 
-    private static int transformPlayer(CommandContext<CommandSourceStack> context) {
-        ServerPlayer player = context.getSource().getPlayer();
+    private static int transformPlayer(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = ctx.getSource().getPlayer();
         if (player == null) {
-            context.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
+            ctx.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
             return 0;
         }
 
-        String mobIdString = StringArgumentType.getString(context, "mob_id");
-        ResourceLocation targetMobId = new ResourceLocation(mobIdString);
+        String mobIdString = StringArgumentType.getString(ctx, "mob_id");
+        // ★ Crucial Fix: Automatically add your MOD_ID if no namespace is provided
+        if (!mobIdString.contains(":")) {
+            mobIdString = MonsterMod.MOD_ID + ":" + mobIdString;
+        }
 
-        final boolean[] commandSuccessfullyProcessed = {false}; // コマンドが正常に処理されたかを示すフラグ
+        ResourceLocation targetMobId;
+        try {
+            targetMobId = new ResourceLocation(mobIdString);
+        } catch (Exception e) {
+            ctx.getSource().sendFailure(Component.literal("無効なモブIDです: " + mobIdString));
+            return 0;
+        }
 
+        boolean[] success = {false};
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            // すでに変身しているかチェックし、同じモブIDなら処理を中断
-            if (transformation.getTransformedMobId() != null && transformation.getTransformedMobId().equals(targetMobId)) {
-                context.getSource().sendFailure(Component.literal("すでに" + mobIdString + "に変身しています。"));
-                return; // ラムダ式の処理をここで終了
+            if (transformation.isTransformed() && targetMobId.equals(transformation.getTransformedMobId())) {
+                ctx.getSource().sendFailure(Component.literal("すでにそのモブに変身済みです。"));
+                success[0] = false;
+                return;
             }
 
-            // インベントリをクリア（変身に成功する場合のみ）
-            player.getInventory().clearContent();
+            boolean isMimic = "mimic".equals(targetMobId.getPath()) &&
+                    MonsterMod.MOD_ID.equals(targetMobId.getNamespace());
 
             transformation.setTransformed(true);
             transformation.setTransformedMobId(targetMobId);
 
-            if (targetMobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
+            if (isMimic) {
                 transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
                 transformation.setBiting(false);
-                player.sendSystemMessage(Component.literal("Mimicに変身しました！"));
 
-                // Mimicに変身した際にアイテムを配布
+                // Inventory management for Mimic transformation
+                // Be aware: This clears the player's inventory. For actual gameplay, you might want a different approach.
+                player.getInventory().clearContent();
                 player.getInventory().add(new ItemStack(ModItems.MIMIC_SWITCH_ITEM.get()));
                 player.getInventory().add(new ItemStack(ModItems.MIMIC_BITE_ITEM.get()));
-                // アイテムを配布した後、ホットバーの最初のスロットにMimicSwitchItemを選択
-                player.getInventory().selected = 0;
-
+                // Optional: set selected slot
+                // player.getInventory().selected = 0;
+                ctx.getSource().sendSuccess(() -> Component.literal("Mimicに変身しました！"), false);
             } else {
-                transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
-                transformation.setBiting(false);
-                player.sendSystemMessage(Component.literal(mobIdString + "に変身しました！"));
+                ctx.getSource().sendSuccess(() -> Component.literal(targetMobId.getPath() + "に変身しました！"), false);
             }
 
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
-
-            context.getSource().sendSuccess(() -> Component.literal("変身しました！"), false);
-            commandSuccessfullyProcessed[0] = true; // 正常処理されたことをマーク
+            // Sync the capability state to the client
+            transformation.syncToClient(player);
+            success[0] = true;
         });
 
-        // フラグに基づいて戻り値を返す
-        return commandSuccessfullyProcessed[0] ? 1 : 0;
+        return success[0] ? 1 : 0;
     }
 
-    private static int untransformPlayer(CommandContext<CommandSourceStack> context) {
-        ServerPlayer player = context.getSource().getPlayer();
+    private static int untransformPlayer(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = ctx.getSource().getPlayer();
         if (player == null) {
-            context.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
+            ctx.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
             return 0;
         }
 
-        final boolean[] commandSuccessfullyProcessed = {false}; // コマンドが正常に処理されたかを示すフラグ
-
+        boolean[] success = {false};
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            // 変身しているかチェック
             if (!transformation.isTransformed()) {
-                context.getSource().sendFailure(Component.literal("変身していません。"));
-                return; // ラムダ式の処理をここで終了
+                ctx.getSource().sendFailure(Component.literal("変身していません。"));
+                return;
             }
 
             transformation.setTransformed(false);
@@ -101,18 +105,14 @@ public class ModCommands {
             transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
             transformation.setBiting(false);
 
-            // 変身解除時にMimic関連アイテムをインベントリから削除
+            // Inventory clear on untransform (consider alternative for real game)
             player.getInventory().clearContent();
-            // 必要であれば、デフォルトのアイテム（剣、ツルハシなど）を再配布するロジックをここに追加
-            // 例: player.addItem(new ItemStack(Items.WOODEN_SWORD));
 
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
-
-            context.getSource().sendSuccess(() -> Component.literal("変身を解除しました！"), false);
-            commandSuccessfullyProcessed[0] = true; // 正常処理されたことをマーク
+            transformation.syncToClient(player);
+            ctx.getSource().sendSuccess(() -> Component.literal("変身を解除しました。"), false);
+            success[0] = true;
         });
 
-        // フラグに基づいて戻り値を返す
-        return commandSuccessfullyProcessed[0] ? 1 : 0;
+        return success[0] ? 1 : 0;
     }
 }

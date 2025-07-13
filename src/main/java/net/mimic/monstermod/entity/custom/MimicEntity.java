@@ -1,6 +1,8 @@
 package net.mimic.monstermod.entity.custom;
 
 import net.mimic.monstermod.MonsterMod;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -9,23 +11,32 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.*;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
+import net.minecraft.world.phys.Vec3;
+
+import software.bernie.geckolib.core.animation.Animation;
 
 public class MimicEntity extends Mob implements GeoEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
     public enum MimicAnimationState {
         IDLE,
-        OPENING,
-        OPEN,
-        CLOSING,
-        CLOSED
+        OPENING, // 開き中
+        OPEN,    // 開いている
+        CLOSING, // 閉じ中
+        CLOSED   // 閉じている
     }
 
-    private MimicAnimationState currentAnimationState = MimicAnimationState.IDLE; // 初期状態をIDLEに設定
+    private MimicAnimationState currentAnimationState = MimicAnimationState.IDLE;
     private boolean isBiting = false;
+
+    public boolean isBiting() {
+        return this.isBiting;
+    }
 
     public static final ResourceLocation MODEL_RESOURCE = new ResourceLocation(MonsterMod.MOD_ID, "geo/mimic.geo.json");
     public static final ResourceLocation TEXTURE_RESOURCE = new ResourceLocation(MonsterMod.MOD_ID, "textures/entity/mimic.png");
@@ -34,9 +45,6 @@ public class MimicEntity extends Mob implements GeoEntity {
 
     public MimicEntity(EntityType<? extends MimicEntity> type, Level level) {
         super(type, level);
-        this.noPhysics = true;
-        this.setNoGravity(true);
-        // エンティティの初期回転を固定
         this.setYRot(0);
         this.setXRot(0);
         this.yHeadRot = 0;
@@ -45,14 +53,12 @@ public class MimicEntity extends Mob implements GeoEntity {
 
     @Override
     protected void registerGoals() {
-        // AIゴールはここに何も追加しない（回転を防ぐため）
     }
 
-    // Tickメソッドで回転を明示的に固定する（念のため）
     @Override
     public void tick() {
         super.tick();
-        if (!this.level().isClientSide()) { // サーバー側で制御
+        if (!this.level().isClientSide()) {
             this.setYRot(0);
             this.setXRot(0);
             this.yHeadRot = 0;
@@ -60,10 +66,12 @@ public class MimicEntity extends Mob implements GeoEntity {
         }
     }
 
-
     public void setCurrentAnimationState(MimicAnimationState state) {
         if (this.currentAnimationState != state) {
             this.currentAnimationState = state;
+            if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: MimicEntity: アニメーション状態変更 -> " + state));
+            }
         }
     }
 
@@ -72,47 +80,96 @@ public class MimicEntity extends Mob implements GeoEntity {
     }
 
     public void setBiting(boolean biting) {
-        this.isBiting = biting;
+        if (this.isBiting != biting) {
+            this.isBiting = biting;
+            if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: MimicEntity: バイト状態変更 -> " + biting));
+            }
+        }
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "main_controller", 5, state -> {
+            AnimationController<?> controller = state.getController();
+
+            String animationToPlay = "none"; // デバッグ用
+
+            // 噛みつきアニメーションの優先
             if (isBiting) {
-                // JSONファイルのアニメーション名に合わせて"bite"に変更。ループタイプはPLAY_ONCE
-                state.getController().setAnimation(RawAnimation.begin().then("bite", Animation.LoopType.PLAY_ONCE));
-                isBiting = false; // バイトアニメーション後はisBitingをリセット
-                return PlayState.CONTINUE;
-            }
+                animationToPlay = "bite";
+                controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.PLAY_ONCE));
 
-            boolean moving = this.getDeltaMovement().horizontalDistanceSqr() > 1e-6;
-
-            switch (currentAnimationState) {
-                case IDLE:
-                    // JSONファイルのアニメーション名に合わせて"idle"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
-                    state.getController().setAnimation(RawAnimation.begin().then("idle", Animation.LoopType.PLAY_ONCE));
-                    break;
-                case CLOSED:
-                    // JSONファイルのアニメーション名に合わせて"close"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
-                    state.getController().setAnimation(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
-                    break;
-                case OPENING:
-                    // JSONファイルのアニメーション名に合わせて"open"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
-                    state.getController().setAnimation(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
-                    break;
-                case OPEN:
-                    // JSONファイルのアニメーション名に合わせて"openjump" または "open" に変更
-                    if (moving) {
-                        state.getController().setAnimation(RawAnimation.begin().thenLoop("openjump"));
-                    } else {
-                        state.getController().setAnimation(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
+                // 修正箇所1: controller.getCurrentRawAnimation() が null でないことを確認
+                if (controller.getAnimationState() == AnimationController.State.STOPPED
+                        && controller.getCurrentRawAnimation() != null // ★ここを修正/確認
+                        && "bite".equals(controller.getCurrentRawAnimation().getAnimationStages())) {
+                    this.setBiting(false);
+                    if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: クライアント: バイトアニメーション終了、isBitingをfalse。"));
                     }
-                    break;
-                case CLOSING:
-                    // JSONファイルのアニメーション名に合わせて"close"に変更。ループタイプはPLAY_ONCE
-                    state.getController().setAnimation(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
-                    break;
+                }
+            } else {
+                // 移動判定
+                boolean moving = this.getDeltaMovement().horizontalDistanceSqr() > 1e-6;
+                if (this.getDeltaMovement().equals(Vec3.ZERO)) {
+                    moving = false;
+                }
+
+                switch (currentAnimationState) {
+                    case IDLE:
+                        animationToPlay = "idle";
+                        controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.LOOP));
+                        break;
+                    case CLOSED:
+                        animationToPlay = "close";
+                        controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.PLAY_ONCE));
+                        break;
+                    case OPENING:
+                        animationToPlay = "open";
+                        controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.PLAY_ONCE));
+
+                        // 修正箇所2: controller.getCurrentRawAnimation() が null でないことを確認
+                        if (controller.getAnimationState() == AnimationController.State.STOPPED
+                                && controller.getCurrentRawAnimation() != null // ★ここを修正/確認
+                                && "open".equals(controller.getCurrentRawAnimation().getAnimationStages())) {
+                            this.setCurrentAnimationState(MimicAnimationState.OPEN);
+                            if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                                Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: クライアント: OPENINGアニメーション終了、OPEN状態に移行。"));
+                            }
+                        }
+                        break;
+                    case OPEN:
+                        if (moving) {
+                            animationToPlay = "openjump";
+                            controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.LOOP));
+                        } else {
+                            animationToPlay = "open";
+                            controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.PLAY_ONCE));
+                        }
+                        break;
+                    case CLOSING:
+                        animationToPlay = "close";
+                        controller.setAnimation(RawAnimation.begin().then(animationToPlay, Animation.LoopType.PLAY_ONCE));
+
+                        // 修正箇所3: controller.getCurrentRawAnimation() が null でないことを確認
+                        if (controller.getAnimationState() == AnimationController.State.STOPPED
+                                && controller.getCurrentRawAnimation() != null // ★ここを修正/確認
+                                && "close".equals(controller.getCurrentRawAnimation().getAnimationStages())) {
+                            this.setCurrentAnimationState(MimicAnimationState.CLOSED);
+                            if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                                Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: クライアント: CLOSINGアニメーション終了、CLOSED状態に移行。"));
+                            }
+                        }
+                        break;
+                }
             }
+
+            // デバッグメッセージ
+            if (this.level().isClientSide() && Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: MimicEntity Controller: 現在状態=" + currentAnimationState + ", バイト=" + isBiting + ", 再生アニメーション='" + animationToPlay + "'"));
+            }
+
             return PlayState.CONTINUE;
         }));
     }

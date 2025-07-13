@@ -1,12 +1,12 @@
 package net.mimic.monstermod.event;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexConsumer; // 使用されていないので削除も可能
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
-import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import net.minecraft.client.renderer.entity.player.PlayerRenderer; // 使用されていないので削除も可能
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
@@ -17,16 +17,14 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.networking.ModMessages;
-import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket; // Import the packet
+import net.mimic.monstermod.networking.ModMessages; // 使用されていないので削除も可能
+import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket; // 使用されていないので削除も可能
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class ClientForgeEvents {
 
-    // クライアント側でレンダリング用のダミーエンティティを保持
-    public static MimicEntity dummyMimicEntity; // このフィールドは既に存在
+    public static MimicEntity dummyMimicEntity;
 
-    // ★追加するメソッド★
     public static MimicEntity getDummyMimicEntity() {
         return dummyMimicEntity;
     }
@@ -41,7 +39,7 @@ public class ClientForgeEvents {
 
                     if (transformedMobId != null && transformedMobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
                         // Mimicモデルのレンダリング
-                        if (dummyMimicEntity == null) {
+                        if (dummyMimicEntity == null || dummyMimicEntity.level() != player.level() || dummyMimicEntity.isRemoved()) { // ★改善されたダミーエンティティ初期化
                             dummyMimicEntity = new MimicEntity(ModEntities.MIMIC.get(), player.level());
                         }
 
@@ -54,7 +52,7 @@ public class ClientForgeEvents {
                         dummyMimicEntity.setYBodyRot(player.yBodyRot); // Body rotation sync
 
                         // ダミーエンティティにプレイヤーの状態を同期
-                        dummyMimicEntity.setCurrentAnimationState(transformation.getMimicState());
+                        dummyMimicEntity.setCurrentAnimationState(transformation.getMimicState()); // ★修正: setOpen() の代わりに setCurrentAnimationState() を使用
                         dummyMimicEntity.setBiting(transformation.isBiting());
 
                         // レンダリング
@@ -70,7 +68,8 @@ public class ClientForgeEvents {
 
                         // モデルのオフセット調整 (必要に応じて微調整)
                         // 通常、プレイヤーモデルの足元がエンティティのベースになるため、Mimicのベースをプレイヤーの足元に合わせる
-                        poseStack.translate(0.0, -1.5, 0.0); // Mimicモデルの高さによって調整が必要
+                        // YオフセットはMimicモデルの中心とプレイヤーの足元の調整に重要
+                        poseStack.translate(0.0, 0.0, 0.0); // Mimicモデルの高さによって調整が必要
 
                         renderer.render(dummyMimicEntity, player.getYRot(), partialTicks, poseStack, buffer, light);
 
@@ -78,6 +77,14 @@ public class ClientForgeEvents {
 
                         // 元のプレイヤーレンダリングをキャンセルしてMimicモデルだけを表示
                         event.setCanceled(true);
+                    }
+                } else { // ★追加: 変身していない場合
+                    if (dummyMimicEntity != null) {
+                        // 変身解除時、Mimicを閉じるアニメーションをトリガーする意図。
+                        // isTransformed() が false の時にここに来るので、
+                        // dummyMimicEntityの状態をリセットするのが適切かもしれません。
+                        dummyMimicEntity.setCurrentAnimationState(MimicEntity.MimicAnimationState.CLOSED); // ★修正: 変身解除時は完全に閉じた状態に
+                        dummyMimicEntity.setBiting(false); // ★修正: バイト状態もリセット
                     }
                 }
             });

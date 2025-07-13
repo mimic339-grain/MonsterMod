@@ -403,6 +403,7 @@
 			}
 		},
 		"idle": {
+			"loop": true,
 			"animation_length": 0.0417,
 			"bones": {
 				"overteeth": {
