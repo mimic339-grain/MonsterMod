@@ -1,5 +1,7 @@
 package net.mimic.monstermod.entity.custom;
 
+import net.mimic.monstermod.MonsterMod;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -14,56 +16,104 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 public class MimicEntity extends Mob implements GeoEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    private boolean isOpen = false;
+    public enum MimicAnimationState {
+        IDLE,
+        OPENING,
+        OPEN,
+        CLOSING,
+        CLOSED
+    }
+
+    private MimicAnimationState currentAnimationState = MimicAnimationState.IDLE; // 初期状態をIDLEに設定
     private boolean isBiting = false;
+
+    public static final ResourceLocation MODEL_RESOURCE = new ResourceLocation(MonsterMod.MOD_ID, "geo/mimic.geo.json");
+    public static final ResourceLocation TEXTURE_RESOURCE = new ResourceLocation(MonsterMod.MOD_ID, "textures/entity/mimic.png");
+    public static final ResourceLocation ANIMATION_RESOURCE = new ResourceLocation(MonsterMod.MOD_ID, "animations/mimic.animations.json");
+
 
     public MimicEntity(EntityType<? extends MimicEntity> type, Level level) {
         super(type, level);
+        this.noPhysics = true;
+        this.setNoGravity(true);
+        // エンティティの初期回転を固定
+        this.setYRot(0);
+        this.setXRot(0);
+        this.yHeadRot = 0;
+        this.yBodyRot = 0;
     }
 
     @Override
     protected void registerGoals() {
-        // 必要ならAI追加 (プレイヤーの変身エンティティなので通常は不要)
+        // AIゴールはここに何も追加しない（回転を防ぐため）
     }
 
-    public void setOpen(boolean open) {
-        this.isOpen = open;
-    }
-
-    public boolean isOpen() {
-        return this.isOpen;
-    }
-
-    public void bite() {
-        if (this.isOpen && !this.isBiting) {
-            this.isBiting = true;
+    // Tickメソッドで回転を明示的に固定する（念のため）
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.level().isClientSide()) { // サーバー側で制御
+            this.setYRot(0);
+            this.setXRot(0);
+            this.yHeadRot = 0;
+            this.yBodyRot = 0;
         }
+    }
+
+
+    public void setCurrentAnimationState(MimicAnimationState state) {
+        if (this.currentAnimationState != state) {
+            this.currentAnimationState = state;
+        }
+    }
+
+    public MimicAnimationState getCurrentAnimationState() {
+        return this.currentAnimationState;
+    }
+
+    public void setBiting(boolean biting) {
+        this.isBiting = biting;
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "main_controller", 5, state -> {
             if (isBiting) {
+                // JSONファイルのアニメーション名に合わせて"bite"に変更。ループタイプはPLAY_ONCE
                 state.getController().setAnimation(RawAnimation.begin().then("bite", Animation.LoopType.PLAY_ONCE));
-                isBiting = false;
+                isBiting = false; // バイトアニメーション後はisBitingをリセット
                 return PlayState.CONTINUE;
             }
 
             boolean moving = this.getDeltaMovement().horizontalDistanceSqr() > 1e-6;
 
-            if (isOpen) {
-                if (moving) {
-                    return state.setAndContinue(RawAnimation.begin().thenLoop("openjump"));
-                } else {
-                    return state.setAndContinue(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
-                }
-            } else {
-                if (moving) {
-                    return state.setAndContinue(RawAnimation.begin().thenLoop("closejump"));
-                } else {
-                    return state.setAndContinue(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
-                }
+            switch (currentAnimationState) {
+                case IDLE:
+                    // JSONファイルのアニメーション名に合わせて"idle"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
+                    state.getController().setAnimation(RawAnimation.begin().then("idle", Animation.LoopType.PLAY_ONCE));
+                    break;
+                case CLOSED:
+                    // JSONファイルのアニメーション名に合わせて"close"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
+                    state.getController().setAnimation(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
+                    break;
+                case OPENING:
+                    // JSONファイルのアニメーション名に合わせて"open"に変更。ループタイプはPLAY_ONCE (hold_on_last_frameに対応)
+                    state.getController().setAnimation(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
+                    break;
+                case OPEN:
+                    // JSONファイルのアニメーション名に合わせて"openjump" または "open" に変更
+                    if (moving) {
+                        state.getController().setAnimation(RawAnimation.begin().thenLoop("openjump"));
+                    } else {
+                        state.getController().setAnimation(RawAnimation.begin().then("open", Animation.LoopType.PLAY_ONCE));
+                    }
+                    break;
+                case CLOSING:
+                    // JSONファイルのアニメーション名に合わせて"close"に変更。ループタイプはPLAY_ONCE
+                    state.getController().setAnimation(RawAnimation.begin().then("close", Animation.LoopType.PLAY_ONCE));
+                    break;
             }
+            return PlayState.CONTINUE;
         }));
     }
 

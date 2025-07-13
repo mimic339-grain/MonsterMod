@@ -7,6 +7,7 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.mimic.monstermod.MonsterMod;
+import net.mimic.monstermod.networking.packet.MimicBiteC2SPacket; // 追加
 import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
 import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
@@ -35,6 +36,13 @@ public class ModMessages {
                 .decoder(MimicSwitchC2SPacket::new)
                 .encoder(MimicSwitchC2SPacket::encode)
                 .consumerMainThread(MimicSwitchC2SPacket::handle)
+                .add();
+
+        // 新しいバイト用C2Sパケットを登録
+        INSTANCE.messageBuilder(MimicBiteC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(MimicBiteC2SPacket::new)
+                .encoder(MimicBiteC2SPacket::encode)
+                .consumerMainThread(MimicBiteC2SPacket::handle)
                 .add();
 
         INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)

@@ -4,11 +4,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.minecraft.resources.ResourceLocation;
-import net.mimic.monstermod.MonsterMod;
-import net.minecraft.network.chat.Component;
-import net.mimic.monstermod.networking.ModMessages;
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.mimic.monstermod.entity.custom.MimicEntity;
 
 import java.util.function.Supplier;
 
@@ -25,19 +21,28 @@ public class MimicSwitchC2SPacket {
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
         context.enqueueWork(() -> {
-            ServerPlayer player = context.getSender();
-            if (player == null) return;
+            ServerPlayer serverPlayer = context.getSender();
+            if (serverPlayer == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                if (transformation.isTransformed() && transformation.getTransformedMobId() != null &&
-                        transformation.getTransformedMobId().equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
+            serverPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+                if (transformation.isTransformed() && transformation.getTransformedMobId() != null && transformation.getTransformedMobId().getPath().equals("mimic")) {
+                    MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
 
-                    boolean currentOpenState = transformation.isMimicOpen();
-                    transformation.setMimicOpen(!currentOpenState);
-
-                    ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.isMimicOpen()), player);
-
-                    player.sendSystemMessage(Component.literal("Mimic state changed to: " + (transformation.isMimicOpen() ? "OPEN" : "CLOSED")));
+                    // 現在の状態に応じて次の状態を設定
+                    if (currentState == MimicEntity.MimicAnimationState.IDLE || currentState == MimicEntity.MimicAnimationState.CLOSED) {
+                        transformation.setMimicState(MimicEntity.MimicAnimationState.OPENING);
+                        serverPlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal("Mimic is opening!"));
+                    } else if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
+                        transformation.setMimicState(MimicEntity.MimicAnimationState.CLOSING);
+                        serverPlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal("Mimic is closing!"));
+                    } else if (currentState == MimicEntity.MimicAnimationState.CLOSING) {
+                        // CLOSING中に再度押された場合、OPENINGに戻すか、完全に閉じるか
+                        // 今回はOPENINGに戻す
+                        transformation.setMimicState(MimicEntity.MimicAnimationState.OPENING);
+                        serverPlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal("Mimic is opening!"));
+                    }
+                    // 状態が変更されたらクライアントに同期
+                    transformation.syncToClient(serverPlayer);
                 }
             });
         });

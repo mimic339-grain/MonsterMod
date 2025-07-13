@@ -3,13 +3,18 @@ package net.mimic.monstermod.capability;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.server.level.ServerPlayer; // ServerPlayerをインポート
+import net.mimic.monstermod.entity.custom.MimicEntity;
+import net.mimic.monstermod.networking.ModMessages; // ModMessagesをインポート
+import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket; // S2CTransformSyncPacketをインポート
 
 public class PlayerTransformation implements IPlayerTransformation {
     private boolean isTransformed = false;
     private ResourceLocation transformedMobId = null;
     private LivingEntity originalMob = null;
 
-    private boolean isMimicOpen = false;
+    private MimicEntity.MimicAnimationState mimicState = MimicEntity.MimicAnimationState.IDLE;
+    private boolean isBiting = false;
 
     @Override
     public boolean isTransformed() {
@@ -19,6 +24,10 @@ public class PlayerTransformation implements IPlayerTransformation {
     @Override
     public void setTransformed(boolean transformed) {
         this.isTransformed = transformed;
+        if (!transformed) {
+            this.mimicState = MimicEntity.MimicAnimationState.IDLE;
+            this.isBiting = false;
+        }
     }
 
     @Override
@@ -42,13 +51,23 @@ public class PlayerTransformation implements IPlayerTransformation {
     }
 
     @Override
-    public boolean isMimicOpen() {
-        return isMimicOpen;
+    public MimicEntity.MimicAnimationState getMimicState() {
+        return mimicState;
     }
 
     @Override
-    public void setMimicOpen(boolean isOpen) {
-        this.isMimicOpen = isOpen;
+    public void setMimicState(MimicEntity.MimicAnimationState state) {
+        this.mimicState = state;
+    }
+
+    @Override
+    public boolean isBiting() {
+        return isBiting;
+    }
+
+    @Override
+    public void setBiting(boolean biting) {
+        this.isBiting = biting;
     }
 
     @Override
@@ -57,7 +76,8 @@ public class PlayerTransformation implements IPlayerTransformation {
         if (transformedMobId != null) {
             nbt.putString("transformedMobId", transformedMobId.toString());
         }
-        nbt.putBoolean("isMimicOpen", isMimicOpen);
+        nbt.putString("mimicState", mimicState.name());
+        nbt.putBoolean("isBiting", isBiting);
     }
 
     @Override
@@ -68,10 +88,21 @@ public class PlayerTransformation implements IPlayerTransformation {
         } else {
             transformedMobId = null;
         }
-        if (nbt.contains("isMimicOpen")) {
-            isMimicOpen = nbt.getBoolean("isMimicOpen");
+        if (nbt.contains("mimicState")) {
+            try {
+                mimicState = MimicEntity.MimicAnimationState.valueOf(nbt.getString("mimicState"));
+            } catch (IllegalArgumentException e) {
+                mimicState = MimicEntity.MimicAnimationState.IDLE;
+            }
         } else {
-            isMimicOpen = false;
+            mimicState = MimicEntity.MimicAnimationState.IDLE;
         }
+        isBiting = nbt.getBoolean("isBiting");
+    }
+
+    // サーバーからクライアントへ状態を同期するためのヘルパーメソッドの実装
+    @Override
+    public void syncToClient(ServerPlayer player) {
+        ModMessages.sendToPlayer(new S2CTransformSyncPacket(isTransformed, transformedMobId, mimicState.name(), isBiting), player);
     }
 }

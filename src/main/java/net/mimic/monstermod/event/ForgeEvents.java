@@ -8,6 +8,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.minecraft.network.chat.Component;
+import net.mimic.monstermod.entity.custom.MimicEntity; // MimicEntityをインポート
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ForgeEvents {
@@ -22,9 +23,15 @@ public class ForgeEvents {
                         && transformation.getTransformedMobId().equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
 
                 if (isMimicForm) {
-                    if (!transformation.isMimicOpen()) {
+                    MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
+
+                    // MimicがOPEN状態またはOPENING状態の場合のみ攻撃を許可
+                    if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
+                        // 攻撃を許可するので何もしない
+                    } else {
+                        // MimicがOPEN状態でない場合、攻撃をキャンセル
                         event.setCanceled(true);
-                        player.sendSystemMessage(Component.literal("You must be open to bite!"));
+                        player.sendSystemMessage(Component.literal("Mimic must be open to bite!"));
                     }
                 }
             });

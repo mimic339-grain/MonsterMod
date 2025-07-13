@@ -14,6 +14,7 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.networking.ModMessages;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.mimic.monstermod.entity.custom.MimicEntity; // MimicEntityをインポート
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class CapabilityEvents {
@@ -34,7 +35,9 @@ public class CapabilityEvents {
                 event.getEntity().getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(newCap -> {
                     newCap.setTransformed(oldCap.isTransformed());
                     newCap.setTransformedMobId(oldCap.getTransformedMobId());
-                    newCap.setMimicOpen(oldCap.isMimicOpen());
+                    // ここで新しいMimicStateとisBitingもコピーする
+                    newCap.setMimicState(oldCap.getMimicState());
+                    newCap.setBiting(oldCap.isBiting());
                 });
             });
         }
@@ -44,7 +47,8 @@ public class CapabilityEvents {
     public static void onPlayerLoggedIn(PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.isMimicOpen()), player);
+                // 新しいS2CTransformSyncPacketで現在の状態をすべて送信
+                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
             });
         }
     }
@@ -53,7 +57,8 @@ public class CapabilityEvents {
     public static void onPlayerRespawn(PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.isMimicOpen()), player);
+                // 新しいS2CTransformSyncPacketで現在の状態をすべて送信
+                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
             });
         }
     }

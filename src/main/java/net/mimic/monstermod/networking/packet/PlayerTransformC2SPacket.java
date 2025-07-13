@@ -1,31 +1,29 @@
 package net.mimic.monstermod.networking.packet;
 
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.item.ModItems;
 import net.mimic.monstermod.networking.ModMessages;
+import net.mimic.monstermod.entity.custom.MimicEntity; // MimicEntityをインポート
 
 import java.util.function.Supplier;
 
 public class PlayerTransformC2SPacket {
-    private final boolean transformToMimic;
+    private final boolean transform;
 
-    public PlayerTransformC2SPacket(boolean transformToMimic) {
-        this.transformToMimic = transformToMimic;
+    public PlayerTransformC2SPacket(boolean transform) {
+        this.transform = transform;
     }
 
     public PlayerTransformC2SPacket(FriendlyByteBuf buf) {
-        this.transformToMimic = buf.readBoolean();
+        this.transform = buf.readBoolean();
     }
 
     public void encode(FriendlyByteBuf buf) {
-        buf.writeBoolean(transformToMimic);
+        buf.writeBoolean(this.transform);
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
@@ -35,43 +33,23 @@ public class PlayerTransformC2SPacket {
             if (player == null) return;
 
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                ResourceLocation mimicId = new ResourceLocation(MonsterMod.MOD_ID, "mimic");
+                transformation.setTransformed(this.transform);
 
-                if (transformToMimic) {
-                    if (!transformation.isTransformed()) {
-                        transformation.setTransformed(true);
-                        transformation.setTransformedMobId(mimicId);
-                        transformation.setMimicOpen(false);
-
-                        ItemStack switchItem = new ItemStack(ModItems.MIMIC_SWITCH.get());
-                        if (!player.getInventory().contains(switchItem)) {
-                            player.getInventory().add(switchItem);
-                            player.sendSystemMessage(Component.literal("You transformed into a Mimic!"));
-                        }
-
-                        ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.isMimicOpen()), player);
-                    }
+                if (this.transform) {
+                    // 仮にMimicに変身するとする
+                    transformation.setTransformedMobId(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
+                    // Mimicに変身する場合、初期状態をIDLEに設定
+                    transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
+                    transformation.setBiting(false);
                 } else {
-                    if (transformation.isTransformed() && transformation.getTransformedMobId().equals(mimicId)) {
-                        transformation.setTransformed(false);
-                        transformation.setTransformedMobId(null);
-                        transformation.setMimicOpen(false);
-
-                        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-                            ItemStack stack = player.getInventory().getItem(i);
-                            if (stack.getItem() == ModItems.MIMIC_SWITCH.get()) {
-                                stack.shrink(1);
-                                if (stack.isEmpty()) {
-                                    player.getInventory().setItem(i, ItemStack.EMPTY);
-                                }
-                                break;
-                            }
-                        }
-                        player.sendSystemMessage(Component.literal("You transformed back to human!"));
-
-                        ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.isMimicOpen()), player);
-                    }
+                    transformation.setTransformedMobId(null);
+                    // 変身解除時、Mimic関連の状態をリセット
+                    transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
+                    transformation.setBiting(false);
                 }
+
+                // クライアントへ同期
+                ModMessages.sendToPlayer(new S2CTransformSyncPacket(transformation.isTransformed(), transformation.getTransformedMobId(), transformation.getMimicState().name(), transformation.isBiting()), player);
             });
         });
         return true;
