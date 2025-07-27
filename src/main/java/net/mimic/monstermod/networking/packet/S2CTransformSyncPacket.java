@@ -1,14 +1,13 @@
 package net.mimic.monstermod.networking.packet;
 
+import net.mimic.monstermod.MonsterMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkEvent;
-import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.event.ClientForgeEvents;
-import net.minecraft.network.chat.Component; // このimportがあることを確認
 
 import java.util.function.Supplier;
 
@@ -45,26 +44,23 @@ public class S2CTransformSyncPacket {
             if (Minecraft.getInstance().player != null) {
                 Minecraft.getInstance().player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                     transformation.setTransformed(this.isTransformed);
-                    transformation.setTransformedMobId(this.transformedMobId);
+                    transformation.setTransformedMobId(this.transformedMobId); // これで内部のIPlayerIdentityも更新される
 
                     try {
                         transformation.setMimicState(MimicEntity.MimicAnimationState.valueOf(this.mimicStateName));
                     } catch (IllegalArgumentException e) {
-                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: S2Cパケット: 無効なMimicAnimationStateを受信: " + this.mimicStateName + ". IDLEに設定。"));
+                        // ★修正: MonsterMod.getLogger() を使用
+                        MonsterMod.getLogger().warn("S2Cパケット: 無効なMimicAnimationStateを受信: {}. IDLEに設定。", this.mimicStateName);
                         transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
                     }
                     transformation.setBiting(this.isBiting);
 
-                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: S2Cパケット受信。変身中: " + this.isTransformed + ", 状態: " + this.mimicStateName + ", バイト: " + this.isBiting));
+                    // Debugメッセージは引き続き残してもOK
+                    // Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: S2Cパケット受信。変身中: " + this.isTransformed + ", ID: " + this.transformedMobId + ", 状態: " + this.mimicStateName + ", バイト: " + this.isBiting));
 
-                    if (ClientForgeEvents.getDummyMimicEntity() != null) {
-                        ClientForgeEvents.getDummyMimicEntity().setCurrentAnimationState(transformation.getMimicState());
-                        ClientForgeEvents.getDummyMimicEntity().setBiting(transformation.isBiting());
-                        // ここがエラーになる行
-                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: ダミーMimicに状態をセット。状態: " + ClientForgeEvents.getDummyMimicEntity().getCurrentAnimationState() + ", バイト: " + ClientForgeEvents.getDummyMimicEntity().isBiting()));
-                    } else {
-                        Minecraft.getInstance().player.sendSystemMessage(Component.literal("DEBUG: ダミーMimicエンティティがnullです。アニメーション更新不可。"));
-                    }
+                    // MimicPlayerRendererがdummyMimicEntityの管理を行うため、
+                    // ここで直接dummyMimicEntityの状態を更新する必要はありません。
+                    // レンダリングループ内でMimicPlayerRendererがCapabilityから最新の状態を取得します。
                 });
             }
         });

@@ -1,118 +1,86 @@
 package net.mimic.monstermod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.mimic.monstermod.MonsterMod;
+import net.mimic.monstermod.capability.PlayerTransformationProvider;
+import net.mimic.monstermod.identity.PlayerIdentityRegistry;
+import net.mimic.monstermod.networking.ModMessages;
+import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
-import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.item.ModItems;
+
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
 
 public class ModCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(
-                Commands.literal("monstermod")
-                        .then(Commands.literal("transform")
-                                .then(Commands.argument("mob_id", StringArgumentType.string())
-                                        .executes(ModCommands::transformPlayer)))
-                        .then(Commands.literal("untransform")
-                                .executes(ModCommands::untransformPlayer))
+        // 変身コマンド
+        // LiteralCommandNodeのインポートは不要なため削除しました。
+        dispatcher.register(Commands.literal("transform")
+                .requires(source -> source.hasPermission(2)) // オペレーター権限レベル2以上
+                .then(Commands.argument("target", EntityArgument.player()) // ターゲットプレイヤー
+                        .then(Commands.argument("transform", BoolArgumentType.bool()) // 変身するかどうか (true/false)
+                                .executes(context -> transformPlayer(
+                                        context.getSource(),
+                                        EntityArgument.getPlayer(context, "target"),
+                                        BoolArgumentType.getBool(context, "transform"),
+                                        null // 変身解除時はID不要
+                                ))
+                                .then(Commands.argument("identityId", StringArgumentType.string()) // 変身先のIdentity ID (Stringとして受け取る)
+                                        .suggests((context, builder) -> SharedSuggestionProvider.suggestResourceLocation(
+                                                PlayerIdentityRegistry.getAllIdentityIds().stream(), builder)) // SuggestionProviderで全てのIdentity IDを提示
+                                        .executes(context -> transformPlayer(
+                                                context.getSource(),
+                                                EntityArgument.getPlayer(context, "target"),
+                                                BoolArgumentType.getBool(context, "transform"),
+                                                new ResourceLocation(StringArgumentType.getString(context, "identityId")) // StringからResourceLocationに変換
+                                        ))
+                                )
+                        )
+                ).build() // ★ ここに .build() を追加しました
         );
     }
 
-    private static int transformPlayer(CommandContext<CommandSourceStack> ctx) {
-        ServerPlayer player = ctx.getSource().getPlayer();
-        if (player == null) {
-            ctx.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
-            return 0;
-        }
-
-        String mobIdString = StringArgumentType.getString(ctx, "mob_id");
-        // ★ Crucial Fix: Automatically add your MOD_ID if no namespace is provided
-        if (!mobIdString.contains(":")) {
-            mobIdString = MonsterMod.MOD_ID + ":" + mobIdString;
-        }
-
-        ResourceLocation targetMobId;
-        try {
-            targetMobId = new ResourceLocation(mobIdString);
-        } catch (Exception e) {
-            ctx.getSource().sendFailure(Component.literal("無効なモブIDです: " + mobIdString));
-            return 0;
-        }
-
-        boolean[] success = {false};
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (transformation.isTransformed() && targetMobId.equals(transformation.getTransformedMobId())) {
-                ctx.getSource().sendFailure(Component.literal("すでにそのモブに変身済みです。"));
-                success[0] = false;
-                return;
-            }
-
-            boolean isMimic = "mimic".equals(targetMobId.getPath()) &&
-                    MonsterMod.MOD_ID.equals(targetMobId.getNamespace());
-
-            transformation.setTransformed(true);
-            transformation.setTransformedMobId(targetMobId);
-
-            if (isMimic) {
-                transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
-                transformation.setBiting(false);
-
-                // Inventory management for Mimic transformation
-                // Be aware: This clears the player's inventory. For actual gameplay, you might want a different approach.
-                player.getInventory().clearContent();
-                player.getInventory().add(new ItemStack(ModItems.MIMIC_SWITCH_ITEM.get()));
-                player.getInventory().add(new ItemStack(ModItems.MIMIC_BITE_ITEM.get()));
-                // Optional: set selected slot
-                // player.getInventory().selected = 0;
-                ctx.getSource().sendSuccess(() -> Component.literal("Mimicに変身しました！"), false);
+    private static int transformPlayer(CommandSourceStack source, ServerPlayer targetPlayer, boolean transform, ResourceLocation identityId) throws CommandSyntaxException {
+        // サーバーサイドで実行される
+        targetPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+            if (transform) {
+                if (identityId == null) {
+                    source.sendFailure(Component.literal("変身するにはIdentity IDを指定してください。"));
+                    return;
+                }
+                if (!PlayerIdentityRegistry.hasIdentity(identityId)) {
+                    source.sendFailure(Component.literal("不明なIdentity ID: " + identityId));
+                    return;
+                }
+                transformation.setTransformedMobId(identityId);
+                transformation.setTransformed(true);
+                // Mimicに変身する場合、初期状態をIDLEに設定
+                if (identityId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
+                    transformation.setMimicState(net.mimic.monstermod.entity.custom.MimicEntity.MimicAnimationState.IDLE);
+                    transformation.setBiting(false);
+                }
+                source.sendSuccess(() -> Component.literal(targetPlayer.getName().getString() + " を " + identityId.getPath() + " に変身させました。"), true);
             } else {
-                ctx.getSource().sendSuccess(() -> Component.literal(targetMobId.getPath() + "に変身しました！"), false);
+                transformation.setTransformed(false);
+                transformation.setTransformedMobId(null);
+                // 変身解除時、Mimic関連の状態をリセット
+                transformation.setMimicState(net.mimic.monstermod.entity.custom.MimicEntity.MimicAnimationState.IDLE);
+                transformation.setBiting(false);
+                source.sendSuccess(() -> Component.literal(targetPlayer.getName().getString() + " の変身を解除しました。"), true);
             }
-
-            // Sync the capability state to the client
-            transformation.syncToClient(player);
-            success[0] = true;
+            transformation.syncToClient(targetPlayer);
         });
-
-        return success[0] ? 1 : 0;
-    }
-
-    private static int untransformPlayer(CommandContext<CommandSourceStack> ctx) {
-        ServerPlayer player = ctx.getSource().getPlayer();
-        if (player == null) {
-            ctx.getSource().sendFailure(Component.literal("プレイヤーが見つかりません。"));
-            return 0;
-        }
-
-        boolean[] success = {false};
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (!transformation.isTransformed()) {
-                ctx.getSource().sendFailure(Component.literal("変身していません。"));
-                return;
-            }
-
-            transformation.setTransformed(false);
-            transformation.setTransformedMobId(null);
-            transformation.setMimicState(MimicEntity.MimicAnimationState.IDLE);
-            transformation.setBiting(false);
-
-            // Inventory clear on untransform (consider alternative for real game)
-            player.getInventory().clearContent();
-
-            transformation.syncToClient(player);
-            ctx.getSource().sendSuccess(() -> Component.literal("変身を解除しました。"), false);
-            success[0] = true;
-        });
-
-        return success[0] ? 1 : 0;
+        return 1;
     }
 }

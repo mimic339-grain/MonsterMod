@@ -1,37 +1,59 @@
 package net.mimic.monstermod.event;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.event.entity.player.AttackEntityEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.minecraft.network.chat.Component;
+import net.mimic.monstermod.identity.IPlayerIdentity;
+import net.mimic.monstermod.identity.impl.MimicIdentity;
 import net.mimic.monstermod.entity.custom.MimicEntity; // MimicEntityをインポート
 
-@Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+/**
+ * Forgeのゲームプレイイベントを処理するクラス。
+ */
+@Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class ForgeEvents {
 
+    // プレイヤーがティックするたびにCapabilityをチェックし、Mimic固有のロジックを適用
     @SubscribeEvent
-    public static void onPlayerAttackEntity(AttackEntityEvent event) {
-        Player player = event.getEntity();
-        if (!player.level().isClientSide()) {
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && event.side.isServer()) {
+            Player player = event.player;
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                boolean isMimicForm = transformation.isTransformed()
-                        && transformation.getTransformedMobId() != null
-                        && transformation.getTransformedMobId().equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
+                if (transformation.isTransformed()) {
+                    IPlayerIdentity currentIdentity = transformation.getTransformedIdentity();
 
-                if (isMimicForm) {
-                    MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
+                    if (currentIdentity instanceof MimicIdentity) {
+                        // Mimic固有のロジックをここに追加
+                        // 例: 飛行状態の維持
+                        if (transformation.isTransformed() && transformation.getTransformedMobId().equals(MimicIdentity.ID)) {
+                            // 飛行能力を付与（ForgeEventでやるのが望ましいが、簡易的にここで）
+                            player.getAbilities().mayfly = true;
+                            player.onUpdateAbilities(); // アビリティの変更をクライアントに同期
+                        }
 
-                    // MimicがOPEN状態またはOPENING状態の場合のみ攻撃を許可
-                    if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
-                        // 攻撃を許可するので何もしない
-                    } else {
-                        // MimicがOPEN状態でない場合、攻撃をキャンセル
-                        event.setCanceled(true);
-                        player.sendSystemMessage(Component.literal("Mimic must be open to bite!"));
+                        // Mimicが噛みつきアニメーション中でない場合、isBitingをfalseにリセット
+                        // クライアント側でアニメーションが終了したらisBitingをfalseにするべきだが、
+                        // サーバー側で強制的にリセットするロジック（例：一定時間後）を入れることも可能
+                        // 現在はMimicEntityのanimation listenerで管理されるのが理想
+                        // 例: if (transformation.isBiting() && !MimicBiteAnimationIsPlaying) { transformation.setBiting(false); }
+                    }
+
+                    // ★重要: 動的状態（アニメーション、噛みつき）はCapabilityから直接取得する
+                    // if (transformation.getMimicState() == MimicEntity.MimicAnimationState.OPENING) {
+                    //     // アニメーションの進行状況に応じて状態を更新するロジック
+                    //     // これは主にクライアントサイドのpredicateでGeckoLibが処理すべき
+                    //     // サーバーは最終的な状態のみを管理すべき
+                    // }
+                } else {
+                    // 変身していない場合、飛行能力をリセット
+                    if (player.getAbilities().mayfly && !player.isCreative() && !player.isSpectator()) {
+                        player.getAbilities().mayfly = false;
+                        player.getAbilities().flying = false; // 飛行状態もリセット
+                        player.onUpdateAbilities();
                     }
                 }
             });

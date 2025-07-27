@@ -1,18 +1,24 @@
 package net.mimic.monstermod.capability;
 
+import net.mimic.monstermod.MonsterMod; // ★追加: Loggerのため
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.server.level.ServerPlayer; // ServerPlayerをインポート
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.networking.ModMessages; // ModMessagesをインポート
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket; // S2CTransformSyncPacketをインポート
+import net.mimic.monstermod.identity.IPlayerIdentity;
+import net.mimic.monstermod.identity.PlayerIdentityRegistry;
+import net.mimic.monstermod.networking.ModMessages;
+import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
 
+/**
+ * IPlayerTransformationの実装クラス。
+ * プレイヤーの変身状態、変身先のMob ID、Mimic固有の状態などを保持します。
+ */
 public class PlayerTransformation implements IPlayerTransformation {
     private boolean isTransformed = false;
     private ResourceLocation transformedMobId = null;
-    private LivingEntity originalMob = null;
-
+    // ★変更: MimicAnimationStateを直接保持
     private MimicEntity.MimicAnimationState mimicState = MimicEntity.MimicAnimationState.IDLE;
     private boolean isBiting = false;
 
@@ -24,10 +30,6 @@ public class PlayerTransformation implements IPlayerTransformation {
     @Override
     public void setTransformed(boolean transformed) {
         this.isTransformed = transformed;
-        if (!transformed) {
-            this.mimicState = MimicEntity.MimicAnimationState.IDLE;
-            this.isBiting = false;
-        }
     }
 
     @Override
@@ -38,16 +40,6 @@ public class PlayerTransformation implements IPlayerTransformation {
     @Override
     public void setTransformedMobId(ResourceLocation mobId) {
         this.transformedMobId = mobId;
-    }
-
-    @Override
-    public LivingEntity getOriginalMob() {
-        return originalMob;
-    }
-
-    @Override
-    public void setOriginalMob(LivingEntity mob) {
-        this.originalMob = mob;
     }
 
     @Override
@@ -71,27 +63,44 @@ public class PlayerTransformation implements IPlayerTransformation {
     }
 
     @Override
-    public void saveNBTData(CompoundTag nbt) {
+    public void syncToClient(Player player) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            ModMessages.sendToPlayer(new S2CTransformSyncPacket(
+                    this.isTransformed,
+                    this.transformedMobId,
+                    this.mimicState.name(), // Enumの名前をStringで送信
+                    this.isBiting
+            ), serverPlayer);
+        }
+    }
+
+    @Override
+    public CompoundTag serializeNBT() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putBoolean("isTransformed", isTransformed);
         if (transformedMobId != null) {
             nbt.putString("transformedMobId", transformedMobId.toString());
         }
+        // ★変更: MimicAnimationStateをNBTに保存
         nbt.putString("mimicState", mimicState.name());
         nbt.putBoolean("isBiting", isBiting);
+        return nbt;
     }
 
     @Override
-    public void loadNBTData(CompoundTag nbt) {
+    public void deserializeNBT(CompoundTag nbt) {
         isTransformed = nbt.getBoolean("isTransformed");
         if (nbt.contains("transformedMobId")) {
             transformedMobId = new ResourceLocation(nbt.getString("transformedMobId"));
         } else {
             transformedMobId = null;
         }
+        // ★変更: MimicAnimationStateをNBTからロード
         if (nbt.contains("mimicState")) {
             try {
                 mimicState = MimicEntity.MimicAnimationState.valueOf(nbt.getString("mimicState"));
             } catch (IllegalArgumentException e) {
+                MonsterMod.getLogger().warn("無効なMimicAnimationStateをロードしました: {}. IDLEにリセット。", nbt.getString("mimicState"));
                 mimicState = MimicEntity.MimicAnimationState.IDLE;
             }
         } else {
@@ -100,9 +109,14 @@ public class PlayerTransformation implements IPlayerTransformation {
         isBiting = nbt.getBoolean("isBiting");
     }
 
-    // サーバーからクライアントへ状態を同期するためのヘルパーメソッドの実装
-    @Override
-    public void syncToClient(ServerPlayer player) {
-        ModMessages.sendToPlayer(new S2CTransformSyncPacket(isTransformed, transformedMobId, mimicState.name(), isBiting), player);
+    /**
+     * 現在の変身先のIPlayerIdentityインスタンスを取得します。
+     * Convenience method.
+     */
+    public IPlayerIdentity getTransformedIdentity() {
+        if (isTransformed && transformedMobId != null) {
+            return PlayerIdentityRegistry.getIdentity(transformedMobId);
+        }
+        return null;
     }
 }

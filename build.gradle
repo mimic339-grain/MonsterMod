@@ -21,7 +21,7 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
+            // ★ここを削除しました: property 'mixin.env.disableRefMap', 'true'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             //Geckolibのrendererのデバッグ用に追加

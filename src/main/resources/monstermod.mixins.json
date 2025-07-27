@@ -4,9 +4,12 @@
   "package": "net.mimic.monstermod.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
-    "ExampleMixin"
+    "common.LivingEntityMixin",
+    "common.PlayerMixin"
   ],
-  "client": [],
+  "client": [
+    "client.PlayerEntityRendererMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
