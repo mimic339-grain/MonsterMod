@@ -1,12 +1,11 @@
 plugins {
     id 'net.minecraftforge.gradle' version '5.1.+'
-    id 'org.spongepowered.mixin' version '0.7.+'
     id 'maven-publish'
 }
 
-group = mod_group_id
-version = mod_version
-archivesBaseName = mod_id
+group = 'com.mimic.monster'
+version = '1.0.0'
+archivesBaseName = 'monstermod'
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
@@ -16,23 +15,12 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
+            property 'mixin.env.disableRefMap', 'false'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            //Geckolibのrendererのデバッグ用に追加
             jvmArgs '-Dgeckolib.debug_renderers=true'
-            mods {
-                monstermod {
-                    source sourceSets.main
-                }
-            }
         }
     }
-}
-
-mixin {
-    add sourceSets.main, "monstermod.refmap.json"
-    config "monstermod.mixins.json"
 }
 
 repositories {
@@ -42,8 +30,9 @@ repositories {
 }
 
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    minecraft "net.minecraftforge:forge:1.20.1-47.2.0"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation fg.deobf('org.spongepowered:mixin:0.8.5')
     implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.4.9')
 }
 
@@ -59,41 +48,26 @@ sourceSets.main.resources {
     srcDir 'src/main/resources'
     exclude '**/*.cache'
 }
+
 tasks.processResources {
-    // このタスクの入力プロパティとしてバージョンを含めることで、
-    // バージョンが変更されたときにタスクが再実行されることを保証します。
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
     inputs.property "version", project.version
-    inputs.property "mcversion", minecraft_version // minecraft_versionも追加
+    inputs.property "mcversion", '1.20.1'
 
-    // sourceSets.main.resources.srcDirs からリソースを取得
     from(sourceSets.main.resources.srcDirs) {
-        // META-INF/mods.toml ファイルのみをフィルタリング対象とします
         include 'META-INF/mods.toml'
-
         expand(
-                properties + [
-                        'mod_id': mod_id,
-                        'mod_name': mod_name,
-                        'mod_license': mod_license,
-                        'mod_version': mod_version,
-                        'mod_group_id': mod_group_id,
-                        'mod_authors': mod_authors,
-                        'mod_description': mod_description,
-                        'minecraft_version': minecraft_version,
-                        'forge_version': forge_version,
-                        'forge_version_range': forge_version_range,
-                        'minecraft_version_range': minecraft_version_range
-                ]
+                'mod_id': archivesBaseName,
+                'mod_version': version,
+                'minecraft_version': '1.20.1'
         )
     }
     from(sourceSets.main.resources.srcDirs) {
-        exclude 'META-INF/mods.toml' // mods.tomlは上記で既に処理されているため、ここでは除外
+        exclude 'META-INF/mods.toml'
     }
 }
 
-// tasks.withType(JavaCompile) はこのままでOK
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
