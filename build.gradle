@@ -1,13 +1,8 @@
-import org.gradle.api.file.DuplicatesStrategy
-
 plugins {
     id 'net.minecraftforge.gradle' version '5.1.+'
     id 'org.spongepowered.mixin' version '0.7.+'
     id 'maven-publish'
-    id 'eclipse'
 }
-
-println "forge_version_range = ${forge_version_range}"
 
 group = mod_group_id
 version = mod_version
@@ -49,7 +44,7 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-    implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.7.1.2')
+    implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.4.9')
 }
 
 jar {
@@ -61,7 +56,7 @@ jar {
 }
 
 sourceSets.main.resources {
-    srcDir 'src/generated/resources'
+    srcDir 'src/main/resources'
     exclude '**/*.cache'
 }
 tasks.processResources {
