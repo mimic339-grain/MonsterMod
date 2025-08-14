@@ -1,5 +1,4 @@
 /*
-
 package com.mimic.monster.Animation.Action;
 
 import com.mimic.monster.MonsterMod;
@@ -71,5 +70,4 @@ public class Ani {
             }
         }
     }
-}
-*/
+}*/

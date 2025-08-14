@@ -1,6 +1,9 @@
 plugins {
-    id 'net.minecraftforge.gradle' version '5.1.+'
+    id 'eclipse'
+    id 'idea'
     id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
 
 group = 'com.mimic.monster'
@@ -10,7 +13,7 @@ archivesBaseName = 'monstermod'
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 minecraft {
-    mappings channel: 'official', version: '1.20.1'
+    mappings channel: 'parchment', version: '2023.09.03-1.20.1'
 
     runs {
         client {
@@ -18,22 +21,23 @@ minecraft {
             property 'mixin.env.disableRefMap', 'false'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            jvmArgs '-Dgeckolib.debug_renderers=true'
         }
     }
 }
 
 repositories {
+    maven { url = 'https://maven.parchmentmc.org' }
     maven { url = 'https://maven.minecraftforge.net/' }
     maven { url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
     maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    maven { url = 'https://maven.kosmx.dev/' }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:1.20.1-47.2.0"
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-    implementation fg.deobf('org.spongepowered:mixin:0.8.5')
+    implementation fg.deobf('org.spongepowered:mixin:0.8.5_mapped_parchment_2023.09.03-1.20.1')
     implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.4.9')
+    implementation fg.deobf('dev.kosmx.player-anim:player-animation-lib-forge:1.0.2-rc1+1.20')
 }
 
 jar {
