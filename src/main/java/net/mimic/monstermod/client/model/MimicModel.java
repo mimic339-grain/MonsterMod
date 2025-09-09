@@ -19,6 +19,6 @@ public class MimicModel extends GeoModel<MimicEntity> {
 
     @Override
     public ResourceLocation getAnimationResource(MimicEntity animatable) {
-        return new ResourceLocation(MonsterMod.MOD_ID, "animations/mimic_animations.json");
+        return new ResourceLocation(MonsterMod.MOD_ID, "animations/mimic_animation.json");
     }
 }

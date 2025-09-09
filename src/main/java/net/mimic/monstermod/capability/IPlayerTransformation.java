@@ -1,33 +1,62 @@
 package net.mimic.monstermod.capability;
 
+import net.mimic.monstermod.identity.IPlayerIdentity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.mimic.monstermod.entity.custom.MimicEntity;
+
+import javax.annotation.Nullable;
 
 /**
  * プレイヤーの変身状態を管理するためのインターフェース。
  * プレイヤーごとに異なる変身情報を保持します。
  */
 public interface IPlayerTransformation {
+
+    boolean hasSavedOriginalStats();
+    void setOriginalHealth(double hp);
+    void setOriginalMaxHealth(double maxHp);
+    void setOriginalAttackDamage(double dmg);
+    void setOriginalArmor(double armor);
+    void setOriginalMoveSpeed(double speed);
+
+    double getOriginalHealth();
+    double getOriginalMaxHealth();
+    double getOriginalAttackDamage();
+    double getOriginalArmor();
+    double getOriginalMoveSpeed();
+
+    void clearOriginalStats();
+
+    @Nullable
+    Entity getTransformedEntity();
+
+    void setTransformedEntity(@Nullable Entity entity);
+    // 変身中かどうか
     boolean isTransformed();
     void setTransformed(boolean transformed);
 
+    // 変身中のMonsterID
     ResourceLocation getTransformedMobId();
     void setTransformedMobId(ResourceLocation mobId);
 
-    // ★変更: Mimic固有のアニメーション状態
-    MimicEntity.MimicAnimationState getMimicState();
-    void setMimicState(MimicEntity.MimicAnimationState state);
+    // Monsterごとの状態取得・更新
+    PlayerTransformation.MonsterState getMonsterState(ResourceLocation mobId);
+    void setMonsterState(ResourceLocation mobId, PlayerTransformation.MonsterState state);
 
-    // ★変更: 噛みつき状態
-    boolean isBiting();
-    void setBiting(boolean biting);
-
-    // サーバーからクライアントへデータを同期するメソッド
+    // プレイヤーの同期（サーバー→クライアント）
     void syncToClient(Player player);
 
-    // NBTデータとの間でCapabilityのデータをシリアライズ/デシリアライズするメソッド
+    // NBT保存・読み込み
     CompoundTag serializeNBT();
     void deserializeNBT(CompoundTag nbt);
+
+    // 変身したプレイヤーのアイデンティティ取得
+    @Nullable
+    IPlayerIdentity getTransformedIdentity();
+
+    // ノックバック無効フラグ
+    boolean isNoKnockback();
+    void setNoKnockback(boolean value);
 }

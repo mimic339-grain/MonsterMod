@@ -6,13 +6,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.IPlayerIdentity;
-import net.mimic.monstermod.identity.impl.MimicIdentity;
+import net.mimic.monstermod.capability.PlayerTransformation.MonsterState;
 
 import java.util.function.Supplier;
 
 public class MimicSwitchC2SPacket {
+
     public MimicSwitchC2SPacket() {}
 
     public MimicSwitchC2SPacket(FriendlyByteBuf buf) {}
@@ -26,30 +25,36 @@ public class MimicSwitchC2SPacket {
             if (player == null) return;
 
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                if (transformation.isTransformed()) {
-                    // ★変更: transformedMobIdとMimicStateをCapabilityから直接取得
-                    ResourceLocation transformedMobId = transformation.getTransformedMobId();
-
-                    // 変身先がMimicの場合のみ処理
-                    if (transformedMobId != null && transformedMobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
-                        MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
-
-                        // 現在の状態に応じて次の状態を設定
-                        if (currentState == MimicEntity.MimicAnimationState.IDLE || currentState == MimicEntity.MimicAnimationState.CLOSED) {
-                            transformation.setMimicState(MimicEntity.MimicAnimationState.OPENING);
-                        } else if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
-                            transformation.setMimicState(MimicEntity.MimicAnimationState.CLOSING);
-                        } else if (currentState == MimicEntity.MimicAnimationState.CLOSING) {
-                            transformation.setMimicState(MimicEntity.MimicAnimationState.OPENING); // 閉じるアニメ中に再度押すと開くアニメに
-                        }
-                        transformation.syncToClient(player); // 状態が変更されたらクライアントに同期
-                        MonsterMod.getLogger().debug("{} のMimic状態を {} に変更。", player.getName().getString(), transformation.getMimicState().name());
-                    } else {
-                        MonsterMod.getLogger().debug("{} はMimicではないため状態を切り替えられない。", player.getName().getString());
-                    }
-                } else {
+                if (!transformation.isTransformed()) {
                     MonsterMod.getLogger().debug("{} は変身していないため状態を切り替えられない。", player.getName().getString());
+                    return;
                 }
+
+                ResourceLocation mobId = transformation.getTransformedMobId();
+                if (mobId == null) return;
+
+                // MonsterState を取得
+                MonsterState state = transformation.getMonsterState(mobId);
+
+                // Mimic 専用フラグを切り替える
+                boolean isOpen = state.getFlag("isOpen");
+                state.setFlag("isOpen", !isOpen);
+
+                // animationState も併せて更新
+                if (!isOpen) {
+                    state.animationState = "OPENING";
+                } else {
+                    state.animationState = "CLOSING";
+                }
+
+                // Capability に保存
+                transformation.setMonsterState(mobId, state);
+
+                // クライアントへ同期
+                transformation.syncToClient(player);
+
+                MonsterMod.getLogger().debug("{} の {} 状態を {} に変更。isOpen={}",
+                        player.getName().getString(), mobId.getPath(), state.animationState, !isOpen);
             });
         });
         context.setPacketHandled(true);

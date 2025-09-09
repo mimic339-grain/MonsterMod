@@ -1,7 +1,6 @@
 package net.mimic.monstermod.networking;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.networking.packet.MimicBiteC2SPacket;
 import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
 import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
@@ -38,11 +37,6 @@ public class ModMessages {
                 .consumerMainThread(MimicSwitchC2SPacket::handle)
                 .add();
 
-        INSTANCE.messageBuilder(MimicBiteC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(MimicBiteC2SPacket::new)
-                .encoder(MimicBiteC2SPacket::encode)
-                .consumerMainThread(MimicBiteC2SPacket::handle)
-                .add();
 
         INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(S2CTransformSyncPacket::new)

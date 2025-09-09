@@ -1,18 +1,16 @@
 package net.mimic.monstermod.networking.packet;
 
-import net.mimic.monstermod.MonsterMod; // ★追加: ロガーのため
+import net.mimic.monstermod.MonsterMod;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation; // ★追加
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.IPlayerIdentity; // IPlayerIdentityをインポート
-import net.mimic.monstermod.identity.impl.MimicIdentity; // MimicIdentityをインポート
+import net.mimic.monstermod.capability.PlayerTransformation.MonsterState;
 
 import java.util.function.Supplier;
 
 public class MimicBiteC2SPacket {
+
     public MimicBiteC2SPacket() {}
 
     public MimicBiteC2SPacket(FriendlyByteBuf buf) {}
@@ -26,27 +24,25 @@ public class MimicBiteC2SPacket {
             if (player == null) return;
 
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                if (transformation.isTransformed()) {
-                    // ★変更: transformedMobIdとMimicStateをCapabilityから直接取得
-                    ResourceLocation transformedMobId = transformation.getTransformedMobId();
-
-                    // 変身先がMimicの場合のみ処理
-                    if (transformedMobId != null && transformedMobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
-                        MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
-                        if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
-                            transformation.setBiting(true); // バイト状態を true に設定
-                            transformation.syncToClient(player); // クライアントに同期してアニメーションをトリガー
-                            // 噛みつき処理（例：ダメージを与えるなど）をここに追加
-                            // MonsterMod.getLogger().debug("{} が噛みついた！", player.getName().getString());
-                        } else {
-                            MonsterMod.getLogger().debug("{} はMimicだが口が開いていないため噛みつけない。", player.getName().getString());
-                        }
-                    } else {
-                        MonsterMod.getLogger().debug("{} はMimicではないため噛みつけない。", player.getName().getString());
-                    }
-                } else {
-                    MonsterMod.getLogger().debug("{} は変身していないため噛みつけない。", player.getName().getString());
+                if (!transformation.isTransformed()) {
+                    MonsterMod.getLogger().debug("{} は変身していないためBITEできない。", player.getName().getString());
+                    return;
                 }
+
+                // 変身先が Mimic か確認
+                MonsterState state = transformation.getMonsterState(transformation.getTransformedMobId());
+                if (state == null) return;
+
+                // BITE アニメーション状態に更新
+                state.animationState = "BITE";
+
+                // 必要なら他のフラグ（例: クールダウン）もここで操作可能
+                transformation.setMonsterState(transformation.getTransformedMobId(), state);
+
+                // クライアントへ同期
+                transformation.syncToClient(player);
+
+                MonsterMod.getLogger().debug("{} が BITE アニメーションを再生", player.getName().getString());
             });
         });
         context.setPacketHandled(true);

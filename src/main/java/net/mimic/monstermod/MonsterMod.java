@@ -1,6 +1,7 @@
 package net.mimic.monstermod;
 
 import com.mojang.logging.LogUtils;
+import net.mimic.monstermod.client.renderer.identity.PlayerIdentityRenderer;
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.event.ModEvents;
 import net.mimic.monstermod.identity.PlayerIdentityRegistry;

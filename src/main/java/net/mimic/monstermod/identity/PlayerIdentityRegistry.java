@@ -21,10 +21,7 @@ public class PlayerIdentityRegistry {
     private static final Map<ResourceLocation, IPlayerIdentity> IDENTITIES = new HashMap<>();
 
     // 定義済みIdentityインスタンス
-    public static final IPlayerIdentity MIMIC_IDENTITY = new MimicIdentity(
-            new ResourceLocation(MonsterMod.MOD_ID, "mimic"),
-            ModEntities.MIMIC); // MimicEntityのSupplierを渡す
-
+    public static final IPlayerIdentity MIMIC_IDENTITY = new MimicIdentity();
     /**
      * FMLCommonSetupEventでIdentityを登録します。
      * このメソッドは、ForgeのModイベントバスによって自動的に呼び出されます。

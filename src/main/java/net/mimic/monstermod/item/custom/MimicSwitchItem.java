@@ -1,41 +1,32 @@
 package net.mimic.monstermod.item.custom;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.capability.PlayerTransformationProvider;
+import net.mimic.monstermod.item.BaseMonsterItem;
 import net.mimic.monstermod.networking.ModMessages;
 import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 
-public class MimicSwitchItem extends Item {
-    public MimicSwitchItem(Properties pProperties) {
-        super(pProperties);
+public class MimicSwitchItem extends BaseMonsterItem {
+
+    public MimicSwitchItem(Properties properties) {
+        // クールダウン時間を指定（例: 5000ms = 5秒）
+        super(properties, 5000);
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level pLevel, Player pPlayer, InteractionHand pUsedHand) {
-        if (!pLevel.isClientSide()) {
-            return InteractionResultHolder.pass(pPlayer.getItemInHand(pUsedHand));
+    protected boolean isTargetMonster(ResourceLocation mobId) {
+        return mobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
+    }
+
+    @Override
+    protected void activateSkill(Player player) {
+        if (player.level().isClientSide()) {
+            // クライアント側でパケットをサーバーに送信
+            ModMessages.sendToServer(new MimicSwitchC2SPacket());
+
+            // クライアント表示用メッセージ
+            sendClientMessage(player, "Mimicの状態を切り替えます！");
         }
-
-        pPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (transformation.isTransformed()) {
-                // ★変更: Capabilityから直接Mimicの状態を取得
-                if (transformation.getTransformedMobId() != null && transformation.getTransformedMobId().equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
-                    ModMessages.sendToServer(new MimicSwitchC2SPacket());
-                    pPlayer.sendSystemMessage(Component.literal("Mimicの状態を切り替えます！ (クライアント)"));
-                }
-            } else {
-                pPlayer.sendSystemMessage(Component.literal("変身していません。(クライアント)"));
-            }
-        });
-
-        return InteractionResultHolder.sidedSuccess(pPlayer.getItemInHand(pUsedHand), pLevel.isClientSide());
     }
 }

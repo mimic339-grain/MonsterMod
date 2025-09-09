@@ -10,9 +10,9 @@ import net.mimic.monstermod.entity.ModEntities;
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientModEvents {
-
+    //EntityRenderer登録クラス
     @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(ModEntities.MIMIC.get(), context -> new MimicRenderer(context));
+        event.registerEntityRenderer(ModEntities.MIMIC.get(), MimicRenderer::new);
     }
 }

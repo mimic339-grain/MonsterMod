@@ -3,46 +3,52 @@ package net.mimic.monstermod.item.custom;
 import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.impl.MimicIdentity;
+import net.mimic.monstermod.item.BaseMonsterItem;
 import net.mimic.monstermod.networking.ModMessages;
 import net.mimic.monstermod.networking.packet.MimicBiteC2SPacket;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 
-public class MimicBiteItem extends Item {
-    public MimicBiteItem(Properties pProperties) {
-        super(pProperties);
+public class MimicBiteItem extends BaseMonsterItem {
+
+    public MimicBiteItem(Properties properties) {
+        super(properties, 5000);
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level pLevel, Player pPlayer, InteractionHand pUsedHand) {
-        if (!pLevel.isClientSide()) {
-            return InteractionResultHolder.pass(pPlayer.getItemInHand(pUsedHand));
-        }
+    protected boolean isTargetMonster(ResourceLocation mobId) {
+        return mobId.equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"));
+    }
 
-        pPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (transformation.isTransformed()) {
-                // ★変更: Capabilityから直接Mimicの状態を取得
-                if (transformation.getTransformedMobId() != null && transformation.getTransformedMobId().equals(new ResourceLocation(MonsterMod.MOD_ID, "mimic"))) {
-                    MimicEntity.MimicAnimationState currentState = transformation.getMimicState();
-                    if (currentState == MimicEntity.MimicAnimationState.OPEN || currentState == MimicEntity.MimicAnimationState.OPENING) {
-                        ModMessages.sendToServer(new MimicBiteC2SPacket());
-                        // クライアント側でメッセージを表示（デバッグ用）
-                        pPlayer.sendSystemMessage(Component.literal("Mimic が噛みつこうとしています！ (クライアント)"));
-                    } else {
-                        pPlayer.sendSystemMessage(Component.literal("Mimicは口を開いていません。(クライアント)"));
+    @Override
+    protected void activateSkill(Player player) {
+        // プレイヤーが変身しているMimicEntityを取得
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+            if (transformation.getTransformedEntity() instanceof MimicEntity mimic) {
+                // CLOSED 状態でない場合はスキルを発動しない
+                if (mimic.getAnimationState() != MimicEntity.MimicAnimationState.CLOSED) {
+                    if (player.level().isClientSide()) {
+                        sendClientMessage(player, "Mimicは閉じていないので噛めません！");
                     }
+                    return;
                 }
-            } else {
-                pPlayer.sendSystemMessage(Component.literal("変身していません。(クライアント)"));
             }
         });
+        if (player.level().isClientSide()) {
+            // クライアント側メッセージ
+            sendClientMessage(player, "Mimic が噛みつこうとしています！（クライアント表示のみ）");
+        } else {
+            // サーバーに BITE パケット送信
+            ModMessages.sendToServer(new MimicBiteC2SPacket());
 
-        return InteractionResultHolder.sidedSuccess(pPlayer.getItemInHand(pUsedHand), pLevel.isClientSide());
+            // ダメージ計算と範囲攻撃
+            int baseDamage = 4;
+            int attackBonus = (int) player.getAttribute(Attributes.ATTACK_DAMAGE).getValue();
+            int totalDamage = baseDamage + attackBonus;
+
+            // 前方2×横3 の範囲攻撃（足元のY座標で固定）
+            skillUtility.castRect(player, 1, 0, 2, totalDamage);
+        }
     }
 }

@@ -1,60 +1,64 @@
 package net.mimic.monstermod.identity.impl;
 
+import net.mimic.monstermod.MonsterMod;
+import net.mimic.monstermod.entity.ModEntities;
+import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.identity.PlayerIdentityType;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.function.Supplier;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Mimicに変身したプレイヤーの特性を定義するIdentity。
  */
-public class MimicIdentity extends PlayerIdentityType {
+public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimationState> {
 
-    public MimicIdentity(ResourceLocation id, Supplier<EntityType<?>> entityTypeSupplier) {
-        super(id, entityTypeSupplier);
+    public static final ResourceLocation IDENTITY_ID =
+            new ResourceLocation(MonsterMod.MOD_ID, "mimic");
+
+    public MimicIdentity() {
+        super(
+                IDENTITY_ID,
+                ModEntities.MIMIC::get,
+                MimicEntity.MimicAnimationState.class,
+                createAnimationMap(),
+                MimicEntity.MimicAnimationState.IDLE
+        );
+    }
+    //動作をMimic用アニメーションに変換するマッピング
+    private static Map<String, MimicEntity.MimicAnimationState> createAnimationMap() {
+        Map<String, MimicEntity.MimicAnimationState> map = new HashMap<>();
+        map.put("IDLE", MimicEntity.MimicAnimationState.IDLE);
+        map.put("WALK", MimicEntity.MimicAnimationState.OPEN);
+        map.put("ATTACK", MimicEntity.MimicAnimationState.BITE);
+        return map;
     }
 
     @Override
     public Vec3 getBoundingBoxDimensions(Pose pose) {
-        // Mimicの具体的なヒットボックスサイズ
-        // MimicEntityのサイズ(0.6f, 0.6f)を使用
         return new Vec3(0.6f, 0.6f, 0.6f);
     }
 
     @Override
     public float getEyeHeight(Pose pose) {
-        // Mimicの視点の高さ
-        // MimicEntityのeyeHeightは通常Mobに合わせて調整
-        return 0.45f; // 例: Mimicのモデルに合わせて調整
+        return 0.45f;
     }
 
     @Override
     public float getStepHeight() {
-        // Mimicのステップ高さ
-        return 0.6f; // 例えば、プレイヤーと同じ
+        return super.getStepHeight();
     }
-
+    //Mimic固有の特殊能力
     @Override
     public void applySpecificAbilities(LivingEntity player) {
-        // Mimicに変身した際にプレイヤーに与える特殊能力
-        // 例: 特定のブロックに対するインタラクションの変更、飛行能力など
-        // 注意: 飛行能力はPlayer#onUpdateAbilities() でクライアントサイドで処理されるため、
-        // サーバーサイドでCapabilityのフラグを立てるなどの処理が必要
-        // 現状のコードでは飛行能力を直接付与していません。
-        // もし飛行を付与したい場合、PlayerTransformationに飛行フラグを追加し、
-        // Player#onUpdateAbilities()のMixinでそのフラグを参照して飛行能力を付与する必要があります。
+        // Capabilityを取得
     }
 
     @Override
     public void removeSpecificAbilities(LivingEntity player) {
-        // 変身解除時に特殊能力を解除
-        // applySpecificAbilitiesで付与した能力を元に戻す
     }
-
-    // ★変更: プレイヤーごとの動的状態に関するメソッドは削除
-    // これらの状態はIPlayerTransformation Capabilityで管理されます。
 }

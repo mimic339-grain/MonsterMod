@@ -17,7 +17,7 @@ public class ModItems {
             () -> new MimicSwitchItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> MIMIC_BITE_ITEM = ITEMS.register("mimic_bite_item", // 追加
-            () -> new MimicBiteItem(new Item.Properties().stacksTo(1))); // 追加
+            () -> new MimicBiteItem(new Item.Properties().stacksTo(1)));// 追加
 
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);

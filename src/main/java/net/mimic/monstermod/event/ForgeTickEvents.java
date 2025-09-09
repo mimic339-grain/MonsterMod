@@ -16,22 +16,20 @@ public class ForgeTickEvents {
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase == TickEvent.Phase.START && event.player instanceof Player) {
+            //変身中かどうかをチェック
             event.player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+                //変身中ならIdentity情報を取得
                 if (transformation.isTransformed()) {
                     IPlayerIdentity currentIdentity = transformation.getTransformedIdentity();
 
-                    // 変身中のIdentity固有の能力を適用
-                    // これはサーバーサイドでのみ実行される
+                    //変身中のIdentity固有の能力を適用
                     if (!event.player.level().isClientSide) {
                         currentIdentity.applySpecificAbilities(event.player);
                     }
 
                 } else {
-                    // 変身していない場合
+                    // 変身していない場合に飛行能力が残ってしまうバグを防ぐために、強制的に飛行権限を外す
                     if (!event.player.level().isClientSide && event.player instanceof ServerPlayer serverPlayer) {
-                        // プレイヤーがクリエイティブモードでなく、現在飛行能力がある場合、それを解除する
-                        // IdentityRegistry.EMPTYのapplySpecificAbilitiesでは何も起こらないため、
-                        // 明示的に飛行能力を解除する必要があるのはここ
                         if (serverPlayer.getAbilities().mayfly && !serverPlayer.isCreative()) {
                             serverPlayer.getAbilities().mayfly = false;
                             serverPlayer.onUpdateAbilities();
