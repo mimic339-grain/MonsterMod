@@ -22,11 +22,9 @@ public class MimicSwitchItem extends BaseMonsterItem {
     @Override
     protected void activateSkill(Player player) {
         if (player.level().isClientSide()) {
-            // クライアント側でパケットをサーバーに送信
+            // サーバーに Packet 送信
             ModMessages.sendToServer(new MimicSwitchC2SPacket());
-
-            // クライアント表示用メッセージ
-            sendClientMessage(player, "Mimicの状態を切り替えます！");
+            sendClientMessage(player, "Mimic の状態を切り替えます！");
         }
     }
 }

@@ -43,6 +43,7 @@ public abstract class PlayerIdentityType <T extends Enum<T>> implements IPlayerI
     public ResourceLocation getId() {
         return id;
     }
+
     //変身時に能力参照などのために作成
     @Override
     public LivingEntity createDummy(net.minecraft.world.level.Level level) {
@@ -92,7 +93,9 @@ public abstract class PlayerIdentityType <T extends Enum<T>> implements IPlayerI
     }
 
     @Override
-    public float getStepHeight() { return 0.6f; }
+    public float getStepHeight() {
+        return 0.6f;
+    }
 
     @Override
     public void applySpecificAbilities(LivingEntity player) {
@@ -119,7 +122,9 @@ public abstract class PlayerIdentityType <T extends Enum<T>> implements IPlayerI
         });
     }
 
-    /** 元のステータスに戻すデフォルト実装 */
+    /**
+     * 元のステータスに戻すデフォルト実装
+     */
     @Override
     public void removeSpecificAbilities(LivingEntity player) {
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {

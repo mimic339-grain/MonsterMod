@@ -2,13 +2,13 @@ package net.mimic.monstermod.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.identity.PlayerIdentityRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,7 +33,7 @@ public class ModCommands {
                                                 //identityId が指定されていない場合は null
                                                 null
                                         ))
-                                        .then(Commands.argument("identityId", StringArgumentType.string())
+                                        .then(Commands.argument("identityId", ResourceLocationArgument.id())
                                                 //タブ補完
                                                 .suggests((context, builder) -> {
                                                     PlayerIdentityRegistry.getAllIdentityIds()
@@ -45,7 +45,7 @@ public class ModCommands {
                                                         context.getSource(),
                                                         EntityArgument.getPlayer(context, "target"),
                                                         BoolArgumentType.getBool(context, "transform"),
-                                                        new ResourceLocation(StringArgumentType.getString(context, "identityId"))
+                                                        ResourceLocationArgument.getId(context, "identityId") // ← ここも変更
                                                 ))
                                         )
                                 )

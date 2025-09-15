@@ -1,26 +1,6 @@
 {
 	"format_version": "1.8.0",
 	"animations": {
-		"idle": {
-			"animation_length": 0.0417,
-			"bones": {
-				"overteeth": {
-					"scale": {
-						"vector": [0, 0, 0]
-					}
-				},
-				"unederteeth": {
-					"scale": {
-						"vector": [0, 0, 0]
-					}
-				},
-				"bero": {
-					"scale": {
-						"vector": [0, 0, 0]
-					}
-				}
-			}
-		},
 		"animation.mimic.open": {
 			"loop": "hold_on_last_frame",
 			"animation_length": 0.5,

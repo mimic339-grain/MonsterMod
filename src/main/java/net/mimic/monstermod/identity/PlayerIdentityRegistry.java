@@ -1,12 +1,11 @@
 package net.mimic.monstermod.identity;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.identity.impl.MimicIdentity;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent; // ここを修正しました
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 
 import java.util.HashMap;
 import java.util.HashSet;

@@ -161,6 +161,7 @@ public class PlayerTransformation implements IPlayerTransformation {
         /** フラグを取得 */
         public boolean getFlag(String key) {
             return customFlags.getOrDefault(key, false);
+
         }
     }
 }
