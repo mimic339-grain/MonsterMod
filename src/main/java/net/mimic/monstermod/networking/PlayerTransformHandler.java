@@ -4,6 +4,7 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.BaseMonsterEntity;
+import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -19,7 +20,6 @@ public class PlayerTransformHandler {
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(cap -> {
 
-            // 変身解除
             if (!transform) {
                 BaseMonsterEntity<?> entity = cap.getTransformedEntity();
                 if (entity != null) {
@@ -30,56 +30,34 @@ public class PlayerTransformHandler {
                 cap.setTransformed(false);
                 cap.setTransformedMobId(null);
                 cap.setTransformedEntity(null);
-                cap.setTransformedEntityId(-1); // IDクリア
+                cap.setTransformedEntityId(-1);
                 cap.syncToClient(player);
 
                 MonsterMod.getLogger().debug("{} の変身を解除", player.getName().getString());
                 return;
             }
 
-            // 変身開始
-            if (identityId == null) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("変身IDが指定されていません。"));
-                return;
-            }
+            if (identityId == null) return;
 
             EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(identityId);
-            if (type == null) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("不明な EntityType: " + identityId));
-                return;
-            }
+            if (type == null) return;
 
             Level level = player.level();
             if (level == null) return;
 
-            Entity entity;
-            try {
-                entity = type.create(level);
-            } catch (ClassCastException e) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("指定の Entity を生成できません: " + identityId));
-                return;
-            }
+            Entity entity = type.create(level);
+            if (!(entity instanceof BaseMonsterEntity<?> monster)) return;
 
-            if (!(entity instanceof BaseMonsterEntity<?> monster)) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                        "指定の Entity は BaseMonsterEntity を実装していません: " + identityId));
-                return;
-            }
-
-            // プレイヤー位置に配置
             monster.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
             level.addFreshEntity(monster);
 
-            // Capability に保存
             cap.setTransformed(true);
             cap.setTransformedMobId(identityId);
             cap.setTransformedEntity(monster);
-            cap.setTransformedEntityId(monster.getId()); // ← IDを保持
+            cap.setTransformedEntityId(monster.getId());
 
-            // サーバ追従に登録
             PlayerTransformTickHandler.registerTransformed(player, monster);
 
-            // クライアント同期
             cap.syncToClient(player);
             MonsterMod.getLogger().debug("{} を {} に変身させました", player.getName().getString(), identityId);
         });

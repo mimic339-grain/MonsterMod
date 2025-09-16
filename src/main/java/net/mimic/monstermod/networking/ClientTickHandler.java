@@ -24,24 +24,17 @@ public class ClientTickHandler {
         PlayerTransformation transformation = PlayerTransformHandler.getOrCreateTransformation(player);
         if (transformation == null || !transformation.isTransformed()) return;
 
-        // サーバ側のEntity IDを取得
-        int entityId = transformation.getTransformedEntityId();
-        if (entityId == -1) return;
-
-        // IDでEntity取得
-        Entity entity = player.level().getEntity(entityId);
+        Entity entity = transformation.getClientTransformedEntity();
         if (!(entity instanceof MimicEntity mimic)) return;
 
-        // 前フレーム回転を保持
+        // サーバから送られた BODY_ROT / HEAD_ROT を lerp
         mimic.yBodyRotO = mimic.yBodyRot;
         mimic.yHeadRotO = mimic.yHeadRot;
 
-        // 回転補間
         float lerp = 0.5f;
         mimic.yBodyRot += (mimic.getBodyRot() - mimic.yBodyRot) * lerp;
         mimic.yHeadRot += (mimic.getHeadRot() - mimic.yHeadRot) * lerp;
 
-        // アニメーション更新
         mimic.updateAnimationStateClient();
     }
 }
