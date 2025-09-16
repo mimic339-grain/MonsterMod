@@ -4,6 +4,7 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
 import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.mimic.monstermod.networking.packet.SyncMimicRotationPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkDirection;
@@ -42,6 +43,12 @@ public class ModMessages {
                 .decoder(S2CTransformSyncPacket::new)
                 .encoder(S2CTransformSyncPacket::encode)
                 .consumerMainThread(S2CTransformSyncPacket::handle)
+                .add();
+
+        INSTANCE.messageBuilder(SyncMimicRotationPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncMimicRotationPacket::new)
+                .encoder(SyncMimicRotationPacket::encode)
+                .consumerMainThread(SyncMimicRotationPacket::handle)
                 .add();
     }
 

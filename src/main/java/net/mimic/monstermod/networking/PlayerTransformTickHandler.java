@@ -1,5 +1,6 @@
 package net.mimic.monstermod.networking;
 
+import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.entity.BaseMonsterEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,6 +30,9 @@ public class PlayerTransformTickHandler {
         }
     }
 
+    // ------------------------
+    // サーバTickでプレイヤーに追従
+    // ------------------------
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
@@ -40,7 +44,7 @@ public class PlayerTransformTickHandler {
             Player player = entity.level().getPlayerByUUID(entry.getKey());
             if (player == null) continue;
 
-            // サーバ側では回転補間はせず、位置のみ補間
+            // 位置のみ補間
             double lerp = 0.5;
             entity.setPos(
                     entity.getX() + (player.getX() - entity.getX()) * lerp,
@@ -48,12 +52,23 @@ public class PlayerTransformTickHandler {
                     entity.getZ() + (player.getZ() - entity.getZ()) * lerp
             );
 
-            // クライアントに回転同期用に BODY_ROT / HEAD_ROT をセット
+            // Mimicの場合は BODY_ROT / HEAD_ROT を同期用にセット
             if (entity instanceof MimicEntity mimic) {
                 mimic.setBodyRot(player.yBodyRot);
                 mimic.setHeadRot(player.yHeadRot);
+
+                // クライアントに回転同期パケット送信
+                ModMessages.sendToPlayer(
+                        new net.mimic.monstermod.networking.packet.SyncMimicRotationPacket(
+                                mimic.getId(),
+                                mimic.getBodyRot(),
+                                mimic.getHeadRot()
+                        ),
+                        (ServerPlayer) player
+                );
             }
 
+            // AIやアニメーション更新
             entity.tick();
         }
     }
