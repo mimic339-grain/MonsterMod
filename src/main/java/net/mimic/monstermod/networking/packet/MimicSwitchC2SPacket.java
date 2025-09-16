@@ -11,10 +11,13 @@ import net.mimic.monstermod.entity.custom.MimicEntity;
 import java.util.function.Supplier;
 
 public class MimicSwitchC2SPacket {
+    private boolean open; // 単純な open/close トグル用
 
     public MimicSwitchC2SPacket() {}
-    public MimicSwitchC2SPacket(FriendlyByteBuf buf) {}
-    public void encode(FriendlyByteBuf buf) {}
+    public MimicSwitchC2SPacket(boolean open) { this.open = open; }
+
+    public MimicSwitchC2SPacket(FriendlyByteBuf buf) { this.open = buf.readBoolean(); }
+    public void encode(FriendlyByteBuf buf) { buf.writeBoolean(this.open); }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
@@ -28,8 +31,7 @@ public class MimicSwitchC2SPacket {
                 MonsterState state = transformation.getMonsterState(transformation.getTransformedMobId());
                 if (state == null) return;
 
-                boolean isOpen = state.getFlag("isOpen");
-                boolean newOpen = !isOpen;
+                boolean newOpen = !state.getFlag("isOpen"); // トグル
                 state.setFlag("isOpen", newOpen);
                 state.animationState = newOpen ? "OPENING" : "CLOSING";
 

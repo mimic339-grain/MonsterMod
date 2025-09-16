@@ -1,167 +1,64 @@
 package net.mimic.monstermod.capability;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.mimic.monstermod.identity.IPlayerIdentity;
-import net.mimic.monstermod.identity.PlayerIdentityRegistry;
+import net.mimic.monstermod.entity.BaseMonsterEntity;
 import net.mimic.monstermod.networking.ModMessages;
 import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-
+import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * 複数Monster対応・アニメーション統合版PlayerTransformation
- */
-public class PlayerTransformation implements IPlayerTransformation {
+public class PlayerTransformation {
 
-    private boolean originalStatsSaved = false;
-    private double originalHealth;
-    private double originalMaxHealth;
-    private double originalAttack;
-    private double originalArmor;
-    private double originalSpeed;
+    private boolean transformed = false;
+    private ResourceLocation transformedMobId;
+    private BaseMonsterEntity<?> transformedEntity;
 
-    public boolean hasSavedOriginalStats() { return originalStatsSaved; }
-    public void setOriginalHealth(double hp) { this.originalHealth = hp; originalStatsSaved = true; }
-    public void setOriginalMaxHealth(double maxHp) { this.originalMaxHealth = maxHp; }
-    public void setOriginalAttackDamage(double dmg) { this.originalAttack = dmg; }
-    public void setOriginalArmor(double armor) { this.originalArmor = armor; }
-    public void setOriginalMoveSpeed(double speed) { this.originalSpeed = speed; }
-    public double getOriginalHealth() { return originalHealth; }
-    public double getOriginalMaxHealth() { return originalMaxHealth; }
-    public double getOriginalAttackDamage() { return originalAttack; }
-    public double getOriginalArmor() { return originalArmor; }
-    public double getOriginalMoveSpeed() { return originalSpeed; }
-    public void clearOriginalStats() { originalStatsSaved = false; }
+    // サーバ側EntityのIDを保持（クライアント側で取得するため）
+    private int transformedEntityId = -1;
 
-    private boolean noKnockback = false;
+    private final Map<ResourceLocation, MonsterState> states = new HashMap<>();
 
-    public boolean isNoKnockback() { return noKnockback; }
-    public void setNoKnockback(boolean value) { noKnockback = value; }
-
-    private Entity transformedEntity;
-
-    @Override
     @Nullable
-    public Entity getTransformedEntity() {
-        return transformedEntity;
-    }
+    private BaseMonsterEntity<?> clientTransformedEntity;
 
-    @Override
-    public void setTransformedEntity(@Nullable Entity entity) {
-        this.transformedEntity = entity;
-    }
+    @Nullable
+    public BaseMonsterEntity<?> getClientTransformedEntity() { return clientTransformedEntity; }
 
-    private boolean isTransformed = false;
-    private ResourceLocation transformedMobId = null;
+    public void setClientTransformedEntity(@Nullable BaseMonsterEntity<?> entity) { this.clientTransformedEntity = entity; }
 
-    // Monsterごとの状態をMapで管理
-    private final Map<ResourceLocation, MonsterState> monsterStates = new HashMap<>();
+    public boolean isTransformed() { return transformed; }
+    public void setTransformed(boolean transformed) { this.transformed = transformed; }
 
-    @Override
-    public boolean isTransformed() { return isTransformed; }
-
-    @Override
-    public void setTransformed(boolean transformed) { this.isTransformed = transformed; }
-
-    @Override
     public ResourceLocation getTransformedMobId() { return transformedMobId; }
+    public void setTransformedMobId(ResourceLocation id) { this.transformedMobId = id; }
 
-    @Override
-    public void setTransformedMobId(ResourceLocation mobId) { this.transformedMobId = mobId; }
-
-    /** 指定Monsterの状態を取得 */
-    public MonsterState getMonsterState(ResourceLocation mobId) {
-        return monsterStates.getOrDefault(mobId, new MonsterState());
-    }
-
-    /** 指定Monsterの状態を更新 */
-    public void setMonsterState(ResourceLocation mobId, MonsterState state) {
-        monsterStates.put(mobId, state);
-    }
-
-    @Override
-    public void syncToClient(Player player) {
-        if (player instanceof ServerPlayer serverPlayer) {
-            ResourceLocation mobId = transformedMobId;
-            MonsterState state = mobId != null ? getMonsterState(mobId) : new MonsterState();
-
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                    isTransformed,
-                    mobId,
-                    state.animationState
-            ), serverPlayer);
-        }
-    }
-
-    @Override
-    public CompoundTag serializeNBT() {
-        CompoundTag nbt = new CompoundTag();
-        nbt.putBoolean("isTransformed", isTransformed);
-        if (transformedMobId != null) nbt.putString("transformedMobId", transformedMobId.toString());
-
-        CompoundTag statesTag = new CompoundTag();
-        for (Map.Entry<ResourceLocation, MonsterState> entry : monsterStates.entrySet()) {
-            CompoundTag stateTag = new CompoundTag();
-            stateTag.putString("animationState", entry.getValue().animationState);
-            statesTag.put(entry.getKey().toString(), stateTag);
-        }
-        nbt.put("monsterStates", statesTag);
-        return nbt;
-    }
-
-    @Override
-    public void deserializeNBT(CompoundTag nbt) {
-        isTransformed = nbt.getBoolean("isTransformed");
-
-        if (nbt.contains("transformedMobId"))
-            transformedMobId = new ResourceLocation(nbt.getString("transformedMobId"));
-        else
-            transformedMobId = null;
-
-        monsterStates.clear();
-        if (nbt.contains("monsterStates")) {
-            CompoundTag statesTag = nbt.getCompound("monsterStates");
-            for (String key : statesTag.getAllKeys()) {
-                ResourceLocation mobId = new ResourceLocation(key);
-                CompoundTag stateTag = statesTag.getCompound(key);
-                MonsterState state = new MonsterState();
-                state.animationState = stateTag.getString("animationState");
-                monsterStates.put(mobId, state);
-            }
-        }
-    }
-
-    @Override
     @Nullable
-    public IPlayerIdentity getTransformedIdentity() {
-        if (isTransformed && transformedMobId != null)
-            return PlayerIdentityRegistry.getIdentity(transformedMobId);
-        return null;
+    public BaseMonsterEntity<?> getTransformedEntity() { return transformedEntity; }
+    public void setTransformedEntity(@Nullable BaseMonsterEntity<?> entity) { this.transformedEntity = entity; }
+
+    public int getTransformedEntityId() { return transformedEntityId; }
+    public void setTransformedEntityId(int id) { this.transformedEntityId = id; }
+
+    public MonsterState getMonsterState(ResourceLocation mobId) { return states.get(mobId); }
+    public void setMonsterState(ResourceLocation mobId, MonsterState state) { states.put(mobId, state); }
+
+    public void syncToClient(ServerPlayer player) {
+        if (player != null) {
+            ModMessages.sendToPlayer(
+                    new S2CTransformSyncPacket(transformed, transformedMobId, transformedEntityId),
+                    player
+            );
+        }
     }
 
-    /** Monster共通の状態を保持するクラス */
     public static class MonsterState {
-        public String animationState = "IDLE"; // 既存
+        public String animationState = "IDLE";
+        private final Map<String, Boolean> flags = new HashMap<>();
 
-        // カスタムフラグを保持する Map
-        private final Map<String, Boolean> customFlags = new HashMap<>();
-
-        /** フラグをセット */
-        public void setFlag(String key, boolean value) {
-            customFlags.put(key, value);
-        }
-
-        /** フラグを取得 */
-        public boolean getFlag(String key) {
-            return customFlags.getOrDefault(key, false);
-
-        }
+        public boolean getFlag(String key) { return flags.getOrDefault(key, false); }
+        public void setFlag(String key, boolean value) { flags.put(key, value); }
     }
 }
