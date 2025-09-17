@@ -1,5 +1,6 @@
 package net.mimic.monstermod.networking;
 
+import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.client.Minecraft;
@@ -21,16 +22,23 @@ public class ClientTickHandler {
         LocalPlayer player = mc.player;
         if (player == null) return;
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (!transformation.isTransformed()) return;
+        PlayerTransformation transformation = player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+                .orElse(null);
+        if (transformation == null || !transformation.isTransformed()) return;
 
-            Entity entity = transformation.getClientTransformedEntity();
-            if (!(entity instanceof MimicEntity mimic)) return;
+        int entityId = transformation.getTransformedEntityId();
+        if (entityId == -1) return;
 
-            // サーバから受け取った同期用の最新値を補間して反映
-            float lerp = 0.3f; // 補間係数（値を小さくするとより滑らか）
-            mimic.yBodyRot += (mimic.getBodyRot() - mimic.yBodyRot) * lerp;
-            mimic.yHeadRot += (mimic.getHeadRot() - mimic.yHeadRot) * lerp;
-        });
+        Entity entity = player.level().getEntity(entityId);
+        if (!(entity instanceof MimicEntity mimic)) return;
+
+        // 前フレーム値を保持
+        mimic.yBodyRotO = mimic.yBodyRot;
+        mimic.yHeadRotO = mimic.yHeadRot;
+
+        // 補間して回転を更新
+        float lerp = 0.5f;
+        mimic.yBodyRot += (player.yBodyRot - mimic.yBodyRot) * lerp;
+        mimic.yHeadRot += (player.yHeadRot - mimic.yHeadRot) * lerp;
     }
 }

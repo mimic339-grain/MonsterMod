@@ -3,9 +3,6 @@ package net.mimic.monstermod.entity.custom;
 import net.mimic.monstermod.entity.BaseMonsterEntity;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.player.Player;
@@ -21,15 +18,6 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
 
     public enum MimicAnimationState { IDLE, OPENING, OPEN, CLOSING, CLOSED, BITE }
 
-    private static final EntityDataAccessor<Boolean> OPEN =
-            SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
-
-    // サーバ/クライアントで同期される値
-    private static final EntityDataAccessor<Float> BODY_ROT =
-            SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> HEAD_ROT =
-            SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.FLOAT);
-
     private int animationTick = 0;
     private boolean pendingSwitch = false;
     private boolean pendingOpen = false;
@@ -38,26 +26,6 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     public MimicEntity(EntityType<? extends BaseMonsterEntity<?>> type, Level level) {
         super(type, level);
     }
-
-    @Override
-    protected void defineSynchedData() {
-        super.defineSynchedData();
-        this.entityData.define(OPEN, false);
-        this.entityData.define(BODY_ROT, 0f);
-        this.entityData.define(HEAD_ROT, 0f);
-    }
-
-    // ------------------------
-    // Body/Head 回転 getter/setter
-    // ------------------------
-    public float getBodyRot() { return this.entityData.get(BODY_ROT); }
-    public void setBodyRot(float rot) { this.entityData.set(BODY_ROT, rot); }
-
-    public float getHeadRot() { return this.entityData.get(HEAD_ROT); }
-    public void setHeadRot(float rot) { this.entityData.set(HEAD_ROT, rot); }
-
-    public boolean isOpen() { return this.entityData.get(OPEN); }
-    public void setOpen(boolean open) { this.entityData.set(OPEN, open); }
 
     public void linkToPlayer(String uuid) { this.linkedPlayerUUID = uuid; }
 
