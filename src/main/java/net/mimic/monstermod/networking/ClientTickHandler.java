@@ -27,12 +27,10 @@ public class ClientTickHandler {
             Entity entity = transformation.getClientTransformedEntity();
             if (!(entity instanceof MimicEntity mimic)) return;
 
-            // サーバから受け取った値を滑らかに補間
-            float lerp = 0.5f;
+            // サーバから受け取った同期用の最新値を補間して反映
+            float lerp = 0.3f; // 補間係数（値を小さくするとより滑らか）
             mimic.yBodyRot += (mimic.getBodyRot() - mimic.yBodyRot) * lerp;
             mimic.yHeadRot += (mimic.getHeadRot() - mimic.yHeadRot) * lerp;
-
-            mimic.updateAnimationStateClient();
         });
     }
 }

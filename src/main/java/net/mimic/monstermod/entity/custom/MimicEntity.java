@@ -24,6 +24,7 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     private static final EntityDataAccessor<Boolean> OPEN =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
 
+    // サーバ/クライアントで同期される値
     private static final EntityDataAccessor<Float> BODY_ROT =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> HEAD_ROT =
@@ -42,14 +43,12 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     protected void defineSynchedData() {
         super.defineSynchedData();
         this.entityData.define(OPEN, false);
-
-        // Body/Head 回転用 SynchedEntityData を追加
         this.entityData.define(BODY_ROT, 0f);
         this.entityData.define(HEAD_ROT, 0f);
     }
 
     // ------------------------
-    // Body/Head回転 getter/setter
+    // Body/Head 回転 getter/setter
     // ------------------------
     public float getBodyRot() { return this.entityData.get(BODY_ROT); }
     public void setBodyRot(float rot) { this.entityData.set(BODY_ROT, rot); }
@@ -142,10 +141,6 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
 
     public static AttributeSupplier.Builder createAttributes() {
         return BaseMonsterEntity.createDefaultAttributes(200.0D, 0.1D, 4.0D, 0.2D, 2.0D, 0.08D);
-    }
-
-    public void updateAnimationStateClient() {
-        // クライアント側ではアニメーション更新のみ
     }
 
     public void playAnimation(String animName, boolean force) {

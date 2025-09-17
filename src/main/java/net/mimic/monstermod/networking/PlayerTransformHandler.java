@@ -4,7 +4,6 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.BaseMonsterEntity;
-import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -20,16 +19,19 @@ public class PlayerTransformHandler {
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(cap -> {
 
+            // 変身解除
             if (!transform) {
-                BaseMonsterEntity<?> entity = cap.getTransformedEntity();
-                if (entity != null) {
-                    entity.remove(Entity.RemovalReason.DISCARDED);
+                int entityId = cap.getTransformedEntityId();
+                if (entityId != -1) {
+                    Entity e = player.level().getEntity(entityId);
+                    if (e != null) {
+                        e.discard(); // removeより安全
+                    }
                     PlayerTransformTickHandler.removeTransformed(player);
                 }
 
                 cap.setTransformed(false);
                 cap.setTransformedMobId(null);
-                cap.setTransformedEntity(null);
                 cap.setTransformedEntityId(-1);
                 cap.syncToClient(player);
 
@@ -37,6 +39,7 @@ public class PlayerTransformHandler {
                 return;
             }
 
+            // 変身開始
             if (identityId == null) return;
 
             EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(identityId);
@@ -48,12 +51,13 @@ public class PlayerTransformHandler {
             Entity entity = type.create(level);
             if (!(entity instanceof BaseMonsterEntity<?> monster)) return;
 
+            // プレイヤーの位置にスポーン
             monster.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
             level.addFreshEntity(monster);
 
+            // Capability に情報を保存（Entity インスタンスは保持しない）
             cap.setTransformed(true);
             cap.setTransformedMobId(identityId);
-            cap.setTransformedEntity(monster);
             cap.setTransformedEntityId(monster.getId());
 
             PlayerTransformTickHandler.registerTransformed(player, monster);

@@ -1,6 +1,5 @@
 package net.mimic.monstermod.networking;
 
-import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.entity.BaseMonsterEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.server.level.ServerPlayer;
@@ -52,20 +51,10 @@ public class PlayerTransformTickHandler {
                     entity.getZ() + (player.getZ() - entity.getZ()) * lerp
             );
 
-            // Mimicの場合は BODY_ROT / HEAD_ROT を同期用にセット
+            // Mimicの場合は BODY_ROT / HEAD_ROT をサーバでセット
             if (entity instanceof MimicEntity mimic) {
                 mimic.setBodyRot(player.yBodyRot);
                 mimic.setHeadRot(player.yHeadRot);
-
-                // クライアントに回転同期パケット送信
-                ModMessages.sendToPlayer(
-                        new net.mimic.monstermod.networking.packet.SyncMimicRotationPacket(
-                                mimic.getId(),
-                                mimic.getBodyRot(),
-                                mimic.getHeadRot()
-                        ),
-                        (ServerPlayer) player
-                );
             }
 
             // AIやアニメーション更新
