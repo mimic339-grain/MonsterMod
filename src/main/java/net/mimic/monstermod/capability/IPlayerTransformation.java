@@ -33,7 +33,7 @@ public interface IPlayerTransformation {
     @Nullable
     Entity getTransformedEntity();
 
-    MimicEntity.MimicAnimationState getAnimationState(String transformedMobId);
+    MimicEntity.MimicAnimationState getAnimationState(ResourceLocation transformedMobId);
 
     void setTransformedEntity(@Nullable Entity entity);
     // 変身中かどうか

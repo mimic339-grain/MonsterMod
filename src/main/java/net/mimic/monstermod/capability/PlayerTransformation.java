@@ -22,12 +22,7 @@ import java.util.Map;
 public class PlayerTransformation implements IPlayerTransformation {
 
     private boolean originalStatsSaved = false;
-    private double originalHealth;
-    private double originalMaxHealth;
-    private double originalAttack;
-    private double originalArmor;
-    private double originalSpeed;
-
+    private double originalHealth, originalMaxHealth, originalAttack, originalArmor, originalSpeed;
     private boolean noKnockback = false;
     private Entity transformedEntity;
     private boolean isTransformed = false;
@@ -49,12 +44,10 @@ public class PlayerTransformation implements IPlayerTransformation {
     public double getOriginalArmor() { return originalArmor; }
     public double getOriginalMoveSpeed() { return originalSpeed; }
     public void clearOriginalStats() { originalStatsSaved = false; }
-
     public boolean isNoKnockback() { return noKnockback; }
     public void setNoKnockback(boolean value) { noKnockback = value; }
 
-    @Override
-    @Nullable
+    @Override @Nullable
     public Entity getTransformedEntity() { return transformedEntity; }
     @Override
     public void setTransformedEntity(@Nullable Entity entity) { this.transformedEntity = entity; }
@@ -71,28 +64,25 @@ public class PlayerTransformation implements IPlayerTransformation {
 
     /** 指定Monsterの状態を取得 */
     public MonsterState getMonsterState(ResourceLocation mobId) {
-        return monsterStates.getOrDefault(mobId, new MonsterState());
+        return mobId != null ? monsterStates.getOrDefault(mobId, new MonsterState()) : new MonsterState();
     }
 
     /** 指定Monsterの状態を更新 */
     public void setMonsterState(ResourceLocation mobId, MonsterState state) {
-        monsterStates.put(mobId, state);
+        if (mobId != null) monsterStates.put(mobId, state);
     }
 
-    /** ★追加: String から MimicAnimationState を取得 */
+    /** ★ ResourceLocation 版で統一 */
     @Override
-    public MimicEntity.MimicAnimationState getAnimationState(String mobIdString) {
-        if (mobIdString == null) return MimicEntity.MimicAnimationState.IDLE;
-        ResourceLocation mobId = new ResourceLocation(mobIdString);
-        MonsterState state = getMonsterState(mobId);
-        return state != null ? state.getAnimationEnum() : MimicEntity.MimicAnimationState.IDLE;
+    public MimicEntity.MimicAnimationState getAnimationState(ResourceLocation mobId) {
+        return getMonsterState(mobId).getAnimationEnum();
     }
 
     @Override
     public void syncToClient(Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
             ResourceLocation mobId = transformedMobId;
-            MonsterState state = mobId != null ? getMonsterState(mobId) : new MonsterState();
+            MonsterState state = getMonsterState(mobId);
             ModMessages.sendToPlayer(new S2CTransformSyncPacket(
                     isTransformed,
                     mobId,
@@ -120,11 +110,7 @@ public class PlayerTransformation implements IPlayerTransformation {
     @Override
     public void deserializeNBT(CompoundTag nbt) {
         isTransformed = nbt.getBoolean("isTransformed");
-
-        if (nbt.contains("transformedMobId"))
-            transformedMobId = new ResourceLocation(nbt.getString("transformedMobId"));
-        else
-            transformedMobId = null;
+        transformedMobId = nbt.contains("transformedMobId") ? new ResourceLocation(nbt.getString("transformedMobId")) : null;
 
         monsterStates.clear();
         if (nbt.contains("monsterStates")) {
@@ -139,31 +125,22 @@ public class PlayerTransformation implements IPlayerTransformation {
         }
     }
 
-    @Override
-    @Nullable
+    @Override @Nullable
     public IPlayerIdentity getTransformedIdentity() {
-        if (isTransformed && transformedMobId != null)
-            return PlayerIdentityRegistry.getIdentity(transformedMobId);
-        return null;
+        return (isTransformed && transformedMobId != null) ? PlayerIdentityRegistry.getIdentity(transformedMobId) : null;
     }
 
     /** Monster共通の状態を保持するクラス */
     public static class MonsterState {
         public String animationState = "IDLE";
-
         private final Map<String, Boolean> customFlags = new HashMap<>();
-
         public void setFlag(String key, boolean value) { customFlags.put(key, value); }
         public boolean getFlag(String key) { return customFlags.getOrDefault(key, false); }
-
         /** animationState を MimicAnimationState に変換して返す */
         public MimicEntity.MimicAnimationState getAnimationEnum() {
             if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
-            try {
-                return MimicEntity.MimicAnimationState.valueOf(animationState);
-            } catch (IllegalArgumentException e) {
-                return MimicEntity.MimicAnimationState.IDLE;
-            }
+            try { return MimicEntity.MimicAnimationState.valueOf(animationState); }
+            catch (IllegalArgumentException e) { return MimicEntity.MimicAnimationState.IDLE; }
         }
     }
 }

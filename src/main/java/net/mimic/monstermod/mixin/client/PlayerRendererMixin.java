@@ -1,10 +1,10 @@
 package net.mimic.monstermod.mixin.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.client.renderer.ClientMimicRenderer;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
+import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.identity.IPlayerIdentity;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -32,32 +32,25 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
     private void onRender(AbstractClientPlayer player, float entityYaw, float partialTicks,
                           PoseStack poseStack, MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(cap -> {
-            if (!cap.isTransformed()) return;
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+            if (!transformation.isTransformed()) return;
 
-            // Identity 優先描画
-            IPlayerIdentity identity = cap.getTransformedIdentity();
+            // Identity が存在する場合は Identity 側で描画
+            IPlayerIdentity identity = transformation.getTransformedIdentity();
+            MimicEntity.MimicAnimationState animState = transformation.getAnimationState(transformation.getTransformedMobId());
+
             if (identity != null) {
-                // MonsterState をそのまま渡す
-                PlayerTransformation.MonsterState state = cap.getMonsterState(cap.getTransformedMobId());
-                identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight, state);
+                identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight, animState);
                 ci.cancel();
                 return;
             }
 
-            // クライアント用 MimicEntity 取得
+            // Identity がない場合は ClientMimicEntity を描画
             ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(player.getUUID());
 
-            // 座標・回転コピー
             clientEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+            clientEntity.setAnimationState(animState);
 
-            // アニメーション状態コピー
-            PlayerTransformation.MonsterState state = cap.getMonsterState(cap.getTransformedMobId());
-            if (state != null) {
-                clientEntity.setAnimationState(state.getAnimationEnum());
-            }
-
-            // 描画
             clientRenderer.render(clientEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
         });
