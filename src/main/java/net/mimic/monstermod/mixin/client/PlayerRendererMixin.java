@@ -1,3 +1,4 @@
+
 package net.mimic.monstermod.mixin.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
