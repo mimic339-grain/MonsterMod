@@ -1,5 +1,6 @@
 package net.mimic.monstermod.capability;
 
+import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.identity.IPlayerIdentity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -31,6 +32,8 @@ public interface IPlayerTransformation {
 
     @Nullable
     Entity getTransformedEntity();
+
+    MimicEntity.MimicAnimationState getAnimationState(String transformedMobId);
 
     void setTransformedEntity(@Nullable Entity entity);
     // 変身中かどうか

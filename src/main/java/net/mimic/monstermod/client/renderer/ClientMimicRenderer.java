@@ -14,18 +14,18 @@ public class ClientMimicRenderer extends GeoEntityRenderer<ClientMimicEntity> {
         this.shadowRadius = 0.4f;
     }
 
-    // ClientMimicEntity の座標・回転をそのまま描画に反映
     @Override
     public void render(ClientMimicEntity entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
 
-        // 回転・座標を poseStack に反映
         poseStack.pushPose();
-        poseStack.translate(entity.getX(), entity.getY(), entity.getZ());
-        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-entity.getYRot()));
-        poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(entity.getXRot()));
 
-        // GeckoLib の描画呼び出し
+        // 描画用フィールドを使用して、Entity 本体の座標や回転に依存しない
+        poseStack.translate(entity.getRenderX(), entity.getRenderY(), entity.getRenderZ());
+        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-entity.getRenderYRot()));
+        poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(entity.getRenderXRot()));
+
+        // GeckoLib に描画を委譲
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
         poseStack.popPose();

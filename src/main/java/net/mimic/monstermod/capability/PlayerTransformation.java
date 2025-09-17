@@ -28,6 +28,15 @@ public class PlayerTransformation implements IPlayerTransformation {
     private double originalArmor;
     private double originalSpeed;
 
+    private boolean noKnockback = false;
+    private Entity transformedEntity;
+    private boolean isTransformed = false;
+    private ResourceLocation transformedMobId = null;
+
+    // Monsterごとの状態をMapで管理
+    private final Map<ResourceLocation, MonsterState> monsterStates = new HashMap<>();
+
+    // --- 元ステータス管理 ---
     public boolean hasSavedOriginalStats() { return originalStatsSaved; }
     public void setOriginalHealth(double hp) { this.originalHealth = hp; originalStatsSaved = true; }
     public void setOriginalMaxHealth(double maxHp) { this.originalMaxHealth = maxHp; }
@@ -41,39 +50,22 @@ public class PlayerTransformation implements IPlayerTransformation {
     public double getOriginalMoveSpeed() { return originalSpeed; }
     public void clearOriginalStats() { originalStatsSaved = false; }
 
-    private boolean noKnockback = false;
-
     public boolean isNoKnockback() { return noKnockback; }
     public void setNoKnockback(boolean value) { noKnockback = value; }
 
-    private Entity transformedEntity;
-
     @Override
     @Nullable
-    public Entity getTransformedEntity() {
-        return transformedEntity;
-    }
-
+    public Entity getTransformedEntity() { return transformedEntity; }
     @Override
-    public void setTransformedEntity(@Nullable Entity entity) {
-        this.transformedEntity = entity;
-    }
-
-    private boolean isTransformed = false;
-    private ResourceLocation transformedMobId = null;
-
-    // Monsterごとの状態をMapで管理
-    private final Map<ResourceLocation, MonsterState> monsterStates = new HashMap<>();
+    public void setTransformedEntity(@Nullable Entity entity) { this.transformedEntity = entity; }
 
     @Override
     public boolean isTransformed() { return isTransformed; }
-
     @Override
     public void setTransformed(boolean transformed) { this.isTransformed = transformed; }
 
     @Override
     public ResourceLocation getTransformedMobId() { return transformedMobId; }
-
     @Override
     public void setTransformedMobId(ResourceLocation mobId) { this.transformedMobId = mobId; }
 
@@ -87,12 +79,20 @@ public class PlayerTransformation implements IPlayerTransformation {
         monsterStates.put(mobId, state);
     }
 
+    /** ★追加: String から MimicAnimationState を取得 */
+    @Override
+    public MimicEntity.MimicAnimationState getAnimationState(String mobIdString) {
+        if (mobIdString == null) return MimicEntity.MimicAnimationState.IDLE;
+        ResourceLocation mobId = new ResourceLocation(mobIdString);
+        MonsterState state = getMonsterState(mobId);
+        return state != null ? state.getAnimationEnum() : MimicEntity.MimicAnimationState.IDLE;
+    }
+
     @Override
     public void syncToClient(Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
             ResourceLocation mobId = transformedMobId;
             MonsterState state = mobId != null ? getMonsterState(mobId) : new MonsterState();
-
             ModMessages.sendToPlayer(new S2CTransformSyncPacket(
                     isTransformed,
                     mobId,
@@ -149,21 +149,14 @@ public class PlayerTransformation implements IPlayerTransformation {
 
     /** Monster共通の状態を保持するクラス */
     public static class MonsterState {
-        public String animationState = "IDLE"; // 既存
+        public String animationState = "IDLE";
 
-        // カスタムフラグを保持する Map
         private final Map<String, Boolean> customFlags = new HashMap<>();
 
-        /** フラグをセット */
-        public void setFlag(String key, boolean value) {
-            customFlags.put(key, value);
-        }
+        public void setFlag(String key, boolean value) { customFlags.put(key, value); }
+        public boolean getFlag(String key) { return customFlags.getOrDefault(key, false); }
 
-        /** フラグを取得 */
-        public boolean getFlag(String key) {
-            return customFlags.getOrDefault(key, false);
-        }
-        /** ★追加: animationState を MimicAnimationState に変換して返す */
+        /** animationState を MimicAnimationState に変換して返す */
         public MimicEntity.MimicAnimationState getAnimationEnum() {
             if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
             try {
