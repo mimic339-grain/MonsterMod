@@ -1,5 +1,6 @@
 package net.mimic.monstermod.capability;
 
+import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -161,7 +162,15 @@ public class PlayerTransformation implements IPlayerTransformation {
         /** フラグを取得 */
         public boolean getFlag(String key) {
             return customFlags.getOrDefault(key, false);
-
+        }
+        /** ★追加: animationState を MimicAnimationState に変換して返す */
+        public MimicEntity.MimicAnimationState getAnimationEnum() {
+            if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
+            try {
+                return MimicEntity.MimicAnimationState.valueOf(animationState);
+            } catch (IllegalArgumentException e) {
+                return MimicEntity.MimicAnimationState.IDLE;
+            }
         }
     }
 }
