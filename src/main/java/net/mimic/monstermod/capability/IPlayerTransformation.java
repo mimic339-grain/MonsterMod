@@ -62,4 +62,8 @@ public interface IPlayerTransformation {
     // ノックバック無効フラグ
     boolean isNoKnockback();
     void setNoKnockback(boolean value);
+
+    MimicEntity.MimicAnimationState getBaseState();
+    void setBaseState(MimicEntity.MimicAnimationState state);
+
 }

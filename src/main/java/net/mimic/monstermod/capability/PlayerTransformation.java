@@ -143,4 +143,17 @@ public class PlayerTransformation implements IPlayerTransformation {
             catch (IllegalArgumentException e) { return MimicEntity.MimicAnimationState.IDLE; }
         }
     }
+
+        private MimicEntity.MimicAnimationState baseState = MimicEntity.MimicAnimationState.IDLE;
+
+        @Override
+        public MimicEntity.MimicAnimationState getBaseState() {
+            return baseState;
+        }
+
+        @Override
+        public void setBaseState(MimicEntity.MimicAnimationState state) {
+            this.baseState = state;
+        }
+
 }

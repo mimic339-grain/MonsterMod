@@ -2,8 +2,8 @@ package net.mimic.monstermod.identity.impl;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.entity.ModEntities;
+import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.identity.PlayerEntityCache;
 import net.mimic.monstermod.identity.PlayerIdentityType;
@@ -42,6 +42,21 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
+    public void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state) {
+        if (!(dummy instanceof Player player)) return;
+        UUID playerId = player.getUUID();
+
+        // --- Client 用のキャッシュを取得 ---
+        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
+
+        // --- 非ループアニメは playOnce、ループアニメは通常の setAnimationState ---
+        switch (state) {
+            case OPEN, CLOSE, BITE -> cachedEntity.playOnce(state);
+            default -> cachedEntity.setAnimationState(state);
+        }
+    }
+
+    @Override
     public Vec3 getBoundingBoxDimensions(net.minecraft.world.entity.Pose pose) {
         return new Vec3(0.6f, 0.6f, 0.6f);
     }
@@ -52,59 +67,39 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
-    public void applySpecificAbilities(net.minecraft.world.entity.LivingEntity player) {}
-
-
+    public void applySpecificAbilities(LivingEntity player) {}
     @Override
-    public void removeSpecificAbilities(net.minecraft.world.entity.LivingEntity player) {}
+    public void removeSpecificAbilities(LivingEntity player) {}
 
-    @Override
-    public void applyAnimation(LivingEntity entity, MimicEntity.MimicAnimationState state) {
-        if (!(entity instanceof Player player)) return;
-
-        UUID playerId = player.getUUID();
-        MimicEntity cachedEntity = PlayerEntityCache.getOrCreate(playerId,
-                () -> new MimicEntity(ModEntities.MIMIC.get(), player.level()));
-
-        // アニメーション状態を直接反映
-        cachedEntity.setAnimationState(state);
-    }
-    @Override
+    /**
+     * 微振動防止版の applyAnimationAndRender
+     */
     public void applyAnimationAndRender(Player player,
                                         float entityYaw,
                                         float partialTicks,
                                         PoseStack poseStack,
                                         MultiBufferSource buffer,
                                         int packedLight,
-                                        MimicEntity.MimicAnimationState state) {
+                                        MimicEntity.MimicAnimationState baseState) {
+
         UUID playerId = player.getUUID();
-        MimicEntity cachedEntity = PlayerEntityCache.getOrCreate(playerId,
-                () -> new MimicEntity(ModEntities.MIMIC.get(), player.level()));
+        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // アニメーション状態を直接反映
-        cachedEntity.setAnimationState(state);
-
-        // 位置・回転コピー
-        cachedEntity.setPos(player.getX(), player.getY(), player.getZ());
+        // --- 位置・回転・速度の同期 ---
+        cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
+                player.yBodyRot, player.getXRot());
         cachedEntity.setDeltaMovement(player.getDeltaMovement());
-        cachedEntity.yBodyRot = 0;
-        cachedEntity.setYRot(0);
-        cachedEntity.setYHeadRot(0);
 
-        // walkAnimation 更新
-        float movementSqr = (float) player.getDeltaMovement().lengthSqr();
-        if (!cachedEntity.isAnimationLocked() && (movementSqr > 1e-6f || player.walkAnimation.position() > 1e-6f)) {
-            cachedEntity.walkAnimation.update(player.walkAnimation.position(), 1.0f);
-            cachedEntity.walkAnimation.setSpeed(player.walkAnimation.speed());
-        }
 
+        // --- AnimationController を進める ---
+        cachedEntity.tick();
+
+        // --- 描画 ---
         poseStack.pushPose();
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
-
         Minecraft.getInstance().getEntityRenderDispatcher()
                 .getRenderer(cachedEntity)
                 .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
-
         poseStack.popPose();
     }
 }

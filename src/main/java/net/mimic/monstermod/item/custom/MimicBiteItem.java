@@ -27,7 +27,7 @@ public class MimicBiteItem extends BaseMonsterItem {
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             if (transformation.getTransformedEntity() instanceof MimicEntity mimic) {
                 // CLOSED 状態でない場合はスキルを発動しない
-                if (mimic.getAnimationState() != MimicEntity.MimicAnimationState.CLOSED) {
+                if (mimic.getAnimationState() != MimicEntity.MimicAnimationState.CLOSE) {
                     if (player.level().isClientSide()) {
                         sendClientMessage(player, "Mimicは閉じていないので噛めません！");
                     }
