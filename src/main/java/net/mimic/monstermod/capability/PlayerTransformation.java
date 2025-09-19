@@ -78,18 +78,26 @@ public class PlayerTransformation implements IPlayerTransformation {
         return getMonsterState(mobId).getAnimationEnum();
     }
 
+    private MimicEntity.MimicAnimationState lastSyncedState = MimicEntity.MimicAnimationState.IDLE;
+
     @Override
     public void syncToClient(Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
             ResourceLocation mobId = transformedMobId;
             MonsterState state = getMonsterState(mobId);
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                    isTransformed,
-                    mobId,
-                    state.animationState
-            ), serverPlayer);
+
+            // 変化があったときだけ同期
+            if (state.getAnimationEnum() != lastSyncedState) {
+                ModMessages.sendToPlayer(new S2CTransformSyncPacket(
+                        isTransformed,
+                        mobId,
+                        state.animationState
+                ), serverPlayer);
+                lastSyncedState = state.getAnimationEnum();
+            }
         }
     }
+
 
     @Override
     public CompoundTag serializeNBT() {
@@ -106,6 +114,7 @@ public class PlayerTransformation implements IPlayerTransformation {
         nbt.put("monsterStates", statesTag);
         return nbt;
     }
+
 
     @Override
     public void deserializeNBT(CompoundTag nbt) {

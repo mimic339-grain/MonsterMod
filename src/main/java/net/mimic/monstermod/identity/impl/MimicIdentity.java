@@ -44,17 +44,14 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     @Override
     public void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state) {
         if (!(dummy instanceof Player player)) return;
-        UUID playerId = player.getUUID();
+        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(player.getUUID());
 
-        // --- Client 用のキャッシュを取得 ---
-        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
-
-        // --- 非ループアニメは playOnce、ループアニメは通常の setAnimationState ---
         switch (state) {
             case OPEN, CLOSE, BITE -> cachedEntity.playOnce(state);
             default -> cachedEntity.setAnimationState(state);
         }
     }
+
 
     @Override
     public Vec3 getBoundingBoxDimensions(net.minecraft.world.entity.Pose pose) {

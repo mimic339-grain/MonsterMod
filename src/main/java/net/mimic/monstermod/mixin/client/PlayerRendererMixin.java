@@ -35,30 +35,15 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
             UUID playerId = player.getUUID();
             ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-            // --- 位置・回転・速度の同期 ---
+            // 位置・回転・速度の同期
             cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
                     player.yBodyRot, player.getXRot());
             cachedEntity.setDeltaMovement(player.getDeltaMovement());
 
-            // --- baseState の適用（微振動防止） ---
-            MimicEntity.MimicAnimationState baseState = transformation.getBaseState();
-            MimicEntity.MimicAnimationState currentState = cachedEntity.getAnimationState();
-
-            if (!cachedEntity.isAnimationLocked()) {
-                boolean isNonLoopPlaying = currentState != null
-                        && !cachedEntity.isLoopAnimation(currentState)
-                        && !cachedEntity.isAnimationFinished();
-
-                // 非ループ再生中でなければ baseState を適用
-                if (!isNonLoopPlaying) {
-                    cachedEntity.setAnimationState(baseState);
-                }
-            }
-
-            // --- AnimationController を進める ---
+            // tick() 側で非ループアニメも含めて状態管理する
             cachedEntity.tick();
 
-            // --- 描画 ---
+            // 描画のみ
             poseStack.pushPose();
             poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
             Minecraft.getInstance().getEntityRenderDispatcher()
@@ -66,8 +51,7 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
                     .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
             poseStack.popPose();
 
-            // プレイヤー描画をキャンセル
-            ci.cancel();
+            ci.cancel(); // プレイヤー本体は描画しない
         });
     }
 }

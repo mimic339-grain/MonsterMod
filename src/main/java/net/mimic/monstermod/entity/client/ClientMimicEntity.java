@@ -67,7 +67,7 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public void tick() {
         super.tick();
 
-        // 非ループ再生中は何もしない
+        // 非ループアニメ再生中は上書きしない
         if (lastRequestedAnimation == null || isLoopAnimation(lastRequestedAnimation)) {
             boolean moving = this.getDeltaMovement().lengthSqr() > 1e-6;
             MimicAnimationState jumpState = moving
@@ -79,6 +79,7 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
             }
         }
     }
+
 
 
     // 非ループアニメ再生用
