@@ -32,7 +32,6 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
                 MimicEntity.MimicAnimationState.IDLE
         );
     }
-
     private static Map<String, MimicEntity.MimicAnimationState> createAnimationMap() {
         Map<String, MimicEntity.MimicAnimationState> map = new HashMap<>();
         map.put("WALK", MimicEntity.MimicAnimationState.OPEN);
@@ -42,38 +41,29 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
-    public void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state) {
-        if (!(dummy instanceof Player player)) return;
-        UUID playerId = player.getUUID();
-
-        // --- Client 用のキャッシュを取得 ---
-        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
-
-        // --- 非ループアニメは playOnce、ループアニメは通常の setAnimationState ---
-        switch (state) {
-            case OPEN, CLOSE, BITE -> cachedEntity.playOnce(state);
-            default -> cachedEntity.setAnimationState(state);
-        }
-    }
-
-    @Override
     public Vec3 getBoundingBoxDimensions(net.minecraft.world.entity.Pose pose) {
         return new Vec3(0.6f, 0.6f, 0.6f);
     }
 
     @Override
-    public float getEyeHeight(net.minecraft.world.entity.Pose pose) {
-        return 0.45f;
-    }
+    public float getEyeHeight(net.minecraft.world.entity.Pose pose) { return 0.45f; }
 
     @Override
     public void applySpecificAbilities(LivingEntity player) {}
     @Override
     public void removeSpecificAbilities(LivingEntity player) {}
 
-    /**
-     * 微振動防止版の applyAnimationAndRender
-     */
+    @Override
+    public void applyAnimation(LivingEntity entity, MimicEntity.MimicAnimationState state) {
+        if (!(entity instanceof Player player)) return;
+
+        UUID playerId = player.getUUID();
+        MimicEntity cachedEntity = PlayerEntityCache.getOrCreate(playerId,
+                () -> new MimicEntity(ModEntities.MIMIC.get(), player.level()));
+        cachedEntity.setAnimationState(state);
+    }
+
+    @Override
     public void applyAnimationAndRender(Player player,
                                         float entityYaw,
                                         float partialTicks,
@@ -84,17 +74,42 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
 
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
+        boolean isMoving = player.getDeltaMovement().lengthSqr() > 1e-6f;
 
-        // --- 位置・回転・速度の同期 ---
-        cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
-                player.yBodyRot, player.getXRot());
+        boolean wasOpen = baseState == MimicEntity.MimicAnimationState.OPEN
+                || baseState == MimicEntity.MimicAnimationState.OPENJUMP;
+        boolean wasClose = baseState == MimicEntity.MimicAnimationState.CLOSE
+                || baseState == MimicEntity.MimicAnimationState.CLOSEJUMP;
+
+        MimicEntity.MimicAnimationState targetState = cachedEntity.getAnimationState();
+        if (!cachedEntity.isAnimationLocked()) {
+            if (isMoving) {
+                if (wasOpen) targetState = MimicEntity.MimicAnimationState.OPENJUMP;
+                else if (wasClose) targetState = MimicEntity.MimicAnimationState.CLOSEJUMP;
+                else targetState = baseState;
+            } else {
+                var current = cachedEntity.getAnimationState();
+                if (current == MimicEntity.MimicAnimationState.OPENJUMP) targetState = MimicEntity.MimicAnimationState.OPEN;
+                else if (current == MimicEntity.MimicAnimationState.CLOSEJUMP) targetState = MimicEntity.MimicAnimationState.CLOSE;
+                else targetState = baseState;
+            }
+        }
+
+        if (cachedEntity.getAnimationState() != targetState) cachedEntity.setAnimationState(targetState);
+
+        cachedEntity.setPos(player.getX(), player.getY(), player.getZ());
         cachedEntity.setDeltaMovement(player.getDeltaMovement());
+        cachedEntity.yBodyRot = 0;
+        cachedEntity.setYRot(0);
+        cachedEntity.setYHeadRot(0);
 
+        if (isMoving) {
+            cachedEntity.walkAnimation.update(player.walkAnimation.position(), 1.0f);
+            cachedEntity.walkAnimation.setSpeed(player.walkAnimation.speed());
+        }
 
-        // --- AnimationController を進める ---
         cachedEntity.tick();
 
-        // --- 描画 ---
         poseStack.pushPose();
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
         Minecraft.getInstance().getEntityRenderDispatcher()

@@ -2,9 +2,10 @@ package net.mimic.monstermod.mixin.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
+import net.mimic.monstermod.client.renderer.ClientMimicRenderer;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.minecraft.client.Minecraft;
+import net.mimic.monstermod.identity.IPlayerIdentity;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -16,13 +17,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.UUID;
-
 @Mixin(PlayerRenderer.class)
 public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
 
+    private final ClientMimicRenderer clientRenderer;
+
     private PlayerRendererMixin(EntityRendererProvider.Context context, PlayerModel<AbstractClientPlayer> model, float shadowRadius) {
         super(context, model, shadowRadius);
+        this.clientRenderer = new ClientMimicRenderer(context);
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
@@ -32,41 +34,21 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             if (!transformation.isTransformed()) return;
 
-            UUID playerId = player.getUUID();
-            ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
+            IPlayerIdentity identity = transformation.getTransformedIdentity();
+            MimicEntity.MimicAnimationState animState = transformation.getAnimationState(transformation.getTransformedMobId());
 
-            // --- 位置・回転・速度の同期 ---
-            cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
-                    player.yBodyRot, player.getXRot());
-            cachedEntity.setDeltaMovement(player.getDeltaMovement());
-
-            // --- baseState の適用（微振動防止） ---
-            MimicEntity.MimicAnimationState baseState = transformation.getBaseState();
-            MimicEntity.MimicAnimationState currentState = cachedEntity.getAnimationState();
-
-            if (!cachedEntity.isAnimationLocked()) {
-                boolean isNonLoopPlaying = currentState != null
-                        && !cachedEntity.isLoopAnimation(currentState)
-                        && !cachedEntity.isAnimationFinished();
-
-                // 非ループ再生中でなければ baseState を適用
-                if (!isNonLoopPlaying) {
-                    cachedEntity.setAnimationState(baseState);
-                }
+            if (identity != null) {
+                identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight, animState);
+                ci.cancel();
+                return;
             }
 
-            // --- AnimationController を進める ---
-            cachedEntity.tick();
+            ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(player.getUUID());
+            clientEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+            clientEntity.setAnimationState(animState);
 
-            // --- 描画 ---
-            poseStack.pushPose();
-            poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
-            Minecraft.getInstance().getEntityRenderDispatcher()
-                    .getRenderer(cachedEntity)
-                    .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
-            poseStack.popPose();
-
-            // プレイヤー描画をキャンセル
+            // 安全に render
+            clientRenderer.render(clientEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
         });
     }
