@@ -20,12 +20,16 @@ public class ClientMimicRenderer extends GeoEntityRenderer<ClientMimicEntity> {
 
         poseStack.pushPose();
 
-        // 描画用フィールドを使用して、Entity 本体の座標や回転に依存しない
-        poseStack.translate(entity.getRenderX(), entity.getRenderY(), entity.getRenderZ());
-        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-entity.getRenderYRot()));
-        poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(entity.getRenderXRot()));
+        // --- 補間位置のみ反映 ---
+        double interpX = entity.getInterpolatedX(partialTicks);
+        double interpY = entity.getInterpolatedY(partialTicks);
+        double interpZ = entity.getInterpolatedZ(partialTicks);
 
-        // GeckoLib に描画を委譲
+        poseStack.translate(
+                interpX - entity.getX(),
+                interpY - entity.getY(),
+                interpZ - entity.getZ()
+        );
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
         poseStack.popPose();

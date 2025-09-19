@@ -5,11 +5,9 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.PlayerEntityCache;
 import net.mimic.monstermod.identity.PlayerIdentityType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -20,17 +18,12 @@ import java.util.UUID;
 
 public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimationState> {
 
-    public static final ResourceLocation IDENTITY_ID =
-            new ResourceLocation(MonsterMod.MOD_ID, "mimic");
+    public static final net.minecraft.resources.ResourceLocation IDENTITY_ID =
+            new net.minecraft.resources.ResourceLocation(MonsterMod.MOD_ID, "mimic");
 
     public MimicIdentity() {
-        super(
-                IDENTITY_ID,
-                ModEntities.MIMIC::get,
-                MimicEntity.MimicAnimationState.class,
-                createAnimationMap(),
-                MimicEntity.MimicAnimationState.IDLE
-        );
+        super(IDENTITY_ID, ModEntities.MIMIC::get, MimicEntity.MimicAnimationState.class,
+                createAnimationMap(), MimicEntity.MimicAnimationState.IDLE);
     }
 
     private static Map<String, MimicEntity.MimicAnimationState> createAnimationMap() {
@@ -39,21 +32,6 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         map.put("ATTACK", MimicEntity.MimicAnimationState.BITE);
         map.put("IDLE", MimicEntity.MimicAnimationState.IDLE);
         return map;
-    }
-
-    @Override
-    public void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state) {
-        if (!(dummy instanceof Player player)) return;
-        UUID playerId = player.getUUID();
-
-        // --- Client 用のキャッシュを取得 ---
-        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
-
-        // --- 非ループアニメは playOnce、ループアニメは通常の setAnimationState ---
-        switch (state) {
-            case OPEN, CLOSE, BITE -> cachedEntity.playOnce(state);
-            default -> cachedEntity.setAnimationState(state);
-        }
     }
 
     @Override
@@ -67,13 +45,30 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
+    public void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state) {
+        if (!(dummy instanceof Player player)) return;
+        UUID playerId = player.getUUID();
+        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
+
+        switch (state) {
+            case OPEN, CLOSE, BITE -> {
+                // 単発アニメは強制再生
+                cachedEntity.playOnce(state);
+            }
+            default -> {
+                // ループ系は現在と違う時だけセット
+                if (cachedEntity.getAnimationState() != state) {
+                    cachedEntity.setAnimationState(state);
+                }
+            }
+        }
+    }
+
+    @Override
     public void applySpecificAbilities(LivingEntity player) {}
     @Override
     public void removeSpecificAbilities(LivingEntity player) {}
 
-    /**
-     * 微振動防止版の applyAnimationAndRender
-     */
     public void applyAnimationAndRender(Player player,
                                         float entityYaw,
                                         float partialTicks,
@@ -85,21 +80,32 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // --- 位置・回転・速度の同期 ---
+        // プレイヤーの位置・回転を反映
+        cachedEntity.setDeltaMovement(player.getDeltaMovement());
         cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
                 player.yBodyRot, player.getXRot());
-        cachedEntity.setDeltaMovement(player.getDeltaMovement());
 
-
-        // --- AnimationController を進める ---
+        // 内部アニメーション状態を更新
         cachedEntity.tick();
 
-        // --- 描画 ---
         poseStack.pushPose();
-        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
+
+        // 平行移動（補間付き）
+        poseStack.translate(
+                cachedEntity.getInterpolatedX(partialTicks) - cachedEntity.getX(),
+                cachedEntity.getInterpolatedY(partialTicks) - cachedEntity.getY(),
+                cachedEntity.getInterpolatedZ(partialTicks) - cachedEntity.getZ()
+        );
+
+        // Y軸回転のみ適用（頭のピッチはアニメ側で制御）
+        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(
+                -cachedEntity.getInterpolatedYRot(partialTicks))
+        );
+
         Minecraft.getInstance().getEntityRenderDispatcher()
                 .getRenderer(cachedEntity)
                 .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+
         poseStack.popPose();
     }
 }
