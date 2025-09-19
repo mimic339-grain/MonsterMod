@@ -5,7 +5,6 @@ import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.PlayerEntityCache;
 import net.mimic.monstermod.identity.PlayerIdentityType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -46,12 +45,12 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         if (!(dummy instanceof Player player)) return;
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(player.getUUID());
 
+        // 非ループアニメは playOnce でリクエスト
         switch (state) {
             case OPEN, CLOSE, BITE -> cachedEntity.playOnce(state);
             default -> cachedEntity.setAnimationState(state);
         }
     }
-
 
     @Override
     public Vec3 getBoundingBoxDimensions(net.minecraft.world.entity.Pose pose) {
@@ -82,16 +81,17 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // --- 位置・回転・速度の同期 ---
+        // 位置・回転・速度同期
         cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
                 player.yBodyRot, player.getXRot());
         cachedEntity.setDeltaMovement(player.getDeltaMovement());
 
+        // baseState 更新（非ループ再生中は上書きしない）
+        if (cachedEntity.isAnimationFinished() || cachedEntity.isLoopAnimation(cachedEntity.getLastRequestedAnimation())) {
+            cachedEntity.setAnimationState(baseState);
+        }
 
-        // --- AnimationController を進める ---
-        cachedEntity.tick();
-
-        // --- 描画 ---
+        // 描画のみ
         poseStack.pushPose();
         poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-player.yBodyRot));
         Minecraft.getInstance().getEntityRenderDispatcher()
@@ -99,4 +99,5 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
                 .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
         poseStack.popPose();
     }
+
 }

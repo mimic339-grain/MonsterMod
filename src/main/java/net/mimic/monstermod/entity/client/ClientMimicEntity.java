@@ -21,14 +21,16 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
     private MimicAnimationState lastRequestedAnimation = null;
 
+    // --- 位置・回転同期用 ---
+    private double renderX, renderY, renderZ;
+    private float renderYRot, renderXRot;
+
     public ClientMimicEntity() {
         super(ModEntities.MIMIC.get(), Minecraft.getInstance().level);
     }
 
     @Override
-    public AnimatableInstanceCache getAnimatableInstanceCache() {
-        return cache;
-    }
+    public AnimatableInstanceCache getAnimatableInstanceCache() { return cache; }
 
     @Override
     public void registerControllers(ControllerRegistrar controllers) {
@@ -38,25 +40,23 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
 
             boolean loop = shouldLoop(animState);
 
-            // --- 前回と同じアニメーションなら再セットしない ---
             if (lastRequestedAnimation != animState) {
-                if (loop) {
-                    state.getController().setAnimation(RawAnimation.begin().thenLoop(getAnimationName(animState)));
-                } else {
-                    state.getController().setAnimation(RawAnimation.begin().thenPlay(getAnimationName(animState)));
-                }
+                state.getController().setAnimation(
+                        loop ? RawAnimation.begin().thenLoop(getAnimationName(animState))
+                                : RawAnimation.begin().thenPlay(getAnimationName(animState))
+                );
                 lastRequestedAnimation = animState;
             }
 
-            // --- 非ループアニメーション終了後に baseState に戻す ---
+            // 非ループ終了後に baseState に戻す
             if (!loop && state.getController().hasAnimationFinished()) {
+                MimicAnimationState nextState = isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE;
                 switch (animState) {
-                    case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
-                    case CLOSE -> setAnimationState(MimicAnimationState.IDLE);
-                    case BITE -> setAnimationState(isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE);
-                    default -> {}
+                    case OPEN -> nextState = MimicAnimationState.OPEN_IDLE;
+                    case CLOSE, BITE -> nextState = isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE;
                 }
-                lastRequestedAnimation = null; // アニメ完了後にだけリセット
+                setAnimationState(nextState);
+                lastRequestedAnimation = null;
             }
 
             return PlayState.CONTINUE;
@@ -65,29 +65,29 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
 
     @Override
     public void tick() {
-        super.tick();
+        // --- 非ループアニメ再生中は tick() で baseState を上書きしない ---
+        if (lastRequestedAnimation != null && !isLoopAnimation(lastRequestedAnimation)) {
+            return; // playOnce中は何もしない
+        }
 
-        // 非ループアニメ再生中は上書きしない
-        if (lastRequestedAnimation == null || isLoopAnimation(lastRequestedAnimation)) {
-            boolean moving = this.getDeltaMovement().lengthSqr() > 1e-6;
-            MimicAnimationState jumpState = moving
-                    ? (isOpen() ? MimicAnimationState.OPENJUMP : MimicAnimationState.CLOSEJUMP)
-                    : (isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE);
+        // --- 微振動防止 ---
+        boolean moving = this.getDeltaMovement().lengthSqr() > 1e-4;
 
-            if (getAnimationState() != jumpState) {
-                setAnimationState(jumpState);
-            }
+        MimicAnimationState newState = moving
+                ? (isOpen() ? MimicAnimationState.OPENJUMP : MimicAnimationState.CLOSEJUMP)
+                : (isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE);
+
+        // --- 状態が変わる場合のみ更新 ---
+        if (getAnimationState() != newState) {
+            setAnimationState(newState);
         }
     }
 
-
-
-    // 非ループアニメ再生用
+    // --- 非ループアニメ再生 ---
     public void playOnce(MimicAnimationState state) {
         setAnimationState(state);
-        lastRequestedAnimation = state; // tick() による上書きをブロック
+        lastRequestedAnimation = state; // tick() による上書きを防ぐ
     }
-
 
     public boolean isLoopAnimation(MimicAnimationState state) {
         return shouldLoop(state);
@@ -97,41 +97,27 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return lastRequestedAnimation == null;
     }
 
-    public MimicAnimationState getLastRequestedAnimation() {
-        return lastRequestedAnimation;
-    }
-
     // --- 位置・回転同期 ---
-    private double renderX, renderY, renderZ;
-    private float renderYRot, renderXRot;
-
     public void setPosAndRot(double x, double y, double z, float yRot, float xRot) {
-        this.setPos(x, y, z);
-        this.renderX = x;
-        this.renderY = y;
-        this.renderZ = z;
-        this.renderYRot = yRot;
-        this.renderXRot = xRot;
+        setPos(x, y, z);
+        this.renderX = x; this.renderY = y; this.renderZ = z;
+        this.renderYRot = yRot; this.renderXRot = xRot;
     }
-
     public double getRenderX() { return renderX; }
     public double getRenderY() { return renderY; }
     public double getRenderZ() { return renderZ; }
     public float getRenderYRot() { return renderYRot; }
     public float getRenderXRot() { return renderXRot; }
-    public MimicAnimationState getRenderAnimationState() { return getAnimationState(); }
 
     // --- キャッシュ管理 ---
     public static ClientMimicEntity getOrCreate(UUID playerUUID) {
         return CLIENT_ENTITIES.computeIfAbsent(playerUUID, uuid -> new ClientMimicEntity());
     }
+    public static void remove(UUID playerUUID) { CLIENT_ENTITIES.remove(playerUUID); }
+    public static void clearAll() { CLIENT_ENTITIES.clear(); }
+    public static Iterable<UUID> getAllUUIDs() { return CLIENT_ENTITIES.keySet(); }
 
-    public static void remove(UUID playerUUID) {
-        CLIENT_ENTITIES.remove(playerUUID);
+    public MimicAnimationState getLastRequestedAnimation() {
+        return lastRequestedAnimation;
     }
-
-    public static void clearAll() {
-        CLIENT_ENTITIES.clear();
-    }
-
 }

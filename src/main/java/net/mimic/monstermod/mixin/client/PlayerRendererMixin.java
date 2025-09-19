@@ -3,7 +3,6 @@ package net.mimic.monstermod.mixin.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
-import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -28,6 +27,8 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void onRender(AbstractClientPlayer player, float entityYaw, float partialTicks,
                           PoseStack poseStack, MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
+        System.out.println("[DEBUG] PlayerRendererMixin called for: " + player.getName().getString());
+
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             if (!transformation.isTransformed()) return;
@@ -35,13 +36,15 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
             UUID playerId = player.getUUID();
             ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-            // 位置・回転・速度の同期
+            // 位置・回転・速度同期
             cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(),
                     player.yBodyRot, player.getXRot());
             cachedEntity.setDeltaMovement(player.getDeltaMovement());
 
-            // tick() 側で非ループアニメも含めて状態管理する
-            cachedEntity.tick();
+            // baseState 更新（非ループアニメ中は上書きしない）
+            if (cachedEntity.isAnimationFinished() || cachedEntity.isLoopAnimation(cachedEntity.getLastRequestedAnimation())) {
+                cachedEntity.setAnimationState(transformation.getBaseState());
+            }
 
             // 描画のみ
             poseStack.pushPose();
