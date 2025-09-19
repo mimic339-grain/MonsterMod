@@ -115,31 +115,8 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     @Override
     public void tick() {
         super.tick();
-
-        // 移動しているか判定
-        boolean moving = this.getDeltaMovement().lengthSqr() > 0.01;
-        MimicAnimationState current = getAnimationState();
-
-        if (isOpen()) {
-            if (moving) {
-                if (current != MimicAnimationState.OPENJUMP) {
-                    setAnimationState(MimicAnimationState.OPENJUMP);
-                }
-            } else if (current == MimicAnimationState.OPENJUMP) {
-                // 移動終了 → OPENに戻す
-                setAnimationState(MimicAnimationState.OPEN);
-            }
-        } else {
-            if (moving) {
-                if (current != MimicAnimationState.CLOSEJUMP) {
-                    setAnimationState(MimicAnimationState.CLOSEJUMP);
-                }
-            } else if (current == MimicAnimationState.CLOSEJUMP) {
-                // 移動終了 → CLOSEに戻す
-                setAnimationState(MimicAnimationState.CLOSE);
-            }
-        }
     }
+
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
@@ -156,7 +133,7 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
 
             boolean loop = shouldLoop(animState);
 
-            // 状態が変わった時だけ setAnimation
+            // 状態が変わったときだけアニメーションをセット
             if (lastRequestedAnimation != animState) {
                 lastRequestedAnimation = animState;
 
@@ -166,25 +143,17 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
                                 : RawAnimation.begin().thenPlay(getAnimationName(animState))
                 );
 
-                // デバッグ出力
                 System.out.println("[Mimic] play animation: " + getAnimationName(animState) + " loop=" + loop);
             }
 
-            // 非ループ系の終了処理
-            if (!loop) {
-                animationTick++;
-                if (animationTick >= getAnimationDuration(animState)) {
-                    switch (animState) {
-                        case OPEN -> setAnimationState(MimicAnimationState.OPEN);
-                        case CLOSE, BITE -> setAnimationState(MimicAnimationState.CLOSE);
-                        default -> {
-                        }
-                    }
-                    animationTick = 0;
-                    lastRequestedAnimation = null; // 次フレームで新しい anim をリクエスト
+            // 非ループ系アニメーション終了後の自動遷移
+            if (!loop && state.getController().hasAnimationFinished()) {
+                switch (animState) {
+                    case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
+                    case CLOSE, BITE -> setAnimationState(MimicAnimationState.IDLE);
+                    default -> {}
                 }
-            } else {
-                animationTick = 0;
+                lastRequestedAnimation = null; // 次フレームで新しいアニメをリクエスト
             }
 
             return PlayState.CONTINUE;

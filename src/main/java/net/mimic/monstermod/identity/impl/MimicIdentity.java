@@ -3,7 +3,6 @@ package net.mimic.monstermod.identity.impl;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
@@ -54,14 +53,10 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
-    public void applySpecificAbilities(LivingEntity player) {
-        // 追加能力があればここで適用
-    }
+    public void applySpecificAbilities(LivingEntity player) { }
 
     @Override
-    public void removeSpecificAbilities(LivingEntity player) {
-        // 能力解除処理
-    }
+    public void removeSpecificAbilities(LivingEntity player) { }
 
     @Override
     public void applyAnimation(LivingEntity entity, MimicEntity.MimicAnimationState state) {
@@ -73,7 +68,6 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
                 () -> new MimicEntity(ModEntities.MIMIC.get(), player.level())
         );
 
-        // アニメーション状態を直接反映
         cachedEntity.setAnimationState(state);
     }
 
@@ -90,37 +84,34 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // 移動判定
         boolean isMoving = player.getDeltaMovement().lengthSqr() > 1e-6f;
 
         MimicEntity.MimicAnimationState currentState = cachedEntity.getAnimationState();
         MimicEntity.MimicAnimationState targetState = currentState;
 
+        // 移動判定によるアニメ切替
         if (!cachedEntity.isAnimationLocked()) {
-            // 移動中の遷移
             if (isMoving) {
                 if (currentState == MimicEntity.MimicAnimationState.OPEN ||
                         currentState == MimicEntity.MimicAnimationState.OPEN_IDLE) {
                     targetState = MimicEntity.MimicAnimationState.OPENJUMP;
-                } else if (currentState == MimicEntity.MimicAnimationState.CLOSE) {
+                } else if (currentState == MimicEntity.MimicAnimationState.CLOSE ||
+                        currentState == MimicEntity.MimicAnimationState.IDLE) {
                     targetState = MimicEntity.MimicAnimationState.CLOSEJUMP;
                 }
-            }
-            // 停止中の遷移
-            else {
+            } else {
                 if (currentState == MimicEntity.MimicAnimationState.OPENJUMP) {
                     targetState = MimicEntity.MimicAnimationState.OPEN_IDLE;
                 } else if (currentState == MimicEntity.MimicAnimationState.CLOSEJUMP) {
-                    targetState = MimicEntity.MimicAnimationState.CLOSE;
+                    targetState = MimicEntity.MimicAnimationState.IDLE;
                 }
             }
         }
 
-        // 状態が変わった場合のみセット
+        // ★ 状態が変わった場合のみセット
         if (currentState != targetState) {
             cachedEntity.setAnimationState(targetState);
         }
-
         // プレイヤー位置・回転に同期
         cachedEntity.setPos(player.getX(), player.getY(), player.getZ());
         cachedEntity.setDeltaMovement(player.getDeltaMovement());

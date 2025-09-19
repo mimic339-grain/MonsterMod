@@ -57,15 +57,14 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
                 System.out.println("[ClientMimicEntity] play animation: " + getAnimationName(animState) + " loop=" + loop);
             }
 
-            // 非ループの終了処理
+            // 非ループ系終了後に待機状態へ遷移
             if (!loop && state.getController().hasAnimationFinished()) {
                 switch (animState) {
-                    case OPEN-> setAnimationState(MimicAnimationState.OPEN);
-                    case CLOSE-> setAnimationState(MimicAnimationState.CLOSE);
-                    case BITE -> setAnimationState(MimicAnimationState.OPEN);
+                    case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
+                    case CLOSE, BITE -> setAnimationState(MimicAnimationState.IDLE);
                     default -> {}
                 }
-                lastRequestedAnimation = null;
+                lastRequestedAnimation = null; // 次フレームでアニメを再設定可能
             }
 
             return PlayState.CONTINUE;
@@ -84,33 +83,16 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public void setAnimationState(MimicAnimationState state) {
         super.setAnimationState(state);
         this.animationState = state;
-        // ★ 強制的にリセットして次フレームで必ず反映
+        // ★ 状態変化時に必ずアニメ再設定可能にする
         this.lastRequestedAnimation = null;
     }
 
-    public double getRenderX() {
-        return renderX;
-    }
-
-    public double getRenderY() {
-        return renderY;
-    }
-
-    public double getRenderZ() {
-        return renderZ;
-    }
-
-    public float getRenderYRot() {
-        return renderYRot;
-    }
-
-    public float getRenderXRot() {
-        return renderXRot;
-    }
-
-    public MimicAnimationState getRenderAnimationState() {
-        return animationState;
-    }
+    public double getRenderX() { return renderX; }
+    public double getRenderY() { return renderY; }
+    public double getRenderZ() { return renderZ; }
+    public float getRenderYRot() { return renderYRot; }
+    public float getRenderXRot() { return renderXRot; }
+    public MimicAnimationState getRenderAnimationState() { return animationState; }
 
     // --- キャッシュ管理 ---
     public static ClientMimicEntity getOrCreate(UUID playerUUID) {
@@ -123,11 +105,5 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
 
     public static void clearAll() {
         CLIENT_ENTITIES.clear();
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        // 状態更新のみ、アニメーションの tick は GeoEntity が render 時に自動処理
     }
 }

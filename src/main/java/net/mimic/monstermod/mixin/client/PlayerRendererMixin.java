@@ -51,10 +51,12 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
                 return;
             }
 
-            // Identity がない場合は ClientMimicEntity を描画
+            // ClientMimicEntity 描画
             ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(player.getUUID());
             clientEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-            clientEntity.setAnimationState(animState);
+
+            // ★ animState を毎フレームセットする行は削除
+            // clientEntity.setAnimationState(animState);
 
             clientRenderer.render(clientEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
