@@ -19,11 +19,10 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     public enum MimicAnimationState {
         // 基本状態
         IDLE,       // デフォルト待機（箱が閉じている静止状態）
-        CLOSE,      // 箱を閉じて擬態している（定常状態）
-        OPEN,       // 箱が開いて戦闘モード（定常状態）
+        OPEN_IDLE,  //open状態の待機
         // 遷移アニメーション
-        OPENING,    // CLOSE → OPEN へ移行中
-        CLOSING,    // OPEN → CLOSE へ移行中
+        OPEN,    // CLOSE → OPEN へ移行中
+        CLOSE,    // OPEN → CLOSE へ移行中
         // 行動系
         OPENJUMP,   // OPEN中の移動
         CLOSEJUMP,  // CLOSE中の移動
@@ -88,22 +87,20 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     protected String getAnimationName(MimicAnimationState state) {
         return switch (state) {
             case BITE -> "animation.mimic.bite";
-            case OPENING -> "animation.mimic.open";
-            case CLOSING -> "animation.mimic.close";
             case OPEN -> "animation.mimic.open";
             case CLOSE -> "animation.mimic.close";
             case OPENJUMP -> "animation.mimic.openjump";
             case CLOSEJUMP -> "animation.mimic.closejump";
             case IDLE -> "animation.mimic.idle";
+            case OPEN_IDLE -> "animation.mimic.open_idle";
         };
     }
 
     @Override
     protected boolean shouldLoop(MimicAnimationState state) {
         return switch (state) {
-            case OPEN, CLOSE, OPENJUMP, CLOSEJUMP -> true;   // 状態維持はループ
-            case OPENING, CLOSING, BITE -> false;           // 遷移・攻撃は一回きり
-            case IDLE -> true;                              // idle はループ
+            case OPENJUMP, CLOSEJUMP ,OPEN_IDLE ,IDLE-> true;   // 状態維持はループ
+            case OPEN, CLOSE, BITE -> false;           // 遷移・攻撃は一回きり
         };
     }
 
@@ -152,7 +149,7 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
 
             // pendingSwitch がある場合は強制切り替え
             if (pendingSwitch) {
-                setAnimationState(pendingOpen ? MimicAnimationState.OPENING : MimicAnimationState.CLOSING);
+                setAnimationState(pendingOpen ? MimicAnimationState.OPEN : MimicAnimationState.CLOSE);
                 pendingSwitch = false;
                 animState = getAnimationState();
             }
@@ -178,10 +175,8 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
                 animationTick++;
                 if (animationTick >= getAnimationDuration(animState)) {
                     switch (animState) {
-                        case OPENING -> setAnimationState(MimicAnimationState.OPEN);
-                        case CLOSING -> setAnimationState(MimicAnimationState.CLOSE);
-                        case BITE -> setAnimationState(MimicAnimationState.OPEN);
-                        case IDLE -> setAnimationState(MimicAnimationState.CLOSE);
+                        case OPEN -> setAnimationState(MimicAnimationState.OPEN);
+                        case CLOSE, BITE -> setAnimationState(MimicAnimationState.CLOSE);
                         default -> {
                         }
                     }
@@ -198,7 +193,7 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
 
     private int getAnimationDuration(MimicAnimationState state) {
         return switch (state) {
-            case BITE, OPENING, CLOSING, IDLE -> 10;
+            case BITE, OPEN, CLOSE -> 10;
             default -> 0;
         };
     }
@@ -206,8 +201,8 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     @Override
     public boolean isAnimationLocked() {
         MimicAnimationState state = getAnimationState();
-        return state == MimicAnimationState.OPENING
-                || state == MimicAnimationState.CLOSING
+        return state == MimicAnimationState.OPEN
+                || state == MimicAnimationState.CLOSE
                 || state == MimicAnimationState.BITE;
     }
 

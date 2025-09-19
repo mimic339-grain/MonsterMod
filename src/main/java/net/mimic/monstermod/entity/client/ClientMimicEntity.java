@@ -60,8 +60,8 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
             // 非ループの終了処理
             if (!loop && state.getController().hasAnimationFinished()) {
                 switch (animState) {
-                    case OPENING -> setAnimationState(MimicAnimationState.OPEN);
-                    case CLOSING -> setAnimationState(MimicAnimationState.CLOSE);
+                    case OPEN-> setAnimationState(MimicAnimationState.OPEN);
+                    case CLOSE-> setAnimationState(MimicAnimationState.CLOSE);
                     case BITE -> setAnimationState(MimicAnimationState.OPEN);
                     default -> {}
                 }

@@ -90,52 +90,45 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // プレイヤーが移動中か判定
+        // 移動判定
         boolean isMoving = player.getDeltaMovement().lengthSqr() > 1e-6f;
 
-        // 基本状態保持（OPEN / CLOSE）
-        boolean wasOpen = baseState == MimicEntity.MimicAnimationState.OPEN
-                || baseState == MimicEntity.MimicAnimationState.OPENJUMP;
-        boolean wasClose = baseState == MimicEntity.MimicAnimationState.CLOSE
-                || baseState == MimicEntity.MimicAnimationState.CLOSEJUMP;
-
-        // 目標ステート決定（現在の cachedEntity の状態をデフォルトにする）
-        MimicEntity.MimicAnimationState targetState = cachedEntity.getAnimationState();
+        MimicEntity.MimicAnimationState currentState = cachedEntity.getAnimationState();
+        MimicEntity.MimicAnimationState targetState = currentState;
 
         if (!cachedEntity.isAnimationLocked()) {
+            // 移動中の遷移
             if (isMoving) {
-                if (wasOpen) {
+                if (currentState == MimicEntity.MimicAnimationState.OPEN ||
+                        currentState == MimicEntity.MimicAnimationState.OPEN_IDLE) {
                     targetState = MimicEntity.MimicAnimationState.OPENJUMP;
-                } else if (wasClose) {
+                } else if (currentState == MimicEntity.MimicAnimationState.CLOSE) {
                     targetState = MimicEntity.MimicAnimationState.CLOSEJUMP;
-                } else {
-                    targetState = baseState;
                 }
-            } else {
-                MimicEntity.MimicAnimationState current = cachedEntity.getAnimationState();
-                if (current == MimicEntity.MimicAnimationState.OPENJUMP) {
-                    targetState = MimicEntity.MimicAnimationState.OPEN;
-                } else if (current == MimicEntity.MimicAnimationState.CLOSEJUMP) {
+            }
+            // 停止中の遷移
+            else {
+                if (currentState == MimicEntity.MimicAnimationState.OPENJUMP) {
+                    targetState = MimicEntity.MimicAnimationState.OPEN_IDLE;
+                } else if (currentState == MimicEntity.MimicAnimationState.CLOSEJUMP) {
                     targetState = MimicEntity.MimicAnimationState.CLOSE;
-                } else {
-                    targetState = baseState;
                 }
             }
         }
 
-        // 変化時のみセット（毎フレームセットするとアニメがリセットされる）
-        if (cachedEntity.getAnimationState() != targetState) {
+        // 状態が変わった場合のみセット
+        if (currentState != targetState) {
             cachedEntity.setAnimationState(targetState);
         }
 
-        // 位置・回転はプレイヤーに合わせる
+        // プレイヤー位置・回転に同期
         cachedEntity.setPos(player.getX(), player.getY(), player.getZ());
         cachedEntity.setDeltaMovement(player.getDeltaMovement());
         cachedEntity.yBodyRot = 0;
         cachedEntity.setYRot(0);
         cachedEntity.setYHeadRot(0);
 
-        // walkAnimation 更新
+        // 歩行アニメーション更新
         if (isMoving) {
             cachedEntity.walkAnimation.update(player.walkAnimation.position(), 1.0f);
             cachedEntity.walkAnimation.setSpeed(player.walkAnimation.speed());
