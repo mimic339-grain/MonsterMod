@@ -24,6 +24,8 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
 
     public static final ResourceLocation IDENTITY_ID = new ResourceLocation(MonsterMod.MOD_ID, "mimic");
 
+    private final Map<UUID, MimicEntity.MimicAnimationState> lastSentStates = new HashMap<>();
+
     public MimicIdentity() {
         super(
                 IDENTITY_ID,
@@ -68,7 +70,9 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
                 () -> new MimicEntity(ModEntities.MIMIC.get(), player.level())
         );
 
-        cachedEntity.setAnimationState(state);
+        if (cachedEntity.getAnimationState() != state) {
+            cachedEntity.setAnimationState(state);
+        }
     }
 
     @Override
@@ -84,48 +88,31 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        boolean isMoving = player.getDeltaMovement().lengthSqr() > 1e-6f;
-
-        MimicEntity.MimicAnimationState currentState = cachedEntity.getAnimationState();
-        MimicEntity.MimicAnimationState targetState = currentState;
-
-        // 移動判定によるアニメ切替
-        if (!cachedEntity.isAnimationLocked()) {
-            if (isMoving) {
-                if (currentState == MimicEntity.MimicAnimationState.OPEN ||
-                        currentState == MimicEntity.MimicAnimationState.OPEN_IDLE) {
-                    targetState = MimicEntity.MimicAnimationState.OPENJUMP;
-                } else if (currentState == MimicEntity.MimicAnimationState.CLOSE ||
-                        currentState == MimicEntity.MimicAnimationState.IDLE) {
-                    targetState = MimicEntity.MimicAnimationState.CLOSEJUMP;
-                }
-            } else {
-                if (currentState == MimicEntity.MimicAnimationState.OPENJUMP) {
-                    targetState = MimicEntity.MimicAnimationState.OPEN_IDLE;
-                } else if (currentState == MimicEntity.MimicAnimationState.CLOSEJUMP) {
-                    targetState = MimicEntity.MimicAnimationState.IDLE;
-                }
-            }
+        // --- クライアントプレイヤーのみ入力判定で移動状態を決定 ---
+        boolean isMoving = false;
+        if (player == Minecraft.getInstance().player) {
+            isMoving = Minecraft.getInstance().player.zza != 0 || Minecraft.getInstance().player.xxa != 0;
         }
 
-        // ★ 状態が変わった場合のみセット
-        if (currentState != targetState) {
-            cachedEntity.setAnimationState(targetState);
-        }
-        // プレイヤー位置・回転に同期
-        cachedEntity.setPos(player.getX(), player.getY(), player.getZ());
-        cachedEntity.setDeltaMovement(player.getDeltaMovement());
-        cachedEntity.yBodyRot = 0;
-        cachedEntity.setYRot(0);
-        cachedEntity.setYHeadRot(0);
+        MimicEntity.MimicAnimationState lastState = lastSentStates.getOrDefault(playerId, MimicEntity.MimicAnimationState.IDLE);
+        MimicEntity.MimicAnimationState targetState;
 
-        // 歩行アニメーション更新
         if (isMoving) {
-            cachedEntity.walkAnimation.update(player.walkAnimation.position(), 1.0f);
-            cachedEntity.walkAnimation.setSpeed(player.walkAnimation.speed());
+            targetState = cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP;
+        } else {
+            targetState = cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE;
         }
 
-        // tick で AnimationController を進める
+        // 状態が変わった場合のみセット
+        if (lastState != targetState) {
+            cachedEntity.setAnimationState(targetState);
+            lastSentStates.put(playerId, targetState);
+        }
+
+        // 描画座標・回転更新
+        cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.yBodyRot, player.getXRot());
+
+        // GeckoLib tick進行
         cachedEntity.tick();
 
         // 描画

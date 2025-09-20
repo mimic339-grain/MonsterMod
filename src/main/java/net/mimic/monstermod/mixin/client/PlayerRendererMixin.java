@@ -53,11 +53,17 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
 
             // ClientMimicEntity 描画
             ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(player.getUUID());
+
+            // 位置と回転だけを毎フレーム更新
             clientEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
 
-            // ★ animState を毎フレームセットする行は削除
-            // clientEntity.setAnimationState(animState);
+            // ★ animState の setAnimation はここでは行わない
+            //    → 状態変化に応じて ClientMimicEntity が自動で管理する
 
+            // GeckoLib の tick 進行
+            clientEntity.tick();
+
+            // 描画
             clientRenderer.render(clientEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
         });

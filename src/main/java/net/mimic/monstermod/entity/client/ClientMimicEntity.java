@@ -6,7 +6,7 @@ import net.minecraft.client.Minecraft;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar;
+import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
@@ -16,19 +16,27 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 描画専用 MimicEntity
- * サーバ同期・AI 無効
+ * クライアント用 MimicEntity
+ * プレイヤーごとに独立したアニメーション管理とレンダリング座標を保持
  */
 public class ClientMimicEntity extends MimicEntity implements GeoEntity {
 
+    // プレイヤーUUIDごとのクライアントMimicEntity保持マップ
     private static final Map<UUID, ClientMimicEntity> CLIENT_ENTITIES = new ConcurrentHashMap<>();
+
     private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
 
+    // 最後に要求したアニメーション
     private MimicAnimationState lastRequestedAnimation = null;
+
+    // レンダリング用座標・回転
     private double renderX, renderY, renderZ;
     private float renderYRot, renderXRot;
+
+    // 現在のアニメーション状態
     private MimicAnimationState animationState = MimicAnimationState.IDLE;
 
+    // コンストラクタ
     public ClientMimicEntity() {
         super(ModEntities.MIMIC.get(), Minecraft.getInstance().level);
     }
@@ -39,38 +47,46 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     }
 
     @Override
-    public void registerControllers(ControllerRegistrar controllers) {
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
-
             MimicAnimationState animState = getAnimationState();
-            boolean loop = shouldLoop(animState);
 
-            // 状態が変わったときだけアニメーションをセット
+            // ループアニメーション判定
+            boolean loop = switch (animState) {
+                case OPENJUMP, CLOSEJUMP, OPEN_IDLE, IDLE -> true;
+                default -> false;
+            };
+
+            // 状態変化時のみアニメーション設定
             if (lastRequestedAnimation != animState) {
-                lastRequestedAnimation = animState;
-                state.getController().setAnimation(
-                        loop
-                                ? RawAnimation.begin().thenLoop(getAnimationName(animState))
-                                : RawAnimation.begin().thenPlay(getAnimationName(animState))
-                );
+                RawAnimation animation = loop
+                        ? RawAnimation.begin().thenLoop(getAnimationName(animState))
+                        : RawAnimation.begin().thenPlay(getAnimationName(animState));
 
-                System.out.println("[ClientMimicEntity] play animation: " + getAnimationName(animState) + " loop=" + loop);
+                state.getController().setAnimation(animation);
+                lastRequestedAnimation = animState;
+
+                System.out.println("[ClientMimicEntity] setAnimation: " + animState);
             }
 
-            // 非ループ系終了後に待機状態へ遷移
+            // 非ループ系アニメ終了時は自動で待機状態に遷移
             if (!loop && state.getController().hasAnimationFinished()) {
                 switch (animState) {
                     case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
                     case CLOSE, BITE -> setAnimationState(MimicAnimationState.IDLE);
-                    default -> {}
+                    default -> { }
                 }
-                lastRequestedAnimation = null; // 次フレームでアニメを再設定可能
+                lastRequestedAnimation = null;
+                System.out.println("[ClientMimicEntity] Non-loop finished, switching idle");
             }
 
             return PlayState.CONTINUE;
         }));
     }
 
+    /**
+     * レンダリング用の位置・回転を設定
+     */
     public void setPosAndRot(double x, double y, double z, float yRot, float xRot) {
         this.renderX = x;
         this.renderY = y;
@@ -83,10 +99,9 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public void setAnimationState(MimicAnimationState state) {
         super.setAnimationState(state);
         this.animationState = state;
-        // ★ 状態変化時に必ずアニメ再設定可能にする
-        this.lastRequestedAnimation = null;
     }
 
+    // レンダリング情報取得
     public double getRenderX() { return renderX; }
     public double getRenderY() { return renderY; }
     public double getRenderZ() { return renderZ; }
@@ -94,7 +109,7 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public float getRenderXRot() { return renderXRot; }
     public MimicAnimationState getRenderAnimationState() { return animationState; }
 
-    // --- キャッシュ管理 ---
+    // プレイヤーUUIDごとにClientMimicEntityを取得 or 作成
     public static ClientMimicEntity getOrCreate(UUID playerUUID) {
         return CLIENT_ENTITIES.computeIfAbsent(playerUUID, uuid -> new ClientMimicEntity());
     }
