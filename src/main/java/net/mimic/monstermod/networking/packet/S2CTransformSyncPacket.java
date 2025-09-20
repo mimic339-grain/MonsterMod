@@ -1,6 +1,5 @@
 package net.mimic.monstermod.networking.packet;
 
-import net.mimic.monstermod.MonsterMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;

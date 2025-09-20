@@ -17,28 +17,23 @@ import software.bernie.geckolib.core.object.PlayState;
 public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationState> {
 
     public enum MimicAnimationState {
-        // 基本状態
-        IDLE,       // デフォルト待機（箱が閉じている静止状態）
-        OPEN_IDLE,  //open状態の待機
-        // 遷移アニメーション
-        OPEN,    // CLOSE → OPEN へ移行中
-        CLOSE,    // OPEN → CLOSE へ移行中
-        // 行動系
-        OPENJUMP,   // OPEN中の移動
-        CLOSEJUMP,  // CLOSE中の移動
-        BITE        // 攻撃
+        IDLE,
+        OPEN_IDLE,
+        OPEN,
+        CLOSE,
+        OPENJUMP,
+        CLOSEJUMP,
+        BITE
     }
 
     private static final EntityDataAccessor<Boolean> OPEN =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
 
-    private int animationTick = 0;
     private boolean idlePlayed = false;
     private boolean pendingSwitch = false;
     private boolean pendingOpen = false;
     private String linkedPlayerUUID = null;
 
-    // MimicEntity のフィールド
     private MimicAnimationState lastRequestedAnimation = null;
 
     public MimicEntity(EntityType<? extends BaseMonsterEntity<?>> type, Level level) {
@@ -67,7 +62,6 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
         return player != null && player.getUUID().toString().equals(this.linkedPlayerUUID);
     }
 
-    // AnimationController に通知
     public void requestSwitchAnimation(boolean open) {
         this.pendingSwitch = true;
         this.pendingOpen = open;
@@ -99,8 +93,8 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     @Override
     protected boolean shouldLoop(MimicAnimationState state) {
         return switch (state) {
-            case OPENJUMP, CLOSEJUMP ,OPEN_IDLE ,IDLE-> true;   // 状態維持はループ
-            case OPEN, CLOSE, BITE -> false;           // 遷移・攻撃は一回きり
+            case OPENJUMP, CLOSEJUMP, OPEN_IDLE, IDLE -> true;
+            case OPEN, CLOSE, BITE -> false;
         };
     }
 
@@ -115,25 +109,30 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
     @Override
     public void tick() {
         super.tick();
+
+        // プレイヤーと Mimic の座標同期ログ
+        Player player = this.level().getNearestPlayer(this, 0.1);
+        if (player != null && this.isLinkedTo(player)) {
+            System.out.println("[MimicEntity] syncPos " +
+                    "player=(" + player.getX() + "," + player.getY() + "," + player.getZ() + ") " +
+                    "mimic=(" + this.getX() + "," + this.getY() + "," + this.getZ() + ")");
+        }
     }
-
-
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
 
             MimicAnimationState animState = getAnimationState();
 
-            // pendingSwitch がある場合は強制切り替え
             if (pendingSwitch) {
                 setAnimationState(pendingOpen ? MimicAnimationState.OPEN : MimicAnimationState.CLOSE);
                 pendingSwitch = false;
                 animState = getAnimationState();
+                System.out.println("[MimicEntity] forced switch -> " + animState);
             }
 
             boolean loop = shouldLoop(animState);
 
-            // 状態が変わったときだけアニメーションをセット
             if (lastRequestedAnimation != animState) {
                 lastRequestedAnimation = animState;
 
@@ -143,29 +142,32 @@ public class MimicEntity extends BaseMonsterEntity<MimicEntity.MimicAnimationSta
                                 : RawAnimation.begin().thenPlay(getAnimationName(animState))
                 );
 
-                System.out.println("[Mimic] play animation: " + getAnimationName(animState) + " loop=" + loop);
+                System.out.println("[MimicEntity] setAnimation: " + getAnimationName(animState) +
+                        " loop=" + loop + " tick=" + this.tickCount);
             }
 
-            // 非ループ系アニメーション終了後の自動遷移
+            // 再生中アニメーションの確認（tick は出せないので省略）
+            if (state.getController().getCurrentAnimation() != null) {
+                System.out.println("[MimicEntity] playing=" +
+                        state.getController().getCurrentAnimation().animation().name() +
+                        " entityTick=" + this.tickCount);
+            }
+
             if (!loop && state.getController().hasAnimationFinished()) {
+                System.out.println("[MimicEntity] animation finished: " + animState);
                 switch (animState) {
                     case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
                     case CLOSE, BITE -> setAnimationState(MimicAnimationState.IDLE);
                     default -> {}
                 }
-                lastRequestedAnimation = null; // 次フレームで新しいアニメをリクエスト
+                lastRequestedAnimation = null;
             }
 
             return PlayState.CONTINUE;
         }));
     }
 
-    private int getAnimationDuration(MimicAnimationState state) {
-        return switch (state) {
-            case BITE, OPEN, CLOSE -> 10;
-            default -> 0;
-        };
-    }
+
 
     @Override
     public boolean isAnimationLocked() {

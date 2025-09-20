@@ -23,7 +23,6 @@ import java.util.UUID;
 public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimationState> {
 
     public static final ResourceLocation IDENTITY_ID = new ResourceLocation(MonsterMod.MOD_ID, "mimic");
-
     private final Map<UUID, MimicEntity.MimicAnimationState> lastSentStates = new HashMap<>();
 
     public MimicIdentity() {
@@ -71,6 +70,7 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         );
 
         if (cachedEntity.getAnimationState() != state) {
+            System.out.println("[MimicIdentity] applyAnimation: " + state + " to player=" + player.getName().getString());
             cachedEntity.setAnimationState(state);
         }
     }
@@ -88,31 +88,35 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // --- クライアントプレイヤーのみ入力判定で移動状態を決定 ---
-        boolean isMoving = false;
-        if (player == Minecraft.getInstance().player) {
-            isMoving = Minecraft.getInstance().player.zza != 0 || Minecraft.getInstance().player.xxa != 0;
-        }
+        boolean isMoving = player == Minecraft.getInstance().player &&
+                (Minecraft.getInstance().player.zza != 0 || Minecraft.getInstance().player.xxa != 0);
 
         MimicEntity.MimicAnimationState lastState = lastSentStates.getOrDefault(playerId, MimicEntity.MimicAnimationState.IDLE);
-        MimicEntity.MimicAnimationState targetState;
-
-        if (isMoving) {
-            targetState = cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP;
-        } else {
-            targetState = cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE;
-        }
+        MimicEntity.MimicAnimationState targetState = isMoving
+                ? (cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP)
+                : (cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE);
 
         // 状態が変わった場合のみセット
         if (lastState != targetState) {
             cachedEntity.setAnimationState(targetState);
             lastSentStates.put(playerId, targetState);
+            System.out.println("[MimicIdentity] setAnimation: " + targetState + " for player=" + player.getName().getString() +
+                    " (moving=" + isMoving + ")");
         }
 
-        // 描画座標・回転更新
-        cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.yBodyRot, player.getXRot());
+        // Y座標補間（ジャンプ中はアニメ任せ）
+        double renderY = cachedEntity.getRenderY();
+        if (!(targetState == MimicEntity.MimicAnimationState.CLOSEJUMP || targetState == MimicEntity.MimicAnimationState.OPENJUMP)) {
+            renderY += (player.getY() - renderY) * 0.5;
+        }
 
-        // GeckoLib tick進行
+        // 回転補間
+        float renderYRot = cachedEntity.getRenderYRot() + (player.yBodyRot - cachedEntity.getRenderYRot()) * 0.5f;
+        float renderXRot = cachedEntity.getRenderXRot() + (player.getXRot() - cachedEntity.getRenderXRot()) * 0.5f;
+
+        cachedEntity.setPosAndRot(player.getX(), renderY, player.getZ(), renderYRot, renderXRot);
+
+        // GeckoLib tick（座標更新後）
         cachedEntity.tick();
 
         // 描画
