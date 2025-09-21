@@ -86,45 +86,52 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
             MimicEntity.MimicAnimationState baseState
     ) {
         UUID playerId = player.getUUID();
-        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
+        ClientMimicEntity cached = ClientMimicEntity.getOrCreate(playerId);
 
         boolean isMoving = player == Minecraft.getInstance().player &&
-                (Minecraft.getInstance().player.zza != 0 || Minecraft.getInstance().player.xxa != 0);
+                (player.zza != 0 || player.xxa != 0);
 
-        MimicEntity.MimicAnimationState lastState = lastSentStates.getOrDefault(playerId, MimicEntity.MimicAnimationState.IDLE);
-        MimicEntity.MimicAnimationState targetState = isMoving
-                ? (cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP)
-                : (cachedEntity.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE);
-
-        // 状態が変わった場合のみセット
-        if (lastState != targetState) {
-            cachedEntity.setAnimationState(targetState);
-            lastSentStates.put(playerId, targetState);
-            System.out.println("[MimicIdentity] setAnimation: " + targetState + " for player=" + player.getName().getString() +
-                    " (moving=" + isMoving + ")");
+        MimicEntity.MimicAnimationState targetState;
+        if (isMoving) {
+            targetState = cached.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP;
+        } else {
+            targetState = cached.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE;
         }
 
-        // Y座標補間（ジャンプ中はアニメ任せ）
-        double renderY = cachedEntity.getRenderY();
-        if (!(targetState == MimicEntity.MimicAnimationState.CLOSEJUMP || targetState == MimicEntity.MimicAnimationState.OPENJUMP)) {
-            renderY += (player.getY() - renderY) * 0.5;
+        // ✅ 前回と違う場合のみアニメーションを更新
+        if (cached.getAnimationState() != targetState) {
+            cached.setAnimationState(targetState);
+            System.out.println("[MimicIdentity] Player=" + player.getName().getString() + " animation changed to " + targetState);
         }
 
-        // 回転補間
-        float renderYRot = cachedEntity.getRenderYRot() + (player.yBodyRot - cachedEntity.getRenderYRot()) * 0.5f;
-        float renderXRot = cachedEntity.getRenderXRot() + (player.getXRot() - cachedEntity.getRenderXRot()) * 0.5f;
+        // 座標補間
+        double renderY = cached.getRenderY();
+        double dy = player.getY() - renderY;
+        if (Math.abs(dy) > 0.01 || targetState == MimicEntity.MimicAnimationState.CLOSEJUMP || targetState == MimicEntity.MimicAnimationState.OPENJUMP) {
+            renderY += dy * 0.5;
+        }
 
-        cachedEntity.setPosAndRot(player.getX(), renderY, player.getZ(), renderYRot, renderXRot);
+        double renderX = cached.getRenderX() + (player.getX() - cached.getRenderX()) * 0.5;
+        double renderZ = cached.getRenderZ() + (player.getZ() - cached.getRenderZ()) * 0.5;
+        float renderYRot = cached.getRenderYRot() + (player.yBodyRot - cached.getRenderYRot()) * 0.5f;
+        float renderXRot = cached.getRenderXRot() + (player.getXRot() - cached.getRenderXRot()) * 0.5f;
 
-        // GeckoLib tick（座標更新後）
-        cachedEntity.tick();
+        cached.setPosAndRot(renderX, renderY, renderZ, renderYRot, renderXRot);
+
+        cached.tick();
+
+        System.out.println("[MimicIdentity] applyAnimationAndRender tick completed: pos=("
+                + cached.getRenderX() + "," + cached.getRenderY() + "," + cached.getRenderZ() + ") rot=("
+                + cached.getRenderYRot() + "," + cached.getRenderXRot() + ") state=" + cached.getAnimationState()
+        );
 
         // 描画
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
         Minecraft.getInstance().getEntityRenderDispatcher()
-                .getRenderer(cachedEntity)
-                .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+                .getRenderer(cached)
+                .render(cached, entityYaw, partialTicks, poseStack, buffer, packedLight);
         poseStack.popPose();
     }
+
 }

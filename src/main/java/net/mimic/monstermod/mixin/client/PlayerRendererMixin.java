@@ -37,13 +37,14 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
             int packedLight,
             CallbackInfo ci
     ) {
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            if (!trans.isTransformed()) return;
 
-            if (!transformation.isTransformed()) return;
+            IPlayerIdentity identity = trans.getTransformedIdentity();
+            MimicEntity.MimicAnimationState animState = trans.getAnimationState(trans.getTransformedMobId());
 
-            // Identity が存在する場合は Identity 側で描画
-            IPlayerIdentity identity = transformation.getTransformedIdentity();
-            MimicEntity.MimicAnimationState animState = transformation.getAnimationState(transformation.getTransformedMobId());
+            System.out.println("[PlayerRendererMixin] render player=" + player.getName().getString() + " animState=" + animState
+                    + " identity=" + (identity != null));
 
             if (identity != null) {
                 identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight, animState);
@@ -51,20 +52,10 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
                 return;
             }
 
-            // ClientMimicEntity 描画
-            ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(player.getUUID());
-
-            // 位置と回転だけを毎フレーム更新
-            clientEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-
-            // ★ animState の setAnimation はここでは行わない
-            //    → 状態変化に応じて ClientMimicEntity が自動で管理する
-
-            // GeckoLib の tick 進行
-            clientEntity.tick();
-
-            // 描画
-            clientRenderer.render(clientEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+            ClientMimicEntity cached = ClientMimicEntity.getOrCreate(player.getUUID());
+            cached.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+            cached.tick();
+            clientRenderer.render(cached, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
         });
     }
