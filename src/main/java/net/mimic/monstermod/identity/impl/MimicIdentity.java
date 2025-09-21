@@ -86,51 +86,61 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
             MimicEntity.MimicAnimationState baseState
     ) {
         UUID playerId = player.getUUID();
-        ClientMimicEntity cached = ClientMimicEntity.getOrCreate(playerId);
+        ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        boolean isMoving = player == Minecraft.getInstance().player &&
-                (player.zza != 0 || player.xxa != 0);
+        // クライアントプレイヤーなら WASD 判定
+        boolean isMoving = false;
+        if (player == Minecraft.getInstance().player) {
+            isMoving = Minecraft.getInstance().options.keyUp.isDown() ||
+                    Minecraft.getInstance().options.keyDown.isDown() ||
+                    Minecraft.getInstance().options.keyLeft.isDown() ||
+                    Minecraft.getInstance().options.keyRight.isDown();
+        }
 
+        // 前回状態を取得
+        MimicEntity.MimicAnimationState lastState = lastSentStates
+                .getOrDefault(playerId, MimicEntity.MimicAnimationState.IDLE);
+
+        // 次の状態を決定
         MimicEntity.MimicAnimationState targetState;
         if (isMoving) {
-            targetState = cached.isOpen() ? MimicEntity.MimicAnimationState.OPENJUMP : MimicEntity.MimicAnimationState.CLOSEJUMP;
+            targetState = cachedEntity.isOpen()
+                    ? MimicEntity.MimicAnimationState.OPENJUMP
+                    : MimicEntity.MimicAnimationState.CLOSEJUMP;
         } else {
-            targetState = cached.isOpen() ? MimicEntity.MimicAnimationState.OPEN_IDLE : MimicEntity.MimicAnimationState.IDLE;
+            targetState = cachedEntity.isOpen()
+                    ? MimicEntity.MimicAnimationState.OPEN_IDLE
+                    : MimicEntity.MimicAnimationState.IDLE;
         }
 
-        // ✅ 前回と違う場合のみアニメーションを更新
-        if (cached.getAnimationState() != targetState) {
-            cached.setAnimationState(targetState);
-            System.out.println("[MimicIdentity] Player=" + player.getName().getString() + " animation changed to " + targetState);
+        // 状態が変わった場合のみ更新
+        if (lastState != targetState) {
+            cachedEntity.setAnimationState(targetState);
+            lastSentStates.put(playerId, targetState);
+            System.out.println("[MimicIdentity] setAnimation: " + targetState
+                    + " for player=" + player.getName().getString()
+                    + " (moving=" + isMoving + ")");
         }
 
-        // 座標補間
-        double renderY = cached.getRenderY();
-        double dy = player.getY() - renderY;
-        if (Math.abs(dy) > 0.01 || targetState == MimicEntity.MimicAnimationState.CLOSEJUMP || targetState == MimicEntity.MimicAnimationState.OPENJUMP) {
-            renderY += dy * 0.5;
-        }
-
-        double renderX = cached.getRenderX() + (player.getX() - cached.getRenderX()) * 0.5;
-        double renderZ = cached.getRenderZ() + (player.getZ() - cached.getRenderZ()) * 0.5;
-        float renderYRot = cached.getRenderYRot() + (player.yBodyRot - cached.getRenderYRot()) * 0.5f;
-        float renderXRot = cached.getRenderXRot() + (player.getXRot() - cached.getRenderXRot()) * 0.5f;
-
-        cached.setPosAndRot(renderX, renderY, renderZ, renderYRot, renderXRot);
-
-        cached.tick();
-
-        System.out.println("[MimicIdentity] applyAnimationAndRender tick completed: pos=("
-                + cached.getRenderX() + "," + cached.getRenderY() + "," + cached.getRenderZ() + ") rot=("
-                + cached.getRenderYRot() + "," + cached.getRenderXRot() + ") state=" + cached.getAnimationState()
+        // 座標・回転・アニメーション状態をキャッシュに反映
+        cachedEntity.tickUpdate(
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                player.getYRot(),
+                player.getXRot(),
+                cachedEntity.getAnimationState() // baseState ではなく最新 state
         );
+
+        // GeckoLib tick
+        cachedEntity.tick();
 
         // 描画
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
         Minecraft.getInstance().getEntityRenderDispatcher()
-                .getRenderer(cached)
-                .render(cached, entityYaw, partialTicks, poseStack, buffer, packedLight);
+                .getRenderer(cachedEntity)
+                .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
         poseStack.popPose();
     }
 

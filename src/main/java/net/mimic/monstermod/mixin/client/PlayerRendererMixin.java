@@ -53,8 +53,11 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
             }
 
             ClientMimicEntity cached = ClientMimicEntity.getOrCreate(player.getUUID());
-            cached.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+
+            cached.tickUpdate(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), animState);
+
             cached.tick();
+            clientRenderer.render(cached, entityYaw, partialTicks, poseStack, buffer, packedLight);
             clientRenderer.render(cached, entityYaw, partialTicks, poseStack, buffer, packedLight);
             ci.cancel();
         });

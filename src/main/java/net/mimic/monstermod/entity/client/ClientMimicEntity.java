@@ -6,9 +6,7 @@ import net.minecraft.client.Minecraft;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.AnimatableManager;
-import software.bernie.geckolib.core.animation.AnimationController;
-import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
 
 import java.util.Map;
@@ -36,64 +34,76 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
-            // ループアニメーション
-            boolean loop = true;
 
-            // 前回と違う状態のみ上書き
-            if (lastRequestedAnimation != animationState) {
-                RawAnimation anim = RawAnimation.begin().thenLoop(getAnimationName(animationState));
+            MimicAnimationState current = animationState;
+
+            boolean loop = switch (current) {
+                case IDLE, OPEN_IDLE -> true;
+                default -> false;
+            };
+
+            // 前回のアニメと違う、またはループアニメは毎フレーム更新
+            if (lastRequestedAnimation != current || loop) {
+                lastRequestedAnimation = current;
+
+                RawAnimation anim = loop
+                        ? RawAnimation.begin().thenLoop(getAnimationName(current))
+                        : RawAnimation.begin().thenPlay(getAnimationName(current));
+
                 state.getController().setAnimation(anim);
-                lastRequestedAnimation = animationState;
-                System.out.println("[ClientMimicEntity] Animation changed to: " + animationState);
+
+                System.out.println("[ClientMimicEntity] setAnimation: " + getAnimationName(current) +
+                        " loop=" + loop + " tick=" + this.tickCount);
+            }
+
+            // ループでないアニメが終わったら自動で IDLE 系に戻す
+            if (!loop && state.getController().hasAnimationFinished()) {
+                switch (current) {
+                    case OPEN -> setAnimationState(MimicAnimationState.OPEN_IDLE);
+                    case CLOSE, BITE, OPENJUMP, CLOSEJUMP -> setAnimationState(MimicAnimationState.IDLE);
+                    default -> {}
+                }
+                lastRequestedAnimation = null;
             }
 
             return PlayState.CONTINUE;
         }));
     }
 
-    /**
-     * 座標・回転を補間する
-     * ジャンプ中以外の微小上下差分は補間せず振動を防止
-     */
-    public void setPosAndRot(double x, double y, double z, float yRot, float xRot) {
-        double oldX = renderX, oldY = renderY, oldZ = renderZ;
-        float oldYRot = renderYRot, oldXRot = renderXRot;
-
-        // Y座標補間
-        double dy = y - renderY;
-        if (Math.abs(dy) > 0.01 || animationState == MimicAnimationState.CLOSEJUMP || animationState == MimicAnimationState.OPENJUMP) {
-            renderY += dy * 0.5;
+    public void tickUpdate(double x, double y, double z, float yRot, float xRot, MimicAnimationState state) {
+        // 状態更新
+        if (this.animationState != state) {
+            this.animationState = state;
+            lastRequestedAnimation = null; // ←重要: controller が更新を反映できるようにリセット
         }
 
-        // X,Z 座標は差分補間
-        renderX += (x - renderX) * 0.5;
-        renderZ += (z - renderZ) * 0.5;
+        // 座標補間
+        renderX += (x - renderX);
+        renderY += (y - renderY);
+        renderZ += (z - renderZ);
 
         renderYRot = yRot;
         renderXRot = xRot;
 
-        System.out.println(String.format(
-                "[ClientMimicEntity] setPosAndRot old=(%.2f,%.2f,%.2f) new=(%.2f,%.2f,%.2f) rot=(%.2f,%.2f) state=%s",
-                oldX, oldY, oldZ, renderX, renderY, renderZ, renderYRot, renderXRot, animationState
-        ));
+        System.out.println("[ClientMimicEntity] tickUpdate pos=("
+                + renderX + "," + renderY + "," + renderZ + ") state=" + animationState);
     }
 
-    public void setAnimationState(MimicAnimationState state) {
-        if (this.animationState != state) {
-            System.out.println("[ClientMimicEntity] setAnimationState from " + this.animationState + " -> " + state);
-            this.animationState = state;
-            lastRequestedAnimation = null; // 次回Tickでアニメーション再設定可能
-        }
-    }
-
-    public MimicAnimationState getAnimationState() { return animationState; }
+    // Getter / Setter
     public double getRenderX() { return renderX; }
     public double getRenderY() { return renderY; }
     public double getRenderZ() { return renderZ; }
     public float getRenderYRot() { return renderYRot; }
     public float getRenderXRot() { return renderXRot; }
+    public MimicAnimationState getAnimationState() { return animationState; }
+    public void setAnimationState(MimicAnimationState state) {
+        if (this.animationState != state) {
+            this.animationState = state;
+            lastRequestedAnimation = null;
+        }
+    }
 
-    // UUID毎キャッシュ
+    // UUID キャッシュ
     private static final Map<UUID, ClientMimicEntity> CLIENT_ENTITIES = new ConcurrentHashMap<>();
     public static ClientMimicEntity getOrCreate(UUID uuid) {
         return CLIENT_ENTITIES.computeIfAbsent(uuid, u -> new ClientMimicEntity());
