@@ -1,3 +1,4 @@
+
 package net.mimic.monstermod.identity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -23,10 +24,6 @@ public interface IPlayerIdentity {
                                  MultiBufferSource buffer,
                                  int packedLight,
                                  MimicEntity.MimicAnimationState state);
-
-    // ダミーEntityにアニメーションや状態を適用
-    void applyAnimation(LivingEntity dummy, MimicEntity.MimicAnimationState state);
-
     // プレイヤーの変身後の物理的プロパティ
     Vec3 getBoundingBoxDimensions(Pose pose);
     float getEyeHeight(Pose pose);
@@ -40,7 +37,4 @@ public interface IPlayerIdentity {
 
     /** プレイヤー専用のダミーEntityを生成 */
     LivingEntity createDummy(Level level);
-
-    /** ダミーEntityにアニメーションや状態を適用 */
-    void applyAnimation(LivingEntity dummy, net.mimic.monstermod.capability.PlayerTransformation.MonsterState state);
 }

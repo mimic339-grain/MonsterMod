@@ -1,3 +1,4 @@
+
 package net.mimic.monstermod.capability;
 
 import net.mimic.monstermod.entity.custom.MimicEntity;
@@ -144,16 +145,16 @@ public class PlayerTransformation implements IPlayerTransformation {
         }
     }
 
-        private MimicEntity.MimicAnimationState baseState = MimicEntity.MimicAnimationState.IDLE;
+    private MimicEntity.MimicAnimationState baseState = MimicEntity.MimicAnimationState.IDLE;
 
-        @Override
-        public MimicEntity.MimicAnimationState getBaseState() {
-            return baseState;
-        }
+    @Override
+    public MimicEntity.MimicAnimationState getBaseState() {
+        return baseState;
+    }
 
-        @Override
-        public void setBaseState(MimicEntity.MimicAnimationState state) {
-            this.baseState = state;
-        }
+    @Override
+    public void setBaseState(MimicEntity.MimicAnimationState state) {
+        this.baseState = state;
+    }
 
 }

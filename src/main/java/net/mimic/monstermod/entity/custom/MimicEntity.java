@@ -1,3 +1,4 @@
+
 package net.mimic.monstermod.entity.custom;
 
 import net.mimic.monstermod.entity.BaseMonsterEntity;

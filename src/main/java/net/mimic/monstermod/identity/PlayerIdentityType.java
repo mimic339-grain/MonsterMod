@@ -55,7 +55,6 @@ public abstract class PlayerIdentityType <T extends Enum<T>> implements IPlayerI
     }
 
     @SuppressWarnings("unchecked")
-    @Override
     public void applyAnimation(LivingEntity dummy, PlayerTransformation.MonsterState state) {
         if (dummy == null) return;
 
