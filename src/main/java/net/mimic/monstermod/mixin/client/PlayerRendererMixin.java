@@ -55,11 +55,6 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
 
             // 元のプレイヤー描画をスキップ
             ci.cancel();
-
-            // ----- デバッグログ -----
-            System.out.println("[PlayerRendererMixin] Render player=" + player.getName().getString() +
-                    " anim=" + cachedEntity.getRenderAnimationState() +
-                    " pos=(" + cachedEntity.getRenderX() + "," + cachedEntity.getRenderY() + "," + cachedEntity.getRenderZ() + ")");
         });
     }
 }

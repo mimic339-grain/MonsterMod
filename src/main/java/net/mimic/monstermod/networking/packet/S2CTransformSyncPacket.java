@@ -40,10 +40,15 @@ public class S2CTransformSyncPacket {
                     transformation.setTransformed(this.isTransformed);
                     transformation.setTransformedMobId(this.transformedMobId);
 
-                    // MonsterState に統合
-                    if (this.transformedMobId != null) {
+                    // ===== デバッグログ追加 =====
+                    System.out.println("[S2CTransformSyncPacket] handle | Player=" +
+                            Minecraft.getInstance().player.getName().getString() +
+                            " MobId=" + this.transformedMobId +
+                            " AnimationStateReceived=" + this.animationState);
+
+                    if (this.transformedMobId != null && this.animationState != null) {
                         PlayerTransformation.MonsterState state = new PlayerTransformation.MonsterState();
-                        state.animationState = this.animationState; // 攻撃/IDLEなど全て文字列で管理
+                        state.animationState = this.animationState;
                         transformation.setMonsterState(this.transformedMobId, state);
                     }
                 });
@@ -52,4 +57,6 @@ public class S2CTransformSyncPacket {
         context.setPacketHandled(true);
         return true;
     }
+
+
 }

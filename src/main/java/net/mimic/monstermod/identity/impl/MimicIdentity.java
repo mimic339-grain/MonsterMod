@@ -50,7 +50,6 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         return 0.45f;
     }
 
-    @Override
     public void applyAnimationAndRender(
             Player player,
             float entityYaw,
@@ -63,18 +62,23 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
         UUID playerId = player.getUUID();
         ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(playerId);
 
-        // ----- 移動判定とアニメーション更新 -----
+        // デバッグログ
+        System.out.println("[MimicIdentity] Player=" + player.getName().getString() +
+                " | BaseState=" + baseState +
+                " | CachedState=" + cachedEntity.getRenderAnimationState());
+
+        // 座標・回転は変化がある場合のみ更新
+        cachedEntity.setPosAndRotIfChanged(
+                player.getX(), player.getY(), player.getZ(),
+                player.yBodyRot, player.getXRot()
+        );
+
+        // 移動判定とアニメーション更新
         if (player instanceof AbstractClientPlayer abstractPlayer) {
             cachedEntity.updateAnimation(abstractPlayer);
         }
 
-        // ----- 座標・回転の同期 -----
-        cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.yBodyRot, player.getXRot());
-
-        // ----- GeckoLib tickのみでアニメーション制御 -----
-        cachedEntity.tick();
-
-        // ----- 描画 -----
+        // 描画
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
         Minecraft.getInstance().getEntityRenderDispatcher()

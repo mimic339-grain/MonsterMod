@@ -48,54 +48,47 @@ public class PlayerTransformC2SPacket {
                     if (this.identityId != null) {
                         transformation.setTransformedMobId(this.identityId);
 
-                        // ===== ここで Entity を生成 =====
-                        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(this.identityId);
-                        if (type != null) {
-                            Level level = player.level(); // ← level() メソッドを使う
-                            Entity entity = type.create(level);
-                            if (entity != null) {
-                                entity.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-                                level.addFreshEntity(entity);  // ここも level を使用
-                                transformation.setTransformedEntity(entity);
+                        // ===== 既存 Entity を再利用する =====
+                        Entity entity = transformation.getTransformedEntity();
+                        if (entity == null) {
+                            EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(this.identityId);
+                            if (type != null) {
+                                entity = type.create(player.level());
+                                if (entity != null) {
+                                    entity.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+                                    player.level().addFreshEntity(entity);
+                                    transformation.setTransformedEntity(entity);
+                                }
                             }
                         }
 
-                        // モンスター状態初期化
-                        PlayerTransformation.MonsterState state = new PlayerTransformation.MonsterState();
-                        state.animationState = "IDLE";
-                        transformation.setMonsterState(this.identityId, state);
+                        // ===== MonsterState を初回生成のみ =====
+                        PlayerTransformation.MonsterState state = transformation.getMonsterState(this.identityId);
+                        if (state == null) {
+                            state = new PlayerTransformation.MonsterState();
+                            state.animationState = "IDLE"; // 初期状態
+                            transformation.setMonsterState(this.identityId, state);
+                        }
 
                         MonsterMod.getLogger().debug("{} が {} に変身しました。",
                                 player.getName().getString(), this.identityId.getPath());
-                    } else {
-                        transformation.setTransformed(false);
-                        transformation.setTransformedMobId(null);
-                        transformation.setTransformedEntity(null);
-                        MonsterMod.getLogger().warn("無効なIdentity IDで変身要求を受信しました: {}", this.identityId);
                     }
                 } else {
                     // ===== 変身解除 =====
                     Entity entity = transformation.getTransformedEntity();
                     if (entity != null) {
-                        // サーバから削除
                         entity.remove(Entity.RemovalReason.DISCARDED);
                         transformation.setTransformedEntity(null);
                     }
                     transformation.setTransformedMobId(null);
-
-                    if (this.identityId != null) {
-                        PlayerTransformation.MonsterState state = new PlayerTransformation.MonsterState();
-                        state.animationState = "IDLE";
-                        transformation.setMonsterState(this.identityId, state);
-                    }
-                    MonsterMod.getLogger().debug("{} が変身を解除しました。", player.getName().getString());
                 }
 
-                // クライアントに同期
+                // クライアントに同期（現在のアニメーション状態を送信）
                 transformation.syncToClient(player);
             });
         });
         context.setPacketHandled(true);
         return true;
     }
+
 }

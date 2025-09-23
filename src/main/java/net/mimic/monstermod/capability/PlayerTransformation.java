@@ -1,4 +1,3 @@
-
 package net.mimic.monstermod.capability;
 
 import net.mimic.monstermod.entity.custom.MimicEntity;
@@ -18,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 複数Monster対応・アニメーション統合版PlayerTransformation
+ * BaseState を廃止した PlayerTransformation
  */
 public class PlayerTransformation implements IPlayerTransformation {
 
@@ -73,22 +72,53 @@ public class PlayerTransformation implements IPlayerTransformation {
         if (mobId != null) monsterStates.put(mobId, state);
     }
 
-    /** ★ ResourceLocation 版で統一 */
     @Override
     public MimicEntity.MimicAnimationState getAnimationState(ResourceLocation mobId) {
         return getMonsterState(mobId).getAnimationEnum();
     }
 
-    @Override
+    private String lastSyncedAnimation = "";
+
     public void syncToClient(Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
             ResourceLocation mobId = transformedMobId;
             MonsterState state = getMonsterState(mobId);
+            if (state == null) return;
+
+            String currentAnim = state.animationState;
+
+            boolean isLooping = false;
+            try {
+                MimicEntity.MimicAnimationState animState =
+                        MimicEntity.MimicAnimationState.valueOf(currentAnim);
+                if (animState == MimicEntity.MimicAnimationState.OPENJUMP ||
+                        animState == MimicEntity.MimicAnimationState.CLOSEJUMP ||
+                        animState == MimicEntity.MimicAnimationState.IDLE ||
+                        animState == MimicEntity.MimicAnimationState.OPEN_IDLE) {
+                    isLooping = true;
+                }
+            } catch (IllegalArgumentException ignored) {}
+
+            // ループアニメーション中は同期しない
+            if (isLooping) return;
+
+            // 前回と同じなら送らない
+            if (currentAnim.equals(lastSyncedAnimation)) return;
+
+            // 同期する
             ModMessages.sendToPlayer(new S2CTransformSyncPacket(
                     isTransformed,
                     mobId,
-                    state.animationState
+                    currentAnim
             ), serverPlayer);
+
+            lastSyncedAnimation = currentAnim;
+
+            System.out.println("[PlayerTransformation] syncToClient | Player=" +
+                    player.getName().getString() +
+                    " MobId=" + mobId +
+                    " Animation=" + currentAnim +
+                    " isLooping=" + isLooping);
         }
     }
 
@@ -137,24 +167,11 @@ public class PlayerTransformation implements IPlayerTransformation {
         private final Map<String, Boolean> customFlags = new HashMap<>();
         public void setFlag(String key, boolean value) { customFlags.put(key, value); }
         public boolean getFlag(String key) { return customFlags.getOrDefault(key, false); }
-        /** animationState を MimicAnimationState に変換して返す */
+
         public MimicEntity.MimicAnimationState getAnimationEnum() {
             if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
             try { return MimicEntity.MimicAnimationState.valueOf(animationState); }
             catch (IllegalArgumentException e) { return MimicEntity.MimicAnimationState.IDLE; }
         }
     }
-
-    private MimicEntity.MimicAnimationState baseState = MimicEntity.MimicAnimationState.IDLE;
-
-    @Override
-    public MimicEntity.MimicAnimationState getBaseState() {
-        return baseState;
-    }
-
-    @Override
-    public void setBaseState(MimicEntity.MimicAnimationState state) {
-        this.baseState = state;
-    }
-
 }

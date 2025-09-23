@@ -2,7 +2,6 @@ package net.mimic.monstermod.entity.client;
 
 import net.mimic.monstermod.entity.ModEntities;
 import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -25,14 +24,13 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     private MimicAnimationState animationState = MimicAnimationState.IDLE;
     private MimicAnimationState pendingState = null;
     private int stateHoldTicks = 0;
-
     private MimicAnimationState lastRequestedAnimation = null;
 
     private double renderX, renderY, renderZ;
     private float renderYRot, renderXRot;
 
     public ClientMimicEntity() {
-        super(ModEntities.MIMIC.get(), Minecraft.getInstance().level);
+        super(ModEntities.MIMIC.get(), net.minecraft.client.Minecraft.getInstance().level);
     }
 
     @Override
@@ -40,27 +38,27 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return cache;
     }
 
+    // GeckoLib によって呼ばれる
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
             String animName = getAnimationName(animationState);
             boolean loop = isLooping(animationState);
 
-            // ループアニメーション中で、前回と同じなら再セットしない
-            if (lastRequestedAnimation != animationState || !loop) {
-                state.getController().setAnimation(
-                        loop ? RawAnimation.begin().thenLoop(animName)
-                                : RawAnimation.begin().thenPlay(animName)
+            // ループアニメーションは lastRequestedAnimation が同じならセットしない
+            if (!loop || lastRequestedAnimation != animationState) {
+                state.getController().setAnimation(loop
+                        ? RawAnimation.begin().thenLoop(animName)
+                        : RawAnimation.begin().thenPlay(animName)
                 );
                 lastRequestedAnimation = animationState;
-                System.out.println("[Controller] setAnimation: " + animName + " loop=" + loop);
             }
 
             return PlayState.CONTINUE;
         }));
     }
 
-    // ループ判定を関数化
+
     private boolean isLooping(MimicAnimationState state) {
         return switch (state) {
             case IDLE, OPEN_IDLE, OPENJUMP, CLOSEJUMP -> true;
@@ -75,6 +73,7 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return false;
     }
 
+    // 毎ティック呼ぶこと
     public void updateAnimation(AbstractClientPlayer player) {
         boolean moving = isMoving(player);
 
@@ -108,12 +107,15 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         }
     }
 
-    public void setPosAndRot(double x, double y, double z, float yRot, float xRot) {
-        this.renderX = x;
-        this.renderY = y;
-        this.renderZ = z;
-        this.renderYRot = yRot;
-        this.renderXRot = xRot;
+    public void setPosAndRotIfChanged(double x, double y, double z, float yRot, float xRot) {
+        if (this.renderX != x || this.renderY != y || this.renderZ != z
+                || this.renderYRot != yRot || this.renderXRot != xRot) {
+            this.renderX = x;
+            this.renderY = y;
+            this.renderZ = z;
+            this.renderYRot = yRot;
+            this.renderXRot = xRot;
+        }
     }
 
     public double getRenderX() { return renderX; }
