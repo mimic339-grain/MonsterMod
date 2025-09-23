@@ -1,38 +1,35 @@
 package net.mimic.monstermod.networking.packet;
 
-import net.mimic.monstermod.MonsterMod;
+import net.mimic.monstermod.capability.PlayerTransformation;
+import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.level.Level;
 import net.minecraftforge.network.NetworkEvent;
-import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.capability.PlayerTransformation;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.function.Supplier;
 
 public class PlayerTransformC2SPacket {
+
     private final boolean transform;
     private final ResourceLocation identityId;
 
-    //送信
     public PlayerTransformC2SPacket(boolean transform, ResourceLocation identityId) {
         this.transform = transform;
         this.identityId = identityId;
     }
 
-    //受信
     public PlayerTransformC2SPacket(FriendlyByteBuf buf) {
         this.transform = buf.readBoolean();
         this.identityId = buf.readNullable(FriendlyByteBuf::readResourceLocation);
     }
 
     public void encode(FriendlyByteBuf buf) {
-        buf.writeBoolean(this.transform);
-        buf.writeNullable(this.identityId, FriendlyByteBuf::writeResourceLocation);
+        buf.writeBoolean(transform);
+        buf.writeNullable(identityId, FriendlyByteBuf::writeResourceLocation);
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
@@ -41,40 +38,37 @@ public class PlayerTransformC2SPacket {
             ServerPlayer player = context.getSender();
             if (player == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                transformation.setTransformed(this.transform);
+            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(it -> {
+                if (!(it instanceof PlayerTransformation transformation)) return;
 
-                if (this.transform) {
-                    if (this.identityId != null) {
-                        transformation.setTransformedMobId(this.identityId);
+                transformation.setTransformed(transform);
 
-                        // ===== 既存 Entity を再利用する =====
-                        Entity entity = transformation.getTransformedEntity();
-                        if (entity == null) {
-                            EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(this.identityId);
-                            if (type != null) {
-                                entity = type.create(player.level());
-                                if (entity != null) {
-                                    entity.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-                                    player.level().addFreshEntity(entity);
-                                    transformation.setTransformedEntity(entity);
-                                }
+                if (transform && identityId != null) {
+                    transformation.setTransformedMobId(identityId);
+
+                    // 既存 Entity を再利用
+                    Entity entity = transformation.getTransformedEntity();
+                    if (entity == null) {
+                        EntityType<?> type = ForgeRegistries.ENTITY_TYPES.getValue(identityId);
+                        if (type != null) {
+                            entity = type.create(player.level());
+                            if (entity != null) {
+                                entity.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+                                player.level().addFreshEntity(entity);
+                                transformation.setTransformedEntity(entity);
                             }
                         }
+                    }
 
-                        // ===== MonsterState を初回生成のみ =====
-                        PlayerTransformation.MonsterState state = transformation.getMonsterState(this.identityId);
-                        if (state == null) {
-                            state = new PlayerTransformation.MonsterState();
-                            state.animationState = "IDLE"; // 初期状態
-                            transformation.setMonsterState(this.identityId, state);
-                        }
-
-                        MonsterMod.getLogger().debug("{} が {} に変身しました。",
-                                player.getName().getString(), this.identityId.getPath());
+                    // MonsterState 初回生成
+                    PlayerTransformation.MonsterState state = transformation.getMonsterState(identityId);
+                    if (state == null) {
+                        state = new PlayerTransformation.MonsterState();
+                        state.animationState = "IDLE";
+                        transformation.setMonsterState(identityId, state);
                     }
                 } else {
-                    // ===== 変身解除 =====
+                    // 変身解除
                     Entity entity = transformation.getTransformedEntity();
                     if (entity != null) {
                         entity.remove(Entity.RemovalReason.DISCARDED);
@@ -83,12 +77,10 @@ public class PlayerTransformC2SPacket {
                     transformation.setTransformedMobId(null);
                 }
 
-                // クライアントに同期（現在のアニメーション状態を送信）
                 transformation.syncToClient(player);
             });
         });
         context.setPacketHandled(true);
         return true;
     }
-
 }

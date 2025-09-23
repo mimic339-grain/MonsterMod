@@ -1,4 +1,3 @@
-
 package net.mimic.monstermod.client.renderer.identity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -25,7 +24,7 @@ public class PlayerIdentityRenderer {
         if (!(entity instanceof Player player)) return;
         if (identity == null) return;
 
-        identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight,
-                MimicEntity.MimicAnimationState.IDLE);
+        // baseState 廃止版
+        identity.applyAnimationAndRender(player, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }
 }

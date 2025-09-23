@@ -7,9 +7,9 @@ import net.minecraft.client.player.LocalPlayer;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
-import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.object.PlayState;
 
 import java.util.Map;
@@ -23,14 +23,19 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
 
     private MimicAnimationState animationState = MimicAnimationState.IDLE;
     private MimicAnimationState pendingState = null;
-    private int stateHoldTicks = 0;
-    private MimicAnimationState lastRequestedAnimation = null;
+    private int holdTicks = 0;
+    private int animationTick = 0; // サーバ同期用 tick
 
     private double renderX, renderY, renderZ;
     private float renderYRot, renderXRot;
 
-    public ClientMimicEntity() {
-        super(ModEntities.MIMIC.get(), net.minecraft.client.Minecraft.getInstance().level);
+    public ClientMimicEntity(UUID playerUUID) {
+        super(ModEntities.MIMIC.get(), null);
+        this.setId(playerUUID.hashCode());
+    }
+
+    public static ClientMimicEntity getOrCreate(UUID playerUUID) {
+        return CLIENT_ENTITIES.computeIfAbsent(playerUUID, ClientMimicEntity::new);
     }
 
     @Override
@@ -38,26 +43,20 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return cache;
     }
 
-    // GeckoLib によって呼ばれる
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
             String animName = getAnimationName(animationState);
             boolean loop = isLooping(animationState);
 
-            // ループアニメーションは lastRequestedAnimation が同じならセットしない
-            if (!loop || lastRequestedAnimation != animationState) {
-                state.getController().setAnimation(loop
-                        ? RawAnimation.begin().thenLoop(animName)
-                        : RawAnimation.begin().thenPlay(animName)
-                );
-                lastRequestedAnimation = animationState;
-            }
+            RawAnimation animation = loop
+                    ? RawAnimation.begin().thenLoop(animName)
+                    : RawAnimation.begin().thenPlay(animName);
 
+            state.getController().setAnimation(animation);
             return PlayState.CONTINUE;
         }));
     }
-
 
     private boolean isLooping(MimicAnimationState state) {
         return switch (state) {
@@ -73,38 +72,36 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return false;
     }
 
-    // 毎ティック呼ぶこと
+    /** 通常入力によるアニメーション更新 */
     public void updateAnimation(AbstractClientPlayer player) {
         boolean moving = isMoving(player);
 
-        MimicAnimationState targetState = moving
+        MimicAnimationState target = moving
                 ? (isOpen() ? MimicAnimationState.OPENJUMP : MimicAnimationState.CLOSEJUMP)
                 : (isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE);
 
-        if (targetState != animationState) {
-            if (targetState != pendingState) {
-                pendingState = targetState;
-                stateHoldTicks = 1;
+        if (target != animationState) {
+            if (pendingState != target) {
+                pendingState = target;
+                holdTicks = 1;
             } else {
-                stateHoldTicks++;
-                if (stateHoldTicks >= 3) {
-                    setAnimationState(pendingState, player);
+                holdTicks++;
+                if (holdTicks >= 3) {
+                    animationState = pendingState;
                     pendingState = null;
-                    stateHoldTicks = 0;
+                    holdTicks = 0;
                 }
             }
         } else {
             pendingState = null;
-            stateHoldTicks = 0;
+            holdTicks = 0;
         }
     }
 
-    private void setAnimationState(MimicAnimationState newState, AbstractClientPlayer player) {
-        if (animationState != newState) {
-            animationState = newState;
-            System.out.println("[ClientMimicEntity] State change -> " + newState +
-                    " (player=" + player.getName().getString() + ")");
-        }
+    /** サーバ同期でアニメーションを強制更新 */
+    public void updateAnimationFromServer(MimicAnimationState serverState, int serverTick, AbstractClientPlayer player) {
+        this.animationState = serverState;
+        this.animationTick = serverTick;
     }
 
     public void setPosAndRotIfChanged(double x, double y, double z, float yRot, float xRot) {
@@ -124,10 +121,5 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public float getRenderYRot() { return renderYRot; }
     public float getRenderXRot() { return renderXRot; }
     public MimicAnimationState getRenderAnimationState() { return animationState; }
-
-    public static ClientMimicEntity getOrCreate(UUID playerUUID) {
-        return CLIENT_ENTITIES.computeIfAbsent(playerUUID, uuid -> new ClientMimicEntity());
-    }
-    public static void remove(UUID playerUUID) { CLIENT_ENTITIES.remove(playerUUID); }
-    public static void clearAll() { CLIENT_ENTITIES.clear(); }
+    public int getAnimationTick() { return animationTick; }
 }

@@ -30,6 +30,7 @@ public class CapabilityEvents {
             }
         }
     }
+
     //リスポーンとディメンション移動にデータをコピー
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
@@ -60,7 +61,8 @@ public class CapabilityEvents {
                 ModMessages.sendToPlayer(new S2CTransformSyncPacket(
                         transformation.isTransformed(),
                         mobId,
-                        state.animationState
+                        state.animationState,
+                        state.animationTick  // ← 追加
                 ), player);
             });
         }
@@ -78,7 +80,8 @@ public class CapabilityEvents {
                 ModMessages.sendToPlayer(new S2CTransformSyncPacket(
                         transformation.isTransformed(),
                         mobId,
-                        state.animationState
+                        state.animationState,
+                        state.animationTick  // ← 追加
                 ), player);
             });
         }

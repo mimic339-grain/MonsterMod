@@ -49,8 +49,7 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
                     partialTicks,
                     poseStack,
                     buffer,
-                    packedLight,
-                    transformation.getAnimationState(transformation.getTransformedMobId())
+                    packedLight
             );
 
             // 元のプレイヤー描画をスキップ

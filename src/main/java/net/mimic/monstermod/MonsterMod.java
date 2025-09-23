@@ -12,6 +12,7 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.network.simple.SimpleChannel;
 import org.slf4j.Logger;
 
 @Mod(MonsterMod.MOD_ID)
@@ -20,6 +21,9 @@ public class MonsterMod {
     public static final String MOD_ID = "monstermod";
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    // 追加: ネットワーク通信チャンネル
+    public static SimpleChannel CHANNEL;
+
     public static Logger getLogger() {
         return LOGGER;
     }
@@ -27,10 +31,12 @@ public class MonsterMod {
     public MonsterMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
+        // エンティティ・アイテム・メッセージ登録
         ModEntities.register(modEventBus);
         ModItems.register(modEventBus);
-        ModMessages.register();
+        ModMessages.register(); // ここで CHANNEL を初期化
 
+        // イベント登録
         modEventBus.register(ModEvents.class);
         modEventBus.register(PlayerIdentityRegistry.class);
         modEventBus.register(PlayerIdentityRenderer.class);
