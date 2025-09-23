@@ -26,6 +26,8 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     private MimicAnimationState pendingState = null;
     private int stateHoldTicks = 0;
 
+    private MimicAnimationState lastRequestedAnimation = null;
+
     private double renderX, renderY, renderZ;
     private float renderYRot, renderXRot;
 
@@ -42,22 +44,30 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "controller", 0, state -> {
             String animName = getAnimationName(animationState);
-            boolean loop = switch (animationState) {
-                case OPENJUMP, CLOSEJUMP, OPEN_IDLE, IDLE -> true;
-                default -> false;
-            };
-            if (state.getController().getCurrentAnimation() == null ||
-                    !state.getController().getCurrentAnimation().animation().name().equals(animName)) {
+            boolean loop = isLooping(animationState);
+
+            // ループアニメーション中で、前回と同じなら再セットしない
+            if (lastRequestedAnimation != animationState || !loop) {
                 state.getController().setAnimation(
                         loop ? RawAnimation.begin().thenLoop(animName)
                                 : RawAnimation.begin().thenPlay(animName)
                 );
+                lastRequestedAnimation = animationState;
+                System.out.println("[Controller] setAnimation: " + animName + " loop=" + loop);
             }
+
             return PlayState.CONTINUE;
         }));
     }
 
-    /** 移動判定は LocalPlayer の WASD 入力で統一 */
+    // ループ判定を関数化
+    private boolean isLooping(MimicAnimationState state) {
+        return switch (state) {
+            case IDLE, OPEN_IDLE, OPENJUMP, CLOSEJUMP -> true;
+            default -> false;
+        };
+    }
+
     public boolean isMoving(AbstractClientPlayer player) {
         if (player instanceof LocalPlayer local && local.input != null) {
             return local.input.up || local.input.down || local.input.left || local.input.right;
@@ -65,9 +75,9 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         return false;
     }
 
-    /** デバウンス付き状態更新 */
     public void updateAnimation(AbstractClientPlayer player) {
         boolean moving = isMoving(player);
+
         MimicAnimationState targetState = moving
                 ? (isOpen() ? MimicAnimationState.OPENJUMP : MimicAnimationState.CLOSEJUMP)
                 : (isOpen() ? MimicAnimationState.OPEN_IDLE : MimicAnimationState.IDLE);
@@ -78,11 +88,8 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
                 stateHoldTicks = 1;
             } else {
                 stateHoldTicks++;
-                if (stateHoldTicks >= 3) { // 3 tick 継続で確定
-                    System.out.println("[ClientMimicEntity] State change: " + animationState + " -> " + pendingState +
-                            " player=" + player.getName().getString() +
-                            " moving=" + moving);
-                    animationState = pendingState;
+                if (stateHoldTicks >= 3) {
+                    setAnimationState(pendingState, player);
                     pendingState = null;
                     stateHoldTicks = 0;
                 }
@@ -90,6 +97,14 @@ public class ClientMimicEntity extends MimicEntity implements GeoEntity {
         } else {
             pendingState = null;
             stateHoldTicks = 0;
+        }
+    }
+
+    private void setAnimationState(MimicAnimationState newState, AbstractClientPlayer player) {
+        if (animationState != newState) {
+            animationState = newState;
+            System.out.println("[ClientMimicEntity] State change -> " + newState +
+                    " (player=" + player.getName().getString() + ")");
         }
     }
 

@@ -68,10 +68,10 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
             cachedEntity.updateAnimation(abstractPlayer);
         }
 
-        // ----- 座標・回転は補間なしで直接反映 -----
+        // ----- 座標・回転の同期 -----
         cachedEntity.setPosAndRot(player.getX(), player.getY(), player.getZ(), player.yBodyRot, player.getXRot());
 
-        // ----- GeckoLib tick -----
+        // ----- GeckoLib tickのみでアニメーション制御 -----
         cachedEntity.tick();
 
         // ----- 描画 -----
@@ -81,10 +81,5 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
                 .getRenderer(cachedEntity)
                 .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
         poseStack.popPose();
-
-        System.out.println("[MimicIdentity] Render player=" + player.getName().getString() +
-                " anim=" + cachedEntity.getRenderAnimationState() +
-                " pos=(" + cachedEntity.getRenderX() + "," + cachedEntity.getRenderY() + "," + cachedEntity.getRenderZ() + ")");
     }
-
 }
