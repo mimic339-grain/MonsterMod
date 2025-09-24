@@ -25,6 +25,8 @@ public class ModMessages {
                 (version) -> true
         );
 
+        MonsterMod.CHANNEL = INSTANCE; // ← これを追加する！！
+
         INSTANCE.messageBuilder(PlayerTransformC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
                 .decoder(PlayerTransformC2SPacket::new)
                 .encoder(PlayerTransformC2SPacket::encode)
@@ -37,9 +39,8 @@ public class ModMessages {
                 .consumerMainThread(MimicSwitchC2SPacket::handle)
                 .add();
 
-
         INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(S2CTransformSyncPacket::new)
+                .decoder(S2CTransformSyncPacket::decode)
                 .encoder(S2CTransformSyncPacket::encode)
                 .consumerMainThread(S2CTransformSyncPacket::handle)
                 .add();

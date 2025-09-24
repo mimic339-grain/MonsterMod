@@ -12,69 +12,81 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public class S2CTransformSyncPacket {
-
     private final boolean isTransformed;
     private final ResourceLocation transformedMobId;
-    private final String animationState;
+    private final String animationStateName;
     private final int animationTick;
 
-    public S2CTransformSyncPacket(boolean isTransformed, ResourceLocation transformedMobId,
-                                  String animationState, int animationTick) {
+    public S2CTransformSyncPacket(boolean isTransformed, ResourceLocation transformedMobId, String animationStateName, int animationTick) {
         this.isTransformed = isTransformed;
         this.transformedMobId = transformedMobId;
-        this.animationState = animationState;
+        this.animationStateName = animationStateName != null ? animationStateName : MimicEntity.MimicAnimationState.IDLE.name();
         this.animationTick = animationTick;
     }
 
     public S2CTransformSyncPacket(FriendlyByteBuf buf) {
         this.isTransformed = buf.readBoolean();
         this.transformedMobId = buf.readNullable(FriendlyByteBuf::readResourceLocation);
-        this.animationState = buf.readUtf();
+        this.animationStateName = buf.readUtf();
         this.animationTick = buf.readInt();
     }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(isTransformed);
         buf.writeNullable(transformedMobId, FriendlyByteBuf::writeResourceLocation);
-        buf.writeUtf(animationState);
+        buf.writeUtf(animationStateName);
         buf.writeInt(animationTick);
+    }
+
+    public static S2CTransformSyncPacket decode(FriendlyByteBuf buf) {
+        return new S2CTransformSyncPacket(buf);
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
         context.enqueueWork(() -> {
-            if (Minecraft.getInstance().player == null) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player == null) return;
 
-            Minecraft.getInstance().player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
-                    .ifPresent(transformation -> {
-                        transformation.setTransformed(isTransformed);
+            mc.player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+                transformation.setTransformed(isTransformed);
 
-                        if (isTransformed && transformedMobId != null) {
-                            transformation.setTransformedMobId(transformedMobId);
+                if (!isTransformed) {
+                    // ===== 解除処理 =====
+                    ResourceLocation currentMobId = transformation.getTransformedMobId();
+                    if (currentMobId != null) {
+                        transformation.setMonsterState(currentMobId, null);
+                    }
+                    transformation.setTransformedMobId(null);
 
-                            // MonsterState に反映
-                            PlayerTransformation.MonsterState state = transformation.getMonsterState(transformedMobId);
-                            state.animationState = animationState;
-                            state.animationTick = animationTick;
-                            transformation.setMonsterState(transformedMobId, state);
+                    // ClientMimicEntity を削除
+                    ClientMimicEntity.remove(mc.player.getUUID());
 
-                            // ClientMimicEntity に反映
-                            ClientMimicEntity clientEntity = ClientMimicEntity.getOrCreate(Minecraft.getInstance().player.getUUID());
-                            clientEntity.updateAnimationFromServer(
-                                    MimicEntity.MimicAnimationState.valueOf(animationState),
-                                    animationTick,
-                                    Minecraft.getInstance().player
-                            );
+                    System.out.printf("[S2CTransformSyncPacket] %s の変身解除\n", mc.player.getName().getString());
+                } else {
+                    // ===== 変身適用 =====
+                    transformation.setTransformedMobId(transformedMobId);
+
+                    if (transformedMobId != null && animationStateName != null) {
+                        PlayerTransformation.MonsterState state = transformation.getMonsterState(transformedMobId);
+                        if (state == null) {
+                            state = new PlayerTransformation.MonsterState();
                         }
-                    });
+                        state.animationState = animationStateName;
+                        state.animationTick = animationTick;
+                        transformation.setMonsterState(transformedMobId, state);
+
+                        System.out.printf("[S2CTransformSyncPacket] %s が %s に変身 | Animation=%s Tick=%d\n",
+                                mc.player.getName().getString(),
+                                transformedMobId.getPath(),
+                                animationStateName,
+                                animationTick
+                        );
+                    }
+                }
+            });
         });
         context.setPacketHandled(true);
         return true;
     }
-
-
-
-    public String getAnimationState() { return animationState; }
-    public int getAnimationTick() { return animationTick; }
-    public ResourceLocation getTransformedMobId() { return transformedMobId; }
 }

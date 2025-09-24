@@ -9,6 +9,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -39,10 +40,11 @@ public abstract class PlayerRendererMixin extends LivingEntityRenderer<AbstractC
             MimicIdentity identity = (MimicIdentity) transformation.getTransformedIdentity();
             if (identity == null) return;
 
-            // ClientMimicEntity を取得
+            // ClientMimicEntity を取得（Level 情報を追加）
+            Level level = player.level();
             ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(player.getUUID());
 
-            // ----- 座標・回転・アニメーション更新・描画を一括 -----
+            // 座標・回転・アニメーション更新・描画を一括
             identity.applyAnimationAndRender(
                     player,
                     entityYaw,
