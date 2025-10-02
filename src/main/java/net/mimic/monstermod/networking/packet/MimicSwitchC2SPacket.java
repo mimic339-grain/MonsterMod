@@ -1,11 +1,11 @@
 package net.mimic.monstermod.networking.packet;
 
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerLevel;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.capability.PlayerTransformation.MonsterState;
+import net.mimic.monstermod.capability.PlayerTransformation;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 
 import java.util.function.Supplier;
@@ -14,7 +14,12 @@ public class MimicSwitchC2SPacket {
 
     public MimicSwitchC2SPacket() {}
     public MimicSwitchC2SPacket(FriendlyByteBuf buf) {}
+
     public void encode(FriendlyByteBuf buf) {}
+
+    public static MimicSwitchC2SPacket decode(FriendlyByteBuf buf) {
+        return new MimicSwitchC2SPacket(buf);
+    }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
@@ -25,25 +30,24 @@ public class MimicSwitchC2SPacket {
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                 if (!transformation.isTransformed()) return;
 
-                MonsterState state = transformation.getMonsterState(transformation.getTransformedMobId());
+                ResourceLocation mobId = transformation.getTransformedMobId();
+                if (mobId == null) return;
+
+                PlayerTransformation.MonsterState state = transformation.getMonsterState(mobId);
                 if (state == null) return;
 
                 boolean isOpen = state.getFlag("isOpen");
                 boolean newOpen = !isOpen;
                 state.setFlag("isOpen", newOpen);
-                state.animationState = newOpen ? "OPENING" : "CLOSING";
 
-                transformation.setMonsterState(transformation.getTransformedMobId(), state);
-                transformation.syncToClient(player);
+                // OPEN / CLOSEアニメーションに変更
+                MimicEntity.MimicAnimationState newState = newOpen
+                        ? MimicEntity.MimicAnimationState.OPEN
+                        : MimicEntity.MimicAnimationState.CLOSE;
 
-                if (player.level() instanceof ServerLevel serverLevel) {
-                    serverLevel.getEntitiesOfClass(MimicEntity.class, player.getBoundingBox().inflate(32.0D))
-                            .forEach(mimic -> {
-                                if (mimic.isLinkedTo(player)) {
-                                    mimic.requestSwitchAnimation(newOpen);
-                                }
-                            });
-                }
+                transformation.setAnimationStateAndSync(mobId, newState, player);
+
+                transformation.setMonsterState(mobId, state);
             });
         });
         context.setPacketHandled(true);

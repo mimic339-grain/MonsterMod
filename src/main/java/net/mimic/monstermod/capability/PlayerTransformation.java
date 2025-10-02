@@ -1,18 +1,19 @@
 package net.mimic.monstermod.capability;
 
+
+import net.mimic.monstermod.MonsterMod;
 import net.mimic.monstermod.entity.custom.MimicEntity;
+import net.mimic.monstermod.identity.impl.MimicIdentity;
+import net.mimic.monstermod.networking.ModMessages;
+import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.mimic.monstermod.identity.IPlayerIdentity;
-import net.mimic.monstermod.identity.PlayerIdentityRegistry;
-import net.mimic.monstermod.networking.ModMessages;
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.minecraftforge.network.PacketDistributor;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-
+import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,49 +22,40 @@ public class PlayerTransformation implements IPlayerTransformation {
     private boolean originalStatsSaved = false;
     private double originalHealth, originalMaxHealth, originalAttack, originalArmor, originalSpeed;
     private boolean noKnockback = false;
-    private Entity transformedEntity;
     private boolean isTransformed = false;
     private ResourceLocation transformedMobId = null;
 
     private final Map<ResourceLocation, MonsterState> monsterStates = new HashMap<>();
 
-    private String lastSyncedAnimation = "";
-    private int lastSyncedTick = -1;
-
+    @Override
     public boolean hasSavedOriginalStats() { return originalStatsSaved; }
-    public void setOriginalHealth(double hp) { this.originalHealth = hp; originalStatsSaved = true; }
-    public void setOriginalMaxHealth(double maxHp) { this.originalMaxHealth = maxHp; }
-    public void setOriginalAttackDamage(double dmg) { this.originalAttack = dmg; }
-    public void setOriginalArmor(double armor) { this.originalArmor = armor; }
-    public void setOriginalMoveSpeed(double speed) { this.originalSpeed = speed; }
-    public double getOriginalHealth() { return originalHealth; }
-    public double getOriginalMaxHealth() { return originalMaxHealth; }
-    public double getOriginalAttackDamage() { return originalAttack; }
-    public double getOriginalArmor() { return originalArmor; }
-    public double getOriginalMoveSpeed() { return originalSpeed; }
-    public void clearOriginalStats() { originalStatsSaved = false; }
-    public boolean isNoKnockback() { return noKnockback; }
-    public void setNoKnockback(boolean value) { noKnockback = value; }
-
-    @Override @Nullable
-    public Entity getTransformedEntity() { return transformedEntity; }
-    @Override
-    public void setTransformedEntity(@Nullable Entity entity) { this.transformedEntity = entity; }
-
-    @Override
-    public boolean isTransformed() { return isTransformed; }
-    @Override
-    public void setTransformed(boolean transformed) { this.isTransformed = transformed; }
+    @Override public void setOriginalHealth(double hp) { originalHealth = hp; originalStatsSaved = true; }
+    @Override public void setOriginalMaxHealth(double maxHp) { originalMaxHealth = maxHp; }
+    @Override public void setOriginalAttackDamage(double dmg) { originalAttack = dmg; }
+    @Override public void setOriginalArmor(double armor) { originalArmor = armor; }
+    @Override public void setOriginalMoveSpeed(double speed) { originalSpeed = speed; }
+    @Override public double getOriginalHealth() { return originalHealth; }
+    @Override public double getOriginalMaxHealth() { return originalMaxHealth; }
+    @Override public double getOriginalAttackDamage() { return originalAttack; }
+    @Override public double getOriginalArmor() { return originalArmor; }
+    @Override public double getOriginalMoveSpeed() { return originalSpeed; }
+    @Override public void clearOriginalStats() { originalStatsSaved = false; }
+    @Override public boolean isNoKnockback() { return noKnockback; }
+    @Override public void setNoKnockback(boolean value) { noKnockback = value; }
+    @Nullable
+    @Override public Entity getTransformedEntity() { return null; }
+    @Override public void setTransformedEntity(@Nullable Entity entity) {}
+    @Override public boolean isTransformed() { return isTransformed; }
+    @Override public void setTransformed(boolean transformed) { isTransformed = transformed; }
+    @Override public ResourceLocation getTransformedMobId() { return transformedMobId; }
+    @Override public void setTransformedMobId(ResourceLocation mobId) { transformedMobId = mobId; }
 
     @Override
-    public ResourceLocation getTransformedMobId() { return transformedMobId; }
-    @Override
-    public void setTransformedMobId(ResourceLocation mobId) { this.transformedMobId = mobId; }
-
     public MonsterState getMonsterState(ResourceLocation mobId) {
         return mobId != null ? monsterStates.getOrDefault(mobId, new MonsterState()) : new MonsterState();
     }
 
+    @Override
     public void setMonsterState(ResourceLocation mobId, MonsterState state) {
         if (mobId != null) monsterStates.put(mobId, state);
     }
@@ -73,59 +65,28 @@ public class PlayerTransformation implements IPlayerTransformation {
         return getMonsterState(mobId).getAnimationEnum();
     }
 
-    public void syncToClient(Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer)) return;
-
-        ResourceLocation mobId = transformedMobId;
-
-        // 解除時もクライアント同期
-        if (!isTransformed || mobId == null) {
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                    false, null, "IDLE", 0
-            ), serverPlayer);
-            lastSyncedAnimation = "";
-            lastSyncedTick = -1;
-            return;
-        }
-
-        MonsterState state = getMonsterState(mobId);
-        if (state == null) return;
-
-        String currentAnim = state.animationState;
-        int currentTick = state.animationTick;
-
-        boolean isLooping = false;
-        try {
-            MimicEntity.MimicAnimationState animState =
-                    MimicEntity.MimicAnimationState.valueOf(currentAnim);
-            if (animState == MimicEntity.MimicAnimationState.OPENJUMP ||
-                    animState == MimicEntity.MimicAnimationState.CLOSEJUMP ||
-                    animState == MimicEntity.MimicAnimationState.IDLE ||
-                    animState == MimicEntity.MimicAnimationState.OPEN_IDLE) {
-                isLooping = true;
-            }
-        } catch (IllegalArgumentException ignored) {}
-
-        // ループアニメーション中は不要同期
-        if (isLooping && lastSyncedAnimation.equals(currentAnim)) return;
-
-        // アニメーション状態またはTickが変わった場合のみ同期
-        if (!currentAnim.equals(lastSyncedAnimation) || currentTick != lastSyncedTick) {
-            ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                    true, mobId, currentAnim, currentTick
-            ), serverPlayer);
-
-            lastSyncedAnimation = currentAnim;
-            lastSyncedTick = currentTick;
-
-            System.out.println("[PlayerTransformation] syncToClient | Player=" +
-                    player.getName().getString() +
-                    " MobId=" + mobId +
-                    " Animation=" + currentAnim +
-                    " Tick=" + currentTick +
-                    " isLooping=" + isLooping);
-        }
+    @Override
+    public int getAnimationTick(ResourceLocation mobId) {
+        return getMonsterState(mobId).animationTick;
     }
+
+    @Override
+    public MimicIdentity getTransformedIdentity() {
+        if (transformedMobId == null) return null;
+        return MimicIdentity.INSTANCE;
+    }
+
+    @Override
+    public void setAnimationTick(ResourceLocation mobId, int tick) {
+        MonsterState state = getMonsterState(mobId);
+        // ★ 修正：tick は必ず上書きではなく差分チェック
+        if (Math.abs(state.animationTick - tick) > 2) {
+            state.animationTick = tick;
+        }
+        setMonsterState(mobId, state);
+        MonsterMod.getLogger().trace("[setAnimationTick] mobId={} tick={}", mobId, tick);
+    }
+
 
     @Override
     public CompoundTag serializeNBT() {
@@ -138,6 +99,13 @@ public class PlayerTransformation implements IPlayerTransformation {
             CompoundTag stateTag = new CompoundTag();
             stateTag.putString("animationState", entry.getValue().animationState);
             stateTag.putInt("animationTick", entry.getValue().animationTick);
+
+            CompoundTag flagsTag = new CompoundTag();
+            for (Map.Entry<String, Boolean> flag : entry.getValue().customFlags.entrySet()) {
+                flagsTag.putBoolean(flag.getKey(), flag.getValue());
+            }
+            stateTag.put("customFlags", flagsTag);
+
             statesTag.put(entry.getKey().toString(), stateTag);
         }
         nbt.put("monsterStates", statesTag);
@@ -158,23 +126,97 @@ public class PlayerTransformation implements IPlayerTransformation {
                 MonsterState state = new MonsterState();
                 state.animationState = stateTag.getString("animationState");
                 state.animationTick = stateTag.getInt("animationTick");
+
+                if (stateTag.contains("customFlags")) {
+                    CompoundTag flagsTag = stateTag.getCompound("customFlags");
+                    for (String flagKey : flagsTag.getAllKeys()) {
+                        state.setFlag(flagKey, flagsTag.getBoolean(flagKey));
+                    }
+                }
                 monsterStates.put(mobId, state);
             }
         }
+        MonsterMod.getLogger().debug("[deserializeNBT] isTransformed={} transformedMobId={} monsterStates={}", isTransformed, transformedMobId, monsterStates.keySet());
     }
 
-    @Override @Nullable
-    public IPlayerIdentity getTransformedIdentity() {
-        return (isTransformed && transformedMobId != null) ? PlayerIdentityRegistry.getIdentity(transformedMobId) : null;
+    private MimicEntity.MimicAnimationState lastSentAnimationState = null;
+    private boolean lastSentTransform = false;
+
+    public boolean shouldSync(ResourceLocation identityId, boolean transform, MimicEntity.MimicAnimationState currentState, int currentTick) {
+        if (transform != lastSentTransform) return true;
+        if (currentState != lastSentAnimationState) return true;
+        if (Math.abs(currentTick - getAnimationTick(identityId)) > 2) return true;
+        return false;
+    }
+
+    public void markSynced(ResourceLocation identityId, boolean transform, MimicEntity.MimicAnimationState currentState) {
+        lastSentTransform = transform;
+        lastSentAnimationState = currentState;
+    }
+
+    @Override
+    public void syncToClient(Player player) {
+        syncToClient(player, "generic");
+    }
+
+    // 呼び出し元が理由を指定できるオーバーロード
+    public void syncToClient(Player player, String reason) {
+        if (!(player instanceof ServerPlayer)) return;
+
+        ResourceLocation mobId = getTransformedMobId();
+        if (mobId == null) return;
+
+        MonsterState state = getMonsterState(mobId);
+
+        S2CTransformSyncPacket packet = new S2CTransformSyncPacket(
+                player.getUUID(),
+                mobId,
+                state.animationState != null ? state.animationState : MimicEntity.MimicAnimationState.IDLE.name(),
+                state.animationTick,
+                state.customFlags
+        );
+
+        MonsterMod.getLogger().debug(
+                "[syncToClient] reason={} mobId={} state={} tick={} flags={}",
+                reason, mobId, state.animationState, state.animationTick, state.customFlags
+        );
+
+        ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> (ServerPlayer) player), packet);
+    }
+
+    @Override
+    public void setAnimationStateAndSync(ResourceLocation mobId, MimicEntity.MimicAnimationState newState, ServerPlayer player) {
+        if (mobId == null || newState == null || player == null) return;
+
+        MonsterState monsterState = getMonsterState(mobId);
+        MimicEntity.MimicAnimationState oldState = monsterState.getAnimationEnum();
+
+        monsterState.animationState = newState.name();
+        setMonsterState(mobId, monsterState);
+
+        if (oldState != newState) {
+            MonsterMod.getLogger().debug(
+                    "[setAnimationStateAndSync] mobId={} CHANGED {} -> {} player={}",
+                    mobId, oldState, newState, player.getName().getString()
+            );
+        } else {
+            MonsterMod.getLogger().debug(
+                    "[setAnimationStateAndSync] mobId={} SAME_STATE={} (sync anyway) player={}",
+                    mobId, newState, player.getName().getString()
+            );
+        }
+
+        // 同期時に「理由」を渡す
+        syncToClient(player, "setAnimationStateAndSync");
     }
 
     public static class MonsterState {
         public String animationState = "IDLE";
         public int animationTick = 0;
-        private final Map<String, Boolean> customFlags = new HashMap<>();
+        public final Map<String, Boolean> customFlags = new HashMap<>();
+
         public void setFlag(String key, boolean value) { customFlags.put(key, value); }
         public boolean getFlag(String key) { return customFlags.getOrDefault(key, false); }
-
         public MimicEntity.MimicAnimationState getAnimationEnum() {
             if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
             try { return MimicEntity.MimicAnimationState.valueOf(animationState); }

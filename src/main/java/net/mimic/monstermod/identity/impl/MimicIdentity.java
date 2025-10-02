@@ -3,15 +3,13 @@ package net.mimic.monstermod.identity.impl;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.capability.IPlayerTransformation;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
 import net.mimic.monstermod.entity.client.ClientMimicEntity;
 import net.mimic.monstermod.entity.custom.MimicEntity;
 import net.mimic.monstermod.identity.PlayerIdentityType;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -22,7 +20,7 @@ import java.util.UUID;
 public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimationState> {
 
     public static final ResourceLocation IDENTITY_ID = new ResourceLocation(MonsterMod.MOD_ID, "mimic");
-    private final Map<UUID, MimicEntity.MimicAnimationState> lastSentStates = new HashMap<>();
+    public static final MimicIdentity INSTANCE = new MimicIdentity();
 
     public MimicIdentity() {
         super(
@@ -43,12 +41,12 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
     }
 
     @Override
-    public Vec3 getBoundingBoxDimensions(net.minecraft.world.entity.Pose pose) {
+    public Vec3 getBoundingBoxDimensions(Pose pose) {
         return new Vec3(0.6f, 0.6f, 0.6f);
     }
 
     @Override
-    public float getEyeHeight(net.minecraft.world.entity.Pose pose) {
+    public float getEyeHeight(Pose pose) {
         return 0.45f;
     }
 
@@ -65,30 +63,15 @@ public class MimicIdentity extends PlayerIdentityType<MimicEntity.MimicAnimation
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             if (!transformation.isTransformed()) {
-                // 解除時にキャッシュ削除
                 ClientMimicEntity.remove(playerId);
                 return;
             }
 
-            ClientMimicEntity cachedEntity = ClientMimicEntity.getOrCreate(player.getUUID());
+            ClientMimicEntity mimicEntity = ClientMimicEntity.getOrCreate(playerId);
 
-            // 座標・回転は変化がある場合のみ更新
-            cachedEntity.setPosAndRotIfChanged(
-                    player.getX(), player.getY(), player.getZ(),
-                    player.yBodyRot, player.getXRot()
-            );
-
-            // アニメーション更新
-            if (player instanceof AbstractClientPlayer abstractPlayer) {
-                cachedEntity.updateAnimation(abstractPlayer);
-            }
-
-            // 描画
             poseStack.pushPose();
             poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
-            Minecraft.getInstance().getEntityRenderDispatcher()
-                    .getRenderer(cachedEntity)
-                    .render(cachedEntity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+
             poseStack.popPose();
         });
     }

@@ -59,10 +59,11 @@ public class CapabilityEvents {
                         : new PlayerTransformation.MonsterState();
 
                 ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                        transformation.isTransformed(),
+                        player.getUUID(),
                         mobId,
                         state.animationState,
-                        state.animationTick  // ← 追加
+                        state.animationTick,
+                        state.customFlags
                 ), player);
             });
         }
@@ -78,10 +79,11 @@ public class CapabilityEvents {
                         : new PlayerTransformation.MonsterState();
 
                 ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                        transformation.isTransformed(),
+                        player.getUUID(),
                         mobId,
                         state.animationState,
-                        state.animationTick  // ← 追加
+                        state.animationTick,
+                        state.customFlags
                 ), player);
             });
         }

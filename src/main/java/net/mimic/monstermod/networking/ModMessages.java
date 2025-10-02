@@ -12,7 +12,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public class ModMessages {
-    private static SimpleChannel INSTANCE;
+    public static SimpleChannel INSTANCE;
 
     private static int packetId = 0;
     private static int id() { return packetId++; }
@@ -25,7 +25,7 @@ public class ModMessages {
                 (version) -> true
         );
 
-        MonsterMod.CHANNEL = INSTANCE; // ← これを追加する！！
+        MonsterMod.CHANNEL = INSTANCE;
 
         INSTANCE.messageBuilder(PlayerTransformC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
                 .decoder(PlayerTransformC2SPacket::new)
@@ -40,7 +40,7 @@ public class ModMessages {
                 .add();
 
         INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(S2CTransformSyncPacket::decode)
+                .decoder(S2CTransformSyncPacket::new)
                 .encoder(S2CTransformSyncPacket::encode)
                 .consumerMainThread(S2CTransformSyncPacket::handle)
                 .add();
@@ -56,5 +56,12 @@ public class ModMessages {
 
     public static <MSG> void sendToPlayer(MSG message, ServerPlayer player) {
         INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
+    }
+
+    /**
+     * 全プレイヤーに送信
+     */
+    public static <MSG> void sendToAll(MSG message) {
+        INSTANCE.send(PacketDistributor.ALL.noArg(), message);
     }
 }

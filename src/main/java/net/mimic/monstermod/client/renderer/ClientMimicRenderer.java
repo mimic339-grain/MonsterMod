@@ -17,14 +17,6 @@ public class ClientMimicRenderer extends GeoEntityRenderer<ClientMimicEntity> {
     @Override
     public void render(ClientMimicEntity entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-
-        // ===== デバッグログ =====
-        System.out.println("[ClientMimicRenderer] render start: id=" + entity.getId() +
-                " tick=" + entity.tickCount +
-                " realPos=(" + entity.getX() + "," + entity.getY() + "," + entity.getZ() + ")" +
-                " renderPos=(" + entity.getRenderX() + "," + entity.getRenderY() + "," + entity.getRenderZ() + ")" +
-                " rotY=" + entity.getRenderYRot() + " rotX=" + entity.getRenderXRot());
-
         poseStack.pushPose();
 
         // 描画用フィールドを使用して、Entity 本体の座標や回転に依存しない
@@ -36,8 +28,5 @@ public class ClientMimicRenderer extends GeoEntityRenderer<ClientMimicEntity> {
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
         poseStack.popPose();
-
-        // ===== デバッグログ =====
-        System.out.println("[ClientMimicRenderer] render end: id=" + entity.getId());
     }
 }
