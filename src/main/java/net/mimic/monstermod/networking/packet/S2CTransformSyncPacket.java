@@ -23,7 +23,6 @@ public class S2CTransformSyncPacket {
     private final int animationTick;
     private final Map<String, Boolean> customFlags;
 
-    // ===== コンストラクタ =====
     public S2CTransformSyncPacket(UUID playerUUID,
                                   ResourceLocation identityId,
                                   String animationStateName,
@@ -38,11 +37,9 @@ public class S2CTransformSyncPacket {
         this.customFlags = customFlags != null ? customFlags : new HashMap<>();
     }
 
-    // ===== デシリアライズ =====
     public S2CTransformSyncPacket(FriendlyByteBuf buf) {
-
         this.playerUUID = buf.readUUID();
-        this.identityId = buf.readResourceLocation();
+        this.identityId = buf.readNullable(FriendlyByteBuf::readResourceLocation);
         this.animationStateName = buf.readUtf();
         this.animationTick = buf.readInt();
 
@@ -55,10 +52,9 @@ public class S2CTransformSyncPacket {
         }
     }
 
-    // ===== シリアライズ =====
     public void encode(FriendlyByteBuf buf) {
         buf.writeUUID(playerUUID);
-        buf.writeResourceLocation(identityId);
+        buf.writeNullable(identityId, FriendlyByteBuf::writeResourceLocation);
         buf.writeUtf(animationStateName);
         buf.writeInt(animationTick);
 
@@ -69,7 +65,6 @@ public class S2CTransformSyncPacket {
         }
     }
 
-    // ===== ハンドラ =====
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
@@ -94,7 +89,6 @@ public class S2CTransformSyncPacket {
                 mimicEntity.updateFromServer(animState, clientTick, customFlags);
             }
 
-            MimicEntity.MimicAnimationState finalAnimState = animState;
             target.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                 transformation.setTransformed(true);
                 transformation.setTransformedMobId(identityId);
@@ -105,7 +99,7 @@ public class S2CTransformSyncPacket {
                         state = new PlayerTransformation.MonsterState();
                     }
 
-                    state.animationState = finalAnimState.name();
+                    state.animationState = animState.name();
                     state.animationTick = animationTick;
                     state.customFlags.clear();
                     state.customFlags.putAll(customFlags);
@@ -116,10 +110,6 @@ public class S2CTransformSyncPacket {
         ctx.get().setPacketHandled(true);
     }
 
-
-
-
-    // ===== Getter =====
     public UUID getPlayerUUID() { return playerUUID; }
     public ResourceLocation getIdentityId() { return identityId; }
     public String getAnimationStateName() { return animationStateName; }

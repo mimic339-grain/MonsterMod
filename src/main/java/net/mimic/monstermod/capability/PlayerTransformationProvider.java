@@ -14,6 +14,8 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 public class PlayerTransformationProvider implements ICapabilityProvider, INBTSerializable<CompoundTag> {
 
     public static final Capability<IPlayerTransformation> PLAYER_TRANSFORMATION =
@@ -52,8 +54,12 @@ public class PlayerTransformationProvider implements ICapabilityProvider, INBTSe
     @Nullable
     public MimicEntity.MimicAnimationState getAnimationState(ResourceLocation transformedMobId) {
         if (transformation == null) return null;
-        PlayerTransformation.MonsterState state = transformation.getMonsterState(transformedMobId);
-        return state != null ? state.getAnimationEnum() : null;
+        return transformation.getAnimationState(transformedMobId);
+    }
+
+    public int getAnimationTick(ResourceLocation transformedMobId) {
+        if (transformation == null) return 0;
+        return transformation.getAnimationTick(transformedMobId);
     }
 
     public void syncToClient(ServerPlayer player) {

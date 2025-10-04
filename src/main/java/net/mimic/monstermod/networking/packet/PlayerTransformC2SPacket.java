@@ -75,14 +75,14 @@ public class PlayerTransformC2SPacket {
                 MimicEntity.MimicAnimationState currentState = transformation.getAnimationState(identityId);
                 int currentTick = transformation.getAnimationTick(identityId);
 
+                // 同期が必要か判定
                 boolean shouldSync = transformation.shouldSync(identityId, transform, currentState, currentTick);
-
                 if (!shouldSync) {
-                    MonsterMod.getLogger().trace("[PlayerTransformC2SPacket.handle] Sync skipped: player={} identityId={}", player.getName().getString(), identityId);
+                    MonsterMod.getLogger().trace("[PlayerTransformC2SPacket.handle] Sync skipped");
                     return;
                 }
-                transformation.markSynced(identityId, transform, currentState);
 
+                transformation.markSynced(identityId, transform, currentState);
                 transformation.setTransformed(transform);
 
                 if (transform && identityId != null) {
@@ -104,24 +104,12 @@ public class PlayerTransformC2SPacket {
                     PlayerTransformation.MonsterState state = transformation.getMonsterState(identityId);
                     if (state == null) state = new PlayerTransformation.MonsterState();
 
-                    state.animationState = (requestedAnimation != null && !requestedAnimation.isEmpty())
-                            ? requestedAnimation
-                            : "IDLE";
-
-                    // ★ 修正：tick はサーバー側で維持、初期化はしない
-                    // state.animationTick = 0; ← 削除
+                    state.animationState = requestedAnimation != null ? requestedAnimation : "IDLE";
+                    // ★ tick はサーバー側で維持し、リセットしない
 
                     state.customFlags.clear();
                     state.customFlags.putAll(customFlags);
-
                     transformation.setMonsterState(identityId, state);
-
-                    MonsterMod.getLogger().debug("{} transformed into {} anim={} tick={} flags={}",
-                            player.getName().getString(),
-                            identityId,
-                            state.animationState,
-                            state.animationTick,
-                            customFlags);
 
                     PlayerTransformationProvider.sendToAllPlayers(
                             new S2CTransformSyncPacket(
@@ -132,7 +120,6 @@ public class PlayerTransformC2SPacket {
                                     state.customFlags
                             )
                     );
-
                 } else {
                     Entity entity = transformation.getTransformedEntity();
                     if (entity != null) {
@@ -143,8 +130,6 @@ public class PlayerTransformC2SPacket {
                         transformation.setMonsterState(transformation.getTransformedMobId(), null);
                     }
                     transformation.setTransformedMobId(null);
-
-                    MonsterMod.getLogger().debug("{} removed transformation.", player.getName().getString());
 
                     PlayerTransformationProvider.sendToAllPlayers(
                             new S2CTransformSyncPacket(
@@ -161,8 +146,6 @@ public class PlayerTransformC2SPacket {
 
         context.setPacketHandled(true);
     }
-
-
 
     public boolean isTransform() { return transform; }
     public ResourceLocation getIdentityId() { return identityId; }

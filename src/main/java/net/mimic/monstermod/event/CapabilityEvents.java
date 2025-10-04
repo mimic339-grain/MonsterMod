@@ -18,7 +18,7 @@ import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class CapabilityEvents {
-    //エンティティにCapabilityを追加
+
     @SubscribeEvent
     public static void onAttachCapabilitiesPlayer(AttachCapabilitiesEvent<Entity> event) {
         if (event.getObject() instanceof Player) {
@@ -31,10 +31,9 @@ public class CapabilityEvents {
         }
     }
 
-    //リスポーンとディメンション移動にデータをコピー
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
-        if (event.isWasDeath() || (event.getEntity().level().isClientSide() && !event.getOriginal().level().isClientSide())) {
+        if (event.isWasDeath()) {
             event.getOriginal().getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(oldCap -> {
                 event.getEntity().getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(newCap -> {
                     newCap.setTransformed(oldCap.isTransformed());
@@ -54,17 +53,18 @@ public class CapabilityEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                 ResourceLocation mobId = transformation.getTransformedMobId();
-                PlayerTransformation.MonsterState state = mobId != null
-                        ? transformation.getMonsterState(mobId)
-                        : new PlayerTransformation.MonsterState();
-
-                ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                        player.getUUID(),
-                        mobId,
-                        state.animationState,
-                        state.animationTick,
-                        state.customFlags
-                ), player);
+                if (mobId != null) {
+                    PlayerTransformation.MonsterState state = transformation.getMonsterState(mobId);
+                    if (state != null) {
+                        ModMessages.sendToPlayer(new S2CTransformSyncPacket(
+                                player.getUUID(),
+                                mobId,
+                                state.animationState,
+                                state.animationTick,
+                                state.customFlags
+                        ), player);
+                    }
+                }
             });
         }
     }
@@ -74,17 +74,18 @@ public class CapabilityEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                 ResourceLocation mobId = transformation.getTransformedMobId();
-                PlayerTransformation.MonsterState state = mobId != null
-                        ? transformation.getMonsterState(mobId)
-                        : new PlayerTransformation.MonsterState();
-
-                ModMessages.sendToPlayer(new S2CTransformSyncPacket(
-                        player.getUUID(),
-                        mobId,
-                        state.animationState,
-                        state.animationTick,
-                        state.customFlags
-                ), player);
+                if (mobId != null) {
+                    PlayerTransformation.MonsterState state = transformation.getMonsterState(mobId);
+                    if (state != null) {
+                        ModMessages.sendToPlayer(new S2CTransformSyncPacket(
+                                player.getUUID(),
+                                mobId,
+                                state.animationState,
+                                state.animationTick,
+                                state.customFlags
+                        ), player);
+                    }
+                }
             });
         }
     }
