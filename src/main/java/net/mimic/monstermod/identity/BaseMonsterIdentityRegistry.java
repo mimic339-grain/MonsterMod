@@ -6,42 +6,38 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Mod内の全てのIPlayerIdentityインスタンスを登録・管理するレジストリ。
- */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
-public class PlayerIdentityRegistry {
-    private static final Map<ResourceLocation, IPlayerIdentity> IDENTITIES = new HashMap<>();
+public class BaseMonsterIdentityRegistry {
 
-    // 定義済みIdentityインスタンス
-    public static final IPlayerIdentity MIMIC_IDENTITY = new MimicIdentity();
-    /**
-     * FMLCommonSetupEventでIdentityを登録します。
-     * このメソッドは、ForgeのModイベントバスによって自動的に呼び出されます。
-     */
+    private static final Map<ResourceLocation, BaseMonsterIdentity> IDENTITIES = new HashMap<>();
+
+    public static final BaseMonsterIdentity MIMIC_IDENTITY = new MimicIdentity();
+
     @SubscribeEvent
     public static void registerIdentities(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             registerIdentity(MIMIC_IDENTITY);
-            MonsterMod.getLogger().debug("PlayerIdentityRegistry: {}個のIdentityを登録しました。", IDENTITIES.size());
+            MonsterMod.getLogger().debug("BaseMonsterIdentityRegistry: {}個のIdentityを登録しました。", IDENTITIES.size());
         });
     }
 
-    private static void registerIdentity(IPlayerIdentity identity) {
-        if (IDENTITIES.containsKey(identity.getId())) {
+    public static void registerIdentity(BaseMonsterIdentity identity) {
+        ResourceLocation id = new ResourceLocation(identity.getId()); // String → ResourceLocation
+        if (IDENTITIES.containsKey(id)) {
             MonsterMod.getLogger().warn("Identity IDが重複しています: {}", identity.getId());
             return;
         }
-        IDENTITIES.put(identity.getId(), identity);
+        IDENTITIES.put(id, identity);
     }
-
-    public static IPlayerIdentity getIdentity(ResourceLocation id) {
+    @Nullable
+    public static BaseMonsterIdentity getIdentity(ResourceLocation id) {
         return IDENTITIES.get(id);
     }
 

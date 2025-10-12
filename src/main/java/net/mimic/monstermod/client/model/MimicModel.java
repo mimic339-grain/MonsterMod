@@ -4,7 +4,7 @@ import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.entity.custom.MimicEntity; // ★追加★
+import net.mimic.monstermod.entity.monster.MimicEntity;
 
 public class MimicModel extends GeoModel<MimicEntity> {
     @Override

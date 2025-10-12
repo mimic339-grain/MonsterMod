@@ -1,10 +1,9 @@
 package net.mimic.monstermod;
 
 import com.mojang.logging.LogUtils;
-import net.mimic.monstermod.client.renderer.identity.PlayerIdentityRenderer;
-import net.mimic.monstermod.entity.ModEntities;
-import net.mimic.monstermod.event.ModEvents;
-import net.mimic.monstermod.identity.PlayerIdentityRegistry;
+import net.mimic.monstermod.entity.ModEntitieType;
+import net.mimic.monstermod.entity.ModEntityAttributes;
+import net.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import net.mimic.monstermod.item.ModItems;
 import net.mimic.monstermod.networking.ModMessages;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -32,14 +31,13 @@ public class MonsterMod {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         // エンティティ・アイテム・メッセージ登録
-        ModEntities.register(modEventBus);
+        ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
         ModMessages.register(); // ここで CHANNEL を初期化
 
         // イベント登録
-        modEventBus.register(ModEvents.class);
-        modEventBus.register(PlayerIdentityRegistry.class);
-        modEventBus.register(PlayerIdentityRenderer.class);
+        modEventBus.register(ModEntityAttributes.class);
+        modEventBus.register(BaseMonsterIdentityRegistry.class);
     }
 
     @SubscribeEvent

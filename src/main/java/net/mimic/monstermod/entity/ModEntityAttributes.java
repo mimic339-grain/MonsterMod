@@ -1,8 +1,7 @@
-package net.mimic.monstermod.event;
+package net.mimic.monstermod.entity;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.entity.ModEntities;
-import net.mimic.monstermod.entity.custom.MimicEntity;
+import net.mimic.monstermod.entity.monster.MimicEntity;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -11,12 +10,16 @@ import net.minecraftforge.fml.common.Mod;
  * Mobの属性登録や、その他Mod全体に関わるイベントを処理するクラス。
  */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
-public class ModEvents {
+public class ModEntityAttributes {
 
     // エンティティの属性（体力、移動速度など）を登録するイベント
     @SubscribeEvent
     public static void entityAttributeEvent(EntityAttributeCreationEvent event) {
-        event.put(ModEntities.MIMIC.get(), MimicEntity.createAttributes().build());
+        event.put(ModEntitieType.MIMIC.get(), MimicEntity.createAttributes().build());
+
+
+
+
     }
 
     // ★追加: プレイヤーの変身中にMimicの攻撃力などを適用する例

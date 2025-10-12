@@ -1,226 +1,174 @@
 package net.mimic.monstermod.capability;
 
-
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.entity.custom.MimicEntity;
-import net.mimic.monstermod.identity.impl.MimicIdentity;
+import net.mimic.monstermod.entity.BaseMonsterEntity;
+import net.mimic.monstermod.entity.ModEntitieType;
 import net.mimic.monstermod.networking.ModMessages;
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.mimic.monstermod.networking.server.S2CTransformSyncPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
 
-public class PlayerTransformation implements IPlayerTransformation {
+/**
+ * 汎用版 PlayerTransformation
+ * - 特定モンスターに依存しない
+ * - mobId から EntityType を取得して変身
+ * - 状態変化時のみクライアント同期
+ */
+public class PlayerTransformation {
 
+    // -----------------------------
+    // 元のプレイヤー情報
+    // -----------------------------
     private boolean originalStatsSaved = false;
     private double originalHealth, originalMaxHealth, originalAttack, originalArmor, originalSpeed;
-    private boolean noKnockback = false;
+
+    // -----------------------------
+    // 変身状態
+    // -----------------------------
     private boolean isTransformed = false;
+    @Nullable
     private ResourceLocation transformedMobId = null;
 
-    private final Map<ResourceLocation, MonsterState> monsterStates = new HashMap<>();
-
-    @Override
-    public boolean hasSavedOriginalStats() { return originalStatsSaved; }
-    @Override public void setOriginalHealth(double hp) { originalHealth = hp; originalStatsSaved = true; }
-    @Override public void setOriginalMaxHealth(double maxHp) { originalMaxHealth = maxHp; }
-    @Override public void setOriginalAttackDamage(double dmg) { originalAttack = dmg; }
-    @Override public void setOriginalArmor(double armor) { originalArmor = armor; }
-    @Override public void setOriginalMoveSpeed(double speed) { originalSpeed = speed; }
-    @Override public double getOriginalHealth() { return originalHealth; }
-    @Override public double getOriginalMaxHealth() { return originalMaxHealth; }
-    @Override public double getOriginalAttackDamage() { return originalAttack; }
-    @Override public double getOriginalArmor() { return originalArmor; }
-    @Override public double getOriginalMoveSpeed() { return originalSpeed; }
-    @Override public void clearOriginalStats() { originalStatsSaved = false; }
-    @Override public boolean isNoKnockback() { return noKnockback; }
-    @Override public void setNoKnockback(boolean value) { noKnockback = value; }
     @Nullable
-    @Override public Entity getTransformedEntity() { return null; }
-    @Override public void setTransformedEntity(@Nullable Entity entity) {}
-    @Override public boolean isTransformed() { return isTransformed; }
-    @Override public void setTransformed(boolean transformed) { isTransformed = transformed; }
-    @Override public ResourceLocation getTransformedMobId() { return transformedMobId; }
-    @Override public void setTransformedMobId(ResourceLocation mobId) { transformedMobId = mobId; }
+    private BaseMonsterEntity transformedEntity = null;
 
-    @Override
-    public MonsterState getMonsterState(ResourceLocation mobId) {
-        return mobId != null ? monsterStates.getOrDefault(mobId, new MonsterState()) : new MonsterState();
+    // ======================
+    // 元のステータス管理
+    // ======================
+    public boolean hasSavedOriginalStats() { return originalStatsSaved; }
+    public void setOriginalHealth(double hp) { originalHealth = hp; originalStatsSaved = true; }
+    public void setOriginalMaxHealth(double maxHp) { originalMaxHealth = maxHp; }
+    public void setOriginalAttackDamage(double dmg) { originalAttack = dmg; }
+    public void setOriginalArmor(double armor) { originalArmor = armor; }
+    public void setOriginalMoveSpeed(double speed) { originalSpeed = speed; }
+    public double getOriginalHealth() { return originalHealth; }
+    public double getOriginalMaxHealth() { return originalMaxHealth; }
+    public double getOriginalAttackDamage() { return originalAttack; }
+    public double getOriginalArmor() { return originalArmor; }
+    public double getOriginalMoveSpeed() { return originalSpeed; }
+    public void clearOriginalStats() { originalStatsSaved = false; }
+
+    // ======================
+    // 変身管理
+    // ======================
+    public boolean isTransformed() { return isTransformed; }
+    public void setTransformed(boolean transformed) { isTransformed = transformed; }
+
+    @Nullable
+    public ResourceLocation getTransformedMobId() { return transformedMobId; }
+    public void setTransformedMobId(ResourceLocation mobId) { transformedMobId = mobId; }
+
+    /**
+     * サーバーまたはクライアント描画用に変身エンティティを取得
+     */
+    @Nullable
+    public BaseMonsterEntity getTransformedEntity(Level level) {
+        if (!isTransformed || transformedMobId == null) return null;
+
+        // すでに生成済みならそのまま返す
+        if (transformedEntity != null) return transformedEntity;
+
+        // サーバー側はスポーン済みのエンティティを返す
+        if (!level.isClientSide) return transformedEntity;
+
+        // クライアント側は描画用に生成
+        var type = ModEntitieType.getEntityType(transformedMobId);
+        if (type == null) return null;
+
+        transformedEntity = (BaseMonsterEntity) type.create(level);
+        return transformedEntity;
     }
 
-    @Override
-    public void setMonsterState(ResourceLocation mobId, MonsterState state) {
-        if (mobId != null) monsterStates.put(mobId, state);
-    }
+    /**
+     * 変身開始（サーバー側）
+     */
+    public void startTransformation(Player player, ResourceLocation mobId) {
+        if (isTransformed) return;
 
-    @Override
-    public MimicEntity.MimicAnimationState getAnimationState(ResourceLocation mobId) {
-        return getMonsterState(mobId).getAnimationEnum();
-    }
+        isTransformed = true;
+        transformedMobId = mobId;
 
-    @Override
-    public int getAnimationTick(ResourceLocation mobId) {
-        return getMonsterState(mobId).animationTick;
-    }
-
-    @Override
-    public MimicIdentity getTransformedIdentity() {
-        if (transformedMobId == null) return null;
-        return MimicIdentity.INSTANCE;
-    }
-
-    @Override
-    public void setAnimationTick(ResourceLocation mobId, int tick) {
-        MonsterState state = getMonsterState(mobId);
-        // ★ 修正：tick は必ず上書きではなく差分チェック
-        if (Math.abs(state.animationTick - tick) > 2) {
-            state.animationTick = tick;
-        }
-        setMonsterState(mobId, state);
-        MonsterMod.getLogger().trace("[setAnimationTick] mobId={} tick={}", mobId, tick);
-    }
-
-
-    @Override
-    public CompoundTag serializeNBT() {
-        CompoundTag nbt = new CompoundTag();
-        nbt.putBoolean("isTransformed", isTransformed);
-        if (transformedMobId != null) nbt.putString("transformedMobId", transformedMobId.toString());
-
-        CompoundTag statesTag = new CompoundTag();
-        for (Map.Entry<ResourceLocation, MonsterState> entry : monsterStates.entrySet()) {
-            CompoundTag stateTag = new CompoundTag();
-            stateTag.putString("animationState", entry.getValue().animationState);
-            stateTag.putInt("animationTick", entry.getValue().animationTick);
-
-            CompoundTag flagsTag = new CompoundTag();
-            for (Map.Entry<String, Boolean> flag : entry.getValue().customFlags.entrySet()) {
-                flagsTag.putBoolean(flag.getKey(), flag.getValue());
-            }
-            stateTag.put("customFlags", flagsTag);
-
-            statesTag.put(entry.getKey().toString(), stateTag);
-        }
-        nbt.put("monsterStates", statesTag);
-        return nbt;
-    }
-
-    @Override
-    public void deserializeNBT(CompoundTag nbt) {
-        isTransformed = nbt.getBoolean("isTransformed");
-        transformedMobId = nbt.contains("transformedMobId") ? new ResourceLocation(nbt.getString("transformedMobId")) : null;
-
-        monsterStates.clear();
-        if (nbt.contains("monsterStates")) {
-            CompoundTag statesTag = nbt.getCompound("monsterStates");
-            for (String key : statesTag.getAllKeys()) {
-                ResourceLocation mobId = new ResourceLocation(key);
-                CompoundTag stateTag = statesTag.getCompound(key);
-                MonsterState state = new MonsterState();
-                state.animationState = stateTag.getString("animationState");
-                state.animationTick = stateTag.getInt("animationTick");
-
-                if (stateTag.contains("customFlags")) {
-                    CompoundTag flagsTag = stateTag.getCompound("customFlags");
-                    for (String flagKey : flagsTag.getAllKeys()) {
-                        state.setFlag(flagKey, flagsTag.getBoolean(flagKey));
-                    }
-                }
-                monsterStates.put(mobId, state);
+        Level level = player.getCommandSenderWorld();
+        if (!level.isClientSide) {
+            var type = ModEntitieType.getEntityType(mobId);
+            if (type != null) {
+                transformedEntity = (BaseMonsterEntity) type.create(level);
+                transformedEntity.setPos(player.getX(), player.getY(), player.getZ());
+                level.addFreshEntity(transformedEntity);
             }
         }
-        MonsterMod.getLogger().debug("[deserializeNBT] isTransformed={} transformedMobId={} monsterStates={}", isTransformed, transformedMobId, monsterStates.keySet());
+
+        syncToClient(player);
     }
 
-    private MimicEntity.MimicAnimationState lastSentAnimationState = null;
-    private boolean lastSentTransform = false;
+    /**
+     * 変身解除（サーバー側）
+     */
+    public void stopTransformation(Player player) {
+        if (!isTransformed) return;
 
-    public boolean shouldSync(ResourceLocation identityId, boolean transform, MimicEntity.MimicAnimationState currentState, int currentTick) {
-        if (transform != lastSentTransform) return true;
-        if (currentState != lastSentAnimationState) return true;
-        if (Math.abs(currentTick - getAnimationTick(identityId)) > 2) return true;
-        return false;
+        isTransformed = false;
+
+        if (transformedEntity != null) {
+            transformedEntity.discard();
+            transformedEntity = null;
+        }
+
+        transformedMobId = null;
+        syncToClient(player);
     }
 
-    public void markSynced(ResourceLocation identityId, boolean transform, MimicEntity.MimicAnimationState currentState) {
-        lastSentTransform = transform;
-        lastSentAnimationState = currentState;
-    }
-
-    @Override
+    // ======================
+    // サーバー → クライアント同期
+    // ======================
     public void syncToClient(Player player) {
-        syncToClient(player, "generic");
-    }
-
-    // 呼び出し元が理由を指定できるオーバーロード
-    public void syncToClient(Player player, String reason) {
-        if (!(player instanceof ServerPlayer)) return;
-
-        ResourceLocation mobId = getTransformedMobId();
-        if (mobId == null) return;
-
-        MonsterState state = getMonsterState(mobId);
+        if (!(player instanceof ServerPlayer sp)) return;
+        if (transformedMobId == null && !isTransformed) return;
 
         S2CTransformSyncPacket packet = new S2CTransformSyncPacket(
                 player.getUUID(),
-                mobId,
-                state.animationState != null ? state.animationState : MimicEntity.MimicAnimationState.IDLE.name(),
-                state.animationTick,
-                state.customFlags
+                transformedMobId,
+                isTransformed
         );
+        ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> sp), packet);
 
-        MonsterMod.getLogger().debug(
-                "[syncToClient] reason={} mobId={} state={} tick={} flags={}",
-                reason, mobId, state.animationState, state.animationTick, state.customFlags
-        );
-
-        ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> (ServerPlayer) player), packet);
+        MonsterMod.getLogger().debug("[syncToClient] player={} transformed={} mobId={}",
+                player.getName().getString(), isTransformed, transformedMobId);
     }
 
-    @Override
-    public void setAnimationStateAndSync(ResourceLocation mobId, MimicEntity.MimicAnimationState newState, ServerPlayer player) {
-        if (mobId == null || newState == null || player == null) return;
-
-        MonsterState monsterState = getMonsterState(mobId);
-        MimicEntity.MimicAnimationState oldState = monsterState.getAnimationEnum();
-
-        monsterState.animationState = newState.name();
-        setMonsterState(mobId, monsterState);
-
-        if (oldState != newState) {
-            MonsterMod.getLogger().debug(
-                    "[setAnimationStateAndSync] mobId={} CHANGED {} -> {} player={}",
-                    mobId, oldState, newState, player.getName().getString()
-            );
-        } else {
-            MonsterMod.getLogger().debug(
-                    "[setAnimationStateAndSync] mobId={} SAME_STATE={} (sync anyway) player={}",
-                    mobId, newState, player.getName().getString()
-            );
-        }
-
-        // 同期時に「理由」を渡す
-        syncToClient(player, "setAnimationStateAndSync");
+    // ======================
+    // NBT 保存 / 読み込み
+    // ======================
+    public CompoundTag serializeNBT() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("isTransformed", isTransformed);
+        if (transformedMobId != null) tag.putString("transformedMobId", transformedMobId.toString());
+        tag.putBoolean("originalStatsSaved", originalStatsSaved);
+        tag.putDouble("originalHealth", originalHealth);
+        tag.putDouble("originalMaxHealth", originalMaxHealth);
+        tag.putDouble("originalAttack", originalAttack);
+        tag.putDouble("originalArmor", originalArmor);
+        tag.putDouble("originalSpeed", originalSpeed);
+        return tag;
     }
 
-    public static class MonsterState {
-        public String animationState = "IDLE";
-        public int animationTick = 0;
-        public final Map<String, Boolean> customFlags = new HashMap<>();
+    public void deserializeNBT(CompoundTag tag) {
+        isTransformed = tag.getBoolean("isTransformed");
+        transformedMobId = tag.contains("transformedMobId") ? new ResourceLocation(tag.getString("transformedMobId")) : null;
 
-        public void setFlag(String key, boolean value) { customFlags.put(key, value); }
-        public boolean getFlag(String key) { return customFlags.getOrDefault(key, false); }
-        public MimicEntity.MimicAnimationState getAnimationEnum() {
-            if (animationState == null) return MimicEntity.MimicAnimationState.IDLE;
-            try { return MimicEntity.MimicAnimationState.valueOf(animationState); }
-            catch (IllegalArgumentException e) { return MimicEntity.MimicAnimationState.IDLE; }
-        }
+        originalStatsSaved = tag.getBoolean("originalStatsSaved");
+        originalHealth = tag.getDouble("originalHealth");
+        originalMaxHealth = tag.getDouble("originalMaxHealth");
+        originalAttack = tag.getDouble("originalAttack");
+        originalArmor = tag.getDouble("originalArmor");
+        originalSpeed = tag.getDouble("originalSpeed");
+
+        MonsterMod.getLogger().debug("[deserializeNBT] transformed={} mobId={}", isTransformed, transformedMobId);
     }
 }

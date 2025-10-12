@@ -1,67 +1,61 @@
 package net.mimic.monstermod.networking;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.networking.packet.MimicSwitchC2SPacket;
-import net.mimic.monstermod.networking.packet.PlayerTransformC2SPacket;
-import net.mimic.monstermod.networking.packet.S2CTransformSyncPacket;
+import net.mimic.monstermod.networking.client.C2SMonsterStatePacket;
+import net.mimic.monstermod.networking.server.S2CMonsterSyncPacket;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+import net.minecraft.server.level.ServerPlayer;
 
 public class ModMessages {
-    public static SimpleChannel INSTANCE;
 
+    public static SimpleChannel INSTANCE;
     private static int packetId = 0;
-    private static int id() { return packetId++; }
+
+    private static int id() {
+        return packetId++;
+    }
 
     public static void register() {
-        INSTANCE = NetworkRegistry.newSimpleChannel(
-                new ResourceLocation(MonsterMod.MOD_ID, "main_channel"),
-                () -> "1.0",
-                (version) -> true,
-                (version) -> true
-        );
+        INSTANCE = NetworkRegistry.ChannelBuilder
+                .named(new ResourceLocation(MonsterMod.MOD_ID, "messages"))
+                .networkProtocolVersion(() -> "1.0")
+                .clientAcceptedVersions(s -> true)
+                .serverAcceptedVersions(s -> true)
+                .simpleChannel();
 
-        MonsterMod.CHANNEL = INSTANCE;
-
-        INSTANCE.messageBuilder(PlayerTransformC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(PlayerTransformC2SPacket::new)
-                .encoder(PlayerTransformC2SPacket::encode)
-                .consumerMainThread(PlayerTransformC2SPacket::handle)
+        // クライアント → サーバー
+        INSTANCE.messageBuilder(C2SMonsterStatePacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .encoder(C2SMonsterStatePacket::encode)
+                .decoder(C2SMonsterStatePacket::decode)
+                .consumerMainThread(C2SMonsterStatePacket::handle)
                 .add();
 
-        INSTANCE.messageBuilder(MimicSwitchC2SPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(MimicSwitchC2SPacket::new)
-                .encoder(MimicSwitchC2SPacket::encode)
-                .consumerMainThread(MimicSwitchC2SPacket::handle)
-                .add();
-
-        INSTANCE.messageBuilder(S2CTransformSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(S2CTransformSyncPacket::new)
-                .encoder(S2CTransformSyncPacket::encode)
-                .consumerMainThread(S2CTransformSyncPacket::handle)
+        // サーバー → クライアント
+        INSTANCE.messageBuilder(S2CMonsterSyncPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(S2CMonsterSyncPacket::encode)
+                .decoder(S2CMonsterSyncPacket::decode)
+                .consumerMainThread(S2CMonsterSyncPacket::handle)
                 .add();
     }
 
-    public static SimpleChannel getChannel() {
-        return INSTANCE;
-    }
-
-    public static <MSG> void sendToServer(MSG message) {
-        INSTANCE.sendToServer(message);
-    }
-
+    // ----------------------------
+    // 共通ユーティリティ
+    // ----------------------------
     public static <MSG> void sendToPlayer(MSG message, ServerPlayer player) {
         INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
     }
 
-    /**
-     * 全プレイヤーに送信
-     */
-    public static <MSG> void sendToAll(MSG message) {
+    /** ★ 全クライアントに送信する */
+    public static <MSG> void sendToAllClients(MSG message) {
         INSTANCE.send(PacketDistributor.ALL.noArg(), message);
+    }
+
+    /** サーバーに送信する（クライアント側から呼び出し） */
+    public static <MSG> void sendToServer(MSG message) {
+        INSTANCE.sendToServer(message);
     }
 }

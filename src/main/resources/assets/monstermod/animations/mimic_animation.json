@@ -183,7 +183,7 @@
 				}
 			}
 		},
-		"animation.mimic.openjump": {
+		"animation.mimic.open_walk": {
 			"loop": true,
 			"animation_length": 1.0031,
 			"bones": {
@@ -302,7 +302,7 @@
 				}
 			}
 		},
-		"animation.mimic.closejump": {
+		"animation.mimic.close_walk": {
 			"loop": true,
 			"animation_length": 1.0031,
 			"bones": {

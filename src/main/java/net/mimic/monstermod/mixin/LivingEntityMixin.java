@@ -1,7 +1,6 @@
 package net.mimic.monstermod.mixin;
 
 import net.mimic.monstermod.MonsterMod;
-import net.mimic.monstermod.identity.IPlayerIdentity;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.LivingEntity;
@@ -18,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
-
+/*
     // プレイヤーのヒットボックスサイズを変更
     @Inject(method = "getDimensions", at = @At("HEAD"), cancellable = true)
     private void monstermod_getDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
@@ -75,5 +74,5 @@ public abstract class LivingEntityMixin {
                 }
             });
         }
-    }
+    }*/
 }

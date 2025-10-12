@@ -4,7 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.mimic.monstermod.capability.PlayerTransformationProvider;
-import net.mimic.monstermod.identity.PlayerIdentityRegistry;
+import net.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -36,7 +36,7 @@ public class ModCommands {
                                         .then(Commands.argument("identityId", ResourceLocationArgument.id())
                                                 //タブ補完
                                                 .suggests((context, builder) -> {
-                                                    PlayerIdentityRegistry.getAllIdentityIds()
+                                                    BaseMonsterIdentityRegistry.getAllIdentityIds()
                                                             .forEach(id -> builder.suggest(id.toString()));
                                                     return builder.buildFuture();
                                                 })
@@ -61,7 +61,7 @@ public class ModCommands {
                     source.sendFailure(Component.literal("変身するにはIdentity IDを指定してください。"));
                     return;
                 }
-                if (!PlayerIdentityRegistry.hasIdentity(identityId)) {
+                if (!BaseMonsterIdentityRegistry.hasIdentity(identityId)) {
                     source.sendFailure(Component.literal("不明なIdentity ID: " + identityId));
                     return;
                 }

@@ -1,0 +1,33 @@
+package net.mimic.monstermod.variable;
+
+import net.mimic.monstermod.MonsterMod;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.util.LazyOptional;
+import net.mimic.monstermod.variable.entity.IPlayerData;
+import net.mimic.monstermod.variable.entity.PlayerCap;
+
+public class PlayerCapabilityProvider implements ICapabilityProvider {
+
+    public static final ResourceLocation ID = new ResourceLocation(MonsterMod.MOD_ID, "player_cap");
+
+    private final PlayerCap backend;
+    private final LazyOptional<IPlayerData> optional;
+
+    public PlayerCapabilityProvider(Player owner) {
+        this.backend = new PlayerCap(owner);
+        this.optional = LazyOptional.of(() -> backend);
+    }
+
+    @Override
+    public <T> LazyOptional<T> getCapability(Capability<T> cap, Direction side) {
+        return cap == CapabilityRegistry.PLAYER_CAPABILITY ? optional.cast() : LazyOptional.empty();
+    }
+
+    public CompoundTag serializeNBT() { return backend.serializeNBT(); }
+    public void deserializeNBT(CompoundTag nbt) { backend.deserializeNBT(nbt); }
+}
