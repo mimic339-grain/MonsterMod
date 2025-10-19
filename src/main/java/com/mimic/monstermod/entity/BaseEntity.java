@@ -110,8 +110,10 @@ public abstract class BaseEntity extends Mob {
     // Capability 取得
     // ----------------------------
     public IMonsterData getMonsterData() {
+        // Capabilityの取得メソッドが正しく機能しているか確認
         return CapabilityRegistry.getMonsterData(this);
     }
+
     // ----------------------------
     // 攻撃アニメーション補間
     // ----------------------------

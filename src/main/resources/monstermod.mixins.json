@@ -6,10 +6,11 @@
   "refmap": "monstermod.refmap.json",
   "mixins": [
     "LivingEntityMixin",
-    "PlayerMixin"
-  ],
-  "client": [
-    "client.PlayerRendererMixin"
+    "PlayerMixin",
+    "player.PlayerEntityTickMixin",
+    "player.PlayerRendererMixin",
+    "player.PlayerTransformationSyncMixin",
+    "player.ClientPlayerEntityTickMixin"
   ],
   "injectors": {
     "defaultRequire": 1

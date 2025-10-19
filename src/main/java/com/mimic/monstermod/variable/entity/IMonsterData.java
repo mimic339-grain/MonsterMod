@@ -24,4 +24,24 @@ public interface IMonsterData extends IEntityData {
 
     // Tick処理（AIやクールダウン更新など）
     void tick();
+
+    // ======================
+    // 変身状態に関連する新しいメソッド
+    // ======================
+
+    // 能力クールダウン
+    int getAbilityCooldown();
+    void setAbilityCooldown(int cooldown);
+
+    // 残りホスティリティ時間
+    int getRemainingHostilityTime();
+    void setRemainingHostilityTime(int time);
+
+    // 現在の変身状態の確認
+    boolean isTransformed();
+    void setTransformed(boolean transformed);
+
+    // 変身後のモンスターID取得
+    String getTransformedMobId();
+    void setTransformedMobId(String mobId);
 }

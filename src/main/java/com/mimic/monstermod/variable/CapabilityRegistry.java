@@ -1,6 +1,7 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.capability.PlayerTransformationMixinHelper;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
@@ -61,7 +62,7 @@ public class CapabilityRegistry {
     public static void registerCaps(RegisterCapabilitiesEvent event) {
         event.register(IPlayerData.class);
         event.register(IMonsterData.class);
-        event.register(PlayerTransformationProvider.class); // 追加
+        event.register(PlayerTransformationProvider.class);
     }
 
     // ====== ATTACH PROVIDERS ======
@@ -70,9 +71,7 @@ public class CapabilityRegistry {
         Entity entity = event.getObject();
 
         if (entity instanceof Player player) {
-            // 既存 PlayerCapabilityProvider
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
-            // PlayerTransformationProvider 追加
             event.addCapability(
                     new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
                     new PlayerTransformationProvider()
@@ -82,31 +81,14 @@ public class CapabilityRegistry {
         }
     }
 
-    // ====== CLONE / RESPAWN / LOGIN HANDLING ======
+    // ====== CLONE / RESPAWN / LOGIN / DIM CHANGE ======
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
         Player oldPlayer = event.getOriginal();
         Player newPlayer = event.getEntity();
         oldPlayer.revive();
 
-        // PLAYER CAP
-        oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                ));
-
-        // MONSTER CAP
-        oldPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                ));
-
-        // TRANSFORMATION CAP
-        oldPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                ));
-
+        copyCaps(oldPlayer, newPlayer);
         syncToClient(newPlayer);
     }
 
@@ -131,20 +113,37 @@ public class CapabilityRegistry {
         }
     }
 
-    // ====== SYNC ======
+    private static void copyCaps(Player oldPlayer, Player newPlayer) {
+        oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
+                newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
+                        newCap.deserializeNBT(oldCap.serializeNBT())
+                )
+        );
+
+        oldPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(oldCap ->
+                newPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(newCap ->
+                        newCap.deserializeNBT(oldCap.serializeNBT())
+                )
+        );
+
+        oldPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(oldCap ->
+                newPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(newCap ->
+                        newCap.deserializeNBT(oldCap.serializeNBT())
+                )
+        );
+    }
+
+    // ====== SYNC TO CLIENT ======
     public static void syncToClient(Player player) {
         if (!(player instanceof ServerPlayer serverPlayer)) return;
 
-        IPlayerData playerData = getPlayerData(player);
-        IMonsterData monsterData = getMonsterData(player);
-
-        // 既存の Capability 同期
-        ModMessages.sendToPlayer(new S2CPlayerCapSyncPacket(playerData.serializeNBT()), serverPlayer);
-        ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(monsterData.serializeNBT()), serverPlayer);
+        // PLAYER / MONSTER Cap 同期
+        ModMessages.sendToPlayer(new S2CPlayerCapSyncPacket(getPlayerData(player).serializeNBT()), serverPlayer);
+        ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()), serverPlayer);
 
         // PlayerTransformation 同期
-        player.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(transCap -> {
-            transCap.syncToClient(player);
-        });
+        getPlayerTransformation(player).ifPresent(transCap ->
+                PlayerTransformationMixinHelper.syncTransformation(serverPlayer)
+        );
     }
 }

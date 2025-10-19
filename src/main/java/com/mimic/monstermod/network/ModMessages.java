@@ -48,7 +48,7 @@ public class ModMessages {
         registerMessage(PlayerTransformC2SPacket.class, PlayerTransformC2SPacket::toBytes, PlayerTransformC2SPacket::new, PlayerTransformC2SPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CMonsterCapSyncPacket.class, S2CMonsterCapSyncPacket::toBytes, S2CMonsterCapSyncPacket::new, S2CMonsterCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2CTransformSyncPacket.class, S2CTransformSyncPacket::toBytes, S2CTransformSyncPacket::new, S2CTransformSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2CTransformSyncPacket.class, S2CTransformSyncPacket::encode, S2CTransformSyncPacket::decode, S2CTransformSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
 

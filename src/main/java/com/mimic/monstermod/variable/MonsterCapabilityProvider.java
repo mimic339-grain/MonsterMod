@@ -25,6 +25,7 @@ public class MonsterCapabilityProvider implements ICapabilityProvider {
 
     @Override
     public <T> LazyOptional<T> getCapability(Capability<T> cap, Direction side) {
+        if (cap == null) return LazyOptional.empty();
         return cap == CapabilityRegistry.MONSTER_CAPABILITY ? optional.cast() : LazyOptional.empty();
     }
 
@@ -34,5 +35,10 @@ public class MonsterCapabilityProvider implements ICapabilityProvider {
 
     public void deserializeNBT(CompoundTag nbt) {
         backend.deserializeNBT(nbt);
+    }
+
+    /** エンティティ削除時に呼ぶと安全 */
+    public void invalidate() {
+        optional.invalidate();
     }
 }
