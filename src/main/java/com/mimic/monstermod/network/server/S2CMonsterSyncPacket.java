@@ -12,11 +12,6 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-/**
- * サーバー → クライアント
- * モンスターの状態変化を全クライアントへ同期する
- * tick同期は不要
- */
 public class S2CMonsterSyncPacket {
 
     private final int entityId;
@@ -29,28 +24,20 @@ public class S2CMonsterSyncPacket {
         this.skill = skill;
     }
 
-    // ----------------------------
-    // 書き込み
-    // ----------------------------
     public static void encode(S2CMonsterSyncPacket msg, FriendlyByteBuf buf) {
         buf.writeInt(msg.entityId);
         buf.writeUtf(msg.animation);
         buf.writeUtf(msg.skill);
     }
 
-    // ----------------------------
-    // 読み込み
-    // ----------------------------
     public static S2CMonsterSyncPacket decode(FriendlyByteBuf buf) {
-        int entityId = buf.readInt();
-        String animation = buf.readUtf();
-        String skill = buf.readUtf();
-        return new S2CMonsterSyncPacket(entityId, animation, skill);
+        return new S2CMonsterSyncPacket(
+                buf.readInt(),
+                buf.readUtf(),
+                buf.readUtf()
+        );
     }
 
-    // ----------------------------
-    // クライアント側処理
-    // ----------------------------
     public static void handle(S2CMonsterSyncPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
@@ -58,24 +45,19 @@ public class S2CMonsterSyncPacket {
 
             Entity entity = mc.level.getEntity(msg.entityId);
             if (entity instanceof BaseMonsterEntity monster) {
+                // 安全に同期：必ず setAnimation() を呼ぶ
+                monster.setAnimation(msg.animation);
 
-                // 🎬 Animation名を直接同期
-                monster.getEntityData().set(BaseMonsterEntity.ANIMATION_NAME, msg.animation);
-
-                // Skill同期
                 IMonsterData data = CapabilityRegistry.getMonsterData(monster);
                 if (data != null) {
                     data.setSkill(msg.skill);
-                    // skillTick は不要なので送らない
+                    // skillTick は送信しない設計
                 }
             }
         });
         ctx.get().setPacketHandled(true);
     }
 
-    // ----------------------------
-    // サーバー → 特定プレイヤー送信
-    // ----------------------------
     public void sendToPlayer(ServerPlayer player) {
         ModMessages.sendToPlayer(this, player);
     }

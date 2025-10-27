@@ -3,7 +3,8 @@ package com.mimic.monstermod.impl;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.server.C2SPlayerSkillInputPacket;
+
+import com.mimic.monstermod.network.client.C2SPlayerInputPacket;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -59,7 +60,7 @@ public class ClientKeyHandler {
                         BaseMonsterIdentity identity = trans.getIdentity();
                         if (identity != null) identity.handleClientInput(player, true, false, skillIndex);
                         // サーバーへ送信
-                        ModMessages.INSTANCE.sendToServer(new C2SPlayerSkillInputPacket(skillIndex));
+                        ModMessages.INSTANCE.sendToServer(new C2SPlayerInputPacket(true, false, skillIndex));
                     });
         }
         keyStateMap.put(key, pressed);
@@ -73,7 +74,7 @@ public class ClientKeyHandler {
                     .ifPresent(trans -> {
                         BaseMonsterIdentity identity = trans.getIdentity();
                         if (identity != null) identity.handleClientInput(player, false, true, -1);
-                        ModMessages.INSTANCE.sendToServer(new C2SPlayerSkillInputPacket(-1));
+                        ModMessages.INSTANCE.sendToServer(new C2SPlayerInputPacket(false, true, -1));
                     });
         }
         keyStateMap.put(key, pressed);

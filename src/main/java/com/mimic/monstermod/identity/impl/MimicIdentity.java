@@ -12,8 +12,6 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Mimic Identity 完全版（BaseMonsterIdentity対応）
- * - BoundingBox, EyeHeight, 能力処理, クライアント入力, NBT対応
- * - サーバーTickでスキル・クールタイム反映
  */
 public class MimicIdentity extends BaseMonsterIdentity {
 
@@ -29,18 +27,16 @@ public class MimicIdentity extends BaseMonsterIdentity {
 
     /** IDだけで作る場合 */
     public MimicIdentity() {
-        super(IDENTITY_ID.toString(), SKILL_COUNT);
+        super(null, SKILL_COUNT);
     }
 
     // -----------------------------
     // BoundingBox / EyeHeight
     // -----------------------------
-    @Override
     public Vec3 getBoundingBoxDimensions(Pose pose) {
         return new Vec3(0.6f, 0.6f, 0.6f);
     }
 
-    @Override
     public float getEyeHeight(Pose pose) {
         return 0.45f;
     }
@@ -48,6 +44,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
     // -----------------------------
     // サーバー専用 Tick（能力・クールタイム更新）
     // -----------------------------
+    @Override
     public void tickServer(Player player) {
         super.tickServer(player); // abilityCooldowns 減算
 
@@ -55,7 +52,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
         if (entity != null) {
             IMonsterData data = entity.getMonsterData();
             if (data != null) {
-                // MonsterData にも反映可能
+                // MonsterData にも反映
                 data.setAbilityCooldown(Math.max(0, data.getAbilityCooldown() - 1));
                 data.setRemainingHostilityTime(Math.max(0, data.getRemainingHostilityTime() - 1));
             }
@@ -67,7 +64,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
     // -----------------------------
     @Override
     protected void handleAbility(Player player, int skillIndex) {
-        if (getCooldown(skillIndex) > 0) return;
+        if (abilityCooldowns[skillIndex] > 0) return;
 
         switch (skillIndex) {
             case 0 -> triggerAttack(player);
@@ -75,7 +72,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
             case 2 -> someOtherSkill(player);
         }
 
-        setCooldown(skillIndex, 20); // 1秒クール
+        abilityCooldowns[skillIndex] = 20; // 1秒クール
     }
 
     @Override
@@ -95,13 +92,13 @@ public class MimicIdentity extends BaseMonsterIdentity {
     private void triggerAttack(Player player) {
         BaseMonsterEntity entity = getEntity();
         if (entity == null) return;
-        // TODO: 攻撃処理実装
+        // TODO: 攻撃処理
     }
 
     private void deployTrap(Player player) {
         BaseMonsterEntity entity = getEntity();
         if (entity == null) return;
-        // TODO: トラップ設置処理実装
+        // TODO: トラップ設置処理
     }
 
     private void someOtherSkill(Player player) {
@@ -116,7 +113,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = super.serializeNBT();
-        // Mimic固有ステートがあればここに保存
+        // Mimic固有ステート保存
         return tag;
     }
 

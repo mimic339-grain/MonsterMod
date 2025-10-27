@@ -1,3 +1,4 @@
+// MimicEntity.java
 package com.mimic.monstermod.entity.monster;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
@@ -12,12 +13,10 @@ import net.minecraft.world.level.Level;
 /**
  * 完全版 MimicEntity
  * - BaseMonsterEntity を継承
- * - Open/Close状態フラグを保持
- * - プレイヤー移動やキー入力に応じたアニメーションをdecideAnimationで返す
+ * - Open/Close 状態と Skill を反映したアニメーションを返す
  */
 public class MimicEntity extends BaseMonsterEntity {
 
-    // Open/Closeフラグ同期
     private static final EntityDataAccessor<Boolean> OPEN =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
 
@@ -31,29 +30,28 @@ public class MimicEntity extends BaseMonsterEntity {
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
-        this.entityData.define(OPEN, false); // デフォルトはClose状態
+        this.entityData.define(OPEN, false);
         this.entityData.define(BITE, false);
     }
 
-    // Open/Close管理
-    public boolean isOpen() {
-        return this.entityData.get(OPEN);
-    }
-    public void setOpen(boolean open) {
-        this.entityData.set(OPEN, open);
-    }
+    public boolean isOpen() { return this.entityData.get(OPEN); }
+    public void setOpen(boolean open) { this.entityData.set(OPEN, open); }
 
+    public boolean isBiting() { return this.entityData.get(BITE); }
+    public void setBiting(boolean bite) { this.entityData.set(BITE, bite); }
+
+    protected String currentAnim = "animation.mimic.idle";
     @Override
-    protected String decideAnimation() {
+    public String decideAnimation() {
         IMonsterData data = getMonsterData();
 
-        // 1. Skillアニメーション優先
+        // Skill > Walk > Idle
         if (data != null && data.getSkill() != null && !data.getSkill().isEmpty()) {
             return "animation.mimic." + data.getSkill();
         }
         if (isPlayerActivelyMoving()) {
             return isOpen() ? "animation.mimic.open_walk" : "animation.mimic.close_walk";
-        }//todo
+        }
         return isOpen() ? "animation.mimic.open_idle" : "animation.mimic.close_walk";
     }
 

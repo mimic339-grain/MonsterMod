@@ -8,11 +8,6 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-/**
- * クライアント → サーバー
- * 「このモンスターがアニメーションやスキル状態を変えた」ことを通知する
- * 中間型設計に沿って、送信者自身には再送しない。
- */
 public class C2SMonsterStatePacket {
     private final int entityId;
     private final String animation;
@@ -24,42 +19,33 @@ public class C2SMonsterStatePacket {
         this.skill = skill;
     }
 
-    // ----------------------------
-    // 書き込み
-    // ----------------------------
     public static void encode(C2SMonsterStatePacket msg, FriendlyByteBuf buf) {
         buf.writeInt(msg.entityId);
         buf.writeUtf(msg.animation);
         buf.writeUtf(msg.skill);
     }
 
-    // ----------------------------
-    // 読み込み
-    // ----------------------------
     public static C2SMonsterStatePacket decode(FriendlyByteBuf buf) {
-        int id = buf.readInt();
-        String animation = buf.readUtf();
-        String skill = buf.readUtf();
-        return new C2SMonsterStatePacket(id, animation, skill);
+        return new C2SMonsterStatePacket(
+                buf.readInt(),
+                buf.readUtf(),
+                buf.readUtf()
+        );
     }
 
-    // ----------------------------
-    // サーバー側で処理
-    // ----------------------------
     public static void handle(C2SMonsterStatePacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             ServerPlayer sender = ctx.get().getSender();
             if (sender == null || sender.level() == null) return;
 
-            // サーバーで受け取った → 全クライアントに配信（送信者自身は除外）
+            // サーバー受信時に全クライアントに送信（送信者も含む場合は除外しない）
             S2CMonsterSyncPacket sync = new S2CMonsterSyncPacket(
                     msg.entityId,
                     msg.animation,
                     msg.skill
             );
 
-            // 全クライアント送信（送信者を除外）
-            ModMessages.sendToAllClientsExcept(sync, sender);
+            ModMessages.sendToAllClients(sync); // 送信者も含めて全員同期
         });
         ctx.get().setPacketHandled(true);
     }

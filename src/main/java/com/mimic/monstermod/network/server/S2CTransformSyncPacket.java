@@ -52,8 +52,7 @@ public class S2CTransformSyncPacket {
                         transformation.deserializeNBT(nbt);
 
                         // 描画用Identityの取得（renderMixinで描画前にPlayerからコピー）
-                        BaseMonsterIdentity identity = transformation.getIdentity(player.getCommandSenderWorld(), player);
-                        // 回転はここでは扱わない
+                        BaseMonsterIdentity identity = transformation.getIdentity();
                     });
         });
         ctx.get().setPacketHandled(true);

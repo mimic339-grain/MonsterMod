@@ -24,8 +24,7 @@ import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
 
 /**
- * 完全版 BaseMonsterEntity（TRACKING_ENTITY_AND_SELF最適化版）
- * - GeckoLib + IMonsterData + Identity互換
+ * BaseMonsterEntity 完全版（GeckoLib + アニメーションリセット防止）
  */
 public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity {
 
@@ -33,7 +32,8 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public static EntityDataAccessor<String> ANIMATION_NAME;
 
     private String currentAnim = "idle";
-    private boolean playerActiveMove = false;
+    private String lastControllerAnim = null; // predicate 内で最後に再生したアニメーション
+    private boolean initialSynced = false;
 
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
@@ -52,13 +52,6 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     }
 
     // -----------------------------
-    // Capability / MonsterData
-    // -----------------------------
-    public IMonsterData getMonsterData() {
-        return CapabilityRegistry.getMonsterData(this);
-    }
-
-    // -----------------------------
     // GeckoLib
     // -----------------------------
     @Override
@@ -71,66 +64,88 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         controllers.add(new AnimationController<>(this, "controller", 0, this::predicate));
     }
 
-    protected <T extends GeoEntity> PlayState predicate(AnimationState<T> state) {
-        String animName = decideAnimation();
-        state.getController().setAnimation(RawAnimation.begin().then(animName, Animation.LoopType.LOOP));
+    private <T extends GeoEntity> PlayState predicate(AnimationState<T> state) {
+        String animName = getAnimation();
+        if (animName == null || animName.isEmpty()) return PlayState.STOP;
+
+        AnimationController<?> controller = state.getController();
+
+        // 前回と同じなら再セットせず継続
+        if (!animName.equals(lastControllerAnim)) {
+            lastControllerAnim = animName;
+            controller.setAnimation(RawAnimation.begin().then(animName, Animation.LoopType.LOOP));
+        }
+
         return PlayState.CONTINUE;
     }
 
-    protected String decideAnimation() {
-        IMonsterData data = getMonsterData();
-        if (data != null && data.getSkill() != null && !data.getSkill().isEmpty()) {
-            return data.getSkill();
-        }
-        return "idle";
-    }
-
+    // -----------------------------
+    // アニメーション管理
+    // -----------------------------
     public String getAnimation() {
         return this.entityData.get(ANIMATION_NAME);
     }
 
-    // -----------------------------
-    // クライアント WASD 判定
-    // -----------------------------
-    public void setPlayerActiveMove(boolean moving) { this.playerActiveMove = moving; }
-    public boolean isPlayerActivelyMoving() { return this.playerActiveMove; }
-
-    // -----------------------------
-    // Tick / SkillTick / サーバー同期
-    // -----------------------------
-    @Override
-    public void tick() {
-        super.tick();
-
-        if (level().isClientSide) return;
-
-        IMonsterData data = getMonsterData();
-        if (data == null) return;
-
-        data.tick();
-
-        String nextAnim = decideAnimation();
-        if (!nextAnim.equals(currentAnim)) {
-            currentAnim = nextAnim;
-            syncToClients(data);
+    public void setAnimation(String animName) {
+        if (animName == null || animName.isEmpty()) return;
+        if (!animName.equals(currentAnim)) {
+            currentAnim = animName;
+            this.entityData.set(ANIMATION_NAME, animName);
+            if (!level().isClientSide) syncToClients();
         }
     }
 
-    private void syncToClients(IMonsterData data) {
-        if (!(level() instanceof ServerLevel)) return;
-
+    private void syncToClients() {
+        if (!(level() instanceof ServerLevel serverLevel)) return;
+        IMonsterData data = getMonsterData();
+        if (data == null) return;
         S2CMonsterSyncPacket packet = new S2CMonsterSyncPacket(getId(), currentAnim, data.getSkill());
         ModMessages.INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this), packet);
     }
 
     // -----------------------------
-    // NBT 保存 / 読み込み
+    // Tick
+    // -----------------------------
+    @Override
+    public void tick() {
+        super.tick();
+
+        if (!level().isClientSide && !initialSynced) {
+            initialSynced = true;
+            setAnimation("idle"); // 初期化
+        }
+
+        if (level().isClientSide) return;
+
+        IMonsterData data = getMonsterData();
+        if (data != null) data.tick();
+
+        // decideAnimation の変化があった場合のみセット
+        String decidedAnim = decideAnimation();
+        if (decidedAnim != null && !decidedAnim.equals(currentAnim)) {
+            setAnimation(decidedAnim);
+        }
+    }
+
+    // -----------------------------
+    // 抽象メソッド
+    // -----------------------------
+    public abstract String decideAnimation();
+
+    // -----------------------------
+    // Capability
+    // -----------------------------
+    public IMonsterData getMonsterData() {
+        return CapabilityRegistry.getMonsterData(this);
+    }
+
+    // -----------------------------
+    // NBT
     // -----------------------------
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putString("AnimationName", getAnimation());
-
+        tag.putString("AnimationName", currentAnim);
         IMonsterData data = getMonsterData();
         if (data != null) {
             tag.putString("Skill", data.getSkill());
@@ -141,9 +156,7 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("AnimationName"))
-            this.entityData.set(ANIMATION_NAME, tag.getString("AnimationName"));
-
+        if (tag.contains("AnimationName")) currentAnim = tag.getString("AnimationName");
         IMonsterData data = getMonsterData();
         if (data != null) {
             if (tag.contains("Skill")) data.setSkill(tag.getString("Skill"));
@@ -152,7 +165,14 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     }
 
     // -----------------------------
-    // 属性作成
+    // 移動状態
+    // -----------------------------
+    private boolean playerActiveMove = false;
+    public void setPlayerActiveMove(boolean moving) { this.playerActiveMove = moving; }
+    public boolean isPlayerActivelyMoving() { return this.playerActiveMove; }
+
+    // -----------------------------
+    // 属性生成
     // -----------------------------
     public static AttributeSupplier.Builder createDefaultAttributes(
             double health, double speed, double damage, double resistance, double armor, double gravity) {

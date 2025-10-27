@@ -12,9 +12,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * PlayerRenderer Mixin 完全版 (IDENTITYMOD方式)
- * - Player 変身中は Identity に描画を完全委譲
- * - Player の回転・ArmPose・装備・Hitbox・EyeHeightなどは Tick 内で同期済み
+ * PlayerRenderer Mixin 完全版（IdentityMod方式）
+ *
+ * - 変身中のプレイヤーは BaseMonsterIdentity に描画を完全委譲
+ * - Player の回転・ArmPose・装備・Hitbox・EyeHeight は Tick 内で同期済み
+ * - partialTicks 補間に対応
  */
 @Mixin(PlayerRenderer.class)
 public class PlayerRendererMixin {
@@ -35,10 +37,8 @@ public class PlayerRendererMixin {
                     BaseMonsterIdentity identity = transformation.getIdentity();
                     if (identity == null) return;
 
-                    // 描画（回転は Tick 内で同期済み、ここでは partialTicks 補間のみ）
-                    poseStack.pushPose();
+                    // 描画呼び出し（位置・回転は Tick 内で同期済み、ここでは partialTicks 補間のみ）
                     identity.render(player, partialTicks, poseStack, buffer, packedLight);
-                    poseStack.popPose();
 
                     // 通常の Player 描画をキャンセル
                     ci.cancel();

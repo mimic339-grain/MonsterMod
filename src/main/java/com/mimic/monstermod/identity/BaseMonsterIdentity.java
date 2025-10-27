@@ -2,24 +2,16 @@ package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
 import net.minecraft.util.Mth;
+import org.jetbrains.annotations.Nullable;
 
-/**
- * BaseMonsterIdentity 完全版（IDENTITYMOD方式）
- * - サーバーは能力・クールタイム更新
- * - クライアントは毎フレーム Player 状態をコピーして描画
- */
 public class BaseMonsterIdentity {
 
     protected final String id;
@@ -30,63 +22,50 @@ public class BaseMonsterIdentity {
     public BaseMonsterIdentity(@Nullable BaseMonsterEntity entity, int abilityCount) {
         this.entity = entity;
         this.abilityCooldowns = new int[abilityCount];
-        if (entity != null) {
-            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
-            this.id = key != null ? key.toString() : "unknown";
-        } else {
-            this.id = "unknown";
-        }
-    }
-
-    public BaseMonsterIdentity(String id, int abilityCount) {
-        this.entity = null;
-        this.id = id;
-        this.abilityCooldowns = new int[abilityCount];
+        this.id = entity != null ? entity.getType().toString() : "unknown";
     }
 
     public String getId() { return id; }
     @Nullable public BaseMonsterEntity getEntity() { return entity; }
 
-    /** BoundingBoxサイズ */
-    public Vec3 getBoundingBoxDimensions(Pose pose) {
-        if (entity != null) {
-            var dims = entity.getDimensions(pose);
-            return new Vec3(dims.width, dims.height, dims.width);
-        }
-        return new Vec3(0.6f, 1.8f, 0.6f);
-    }
-
-    /** EyeHeight */
-    public float getEyeHeight(Pose pose) {
-        if (entity != null) return entity.getEyeHeight(pose);
-        return 1.62f;
-    }
-
-    /** サーバー専用 Tick（クールタイム・能力更新） */
+    /** サーバー Tick: クールタイムのみ */
     public void tickServer(Player player) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (abilityCooldowns[i] > 0) abilityCooldowns[i]--;
         }
     }
 
-    /** サーバー用コピー（回転・Pose・装備・位置・速度） */
+    /** サーバー用コピー */
     public void copyFromPlayerServer(Player player) {
         if (entity == null) return;
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
+        Vec3 prevPos = entity.position();
+        boolean moving = prevPos.distanceToSqr(player.position()) > 0.001;
+        entity.setPlayerActiveMove(moving);
     }
 
-    /** クライアント用コピー（毎フレーム呼び出し） */
+    /** クライアント用コピー（毎フレーム） */
     public void copyFromPlayerClient(Player player) {
         if (entity == null) return;
         copyRotationPoseAndEquip(player);
+
+        Vec3 prevPos = entity.position();
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
+
+        boolean moving = prevPos.distanceToSqr(entity.position()) > 0.001;
+        entity.setPlayerActiveMove(moving);
+
+        // GeckoLibアニメーション制御
+        updateAnimation();
     }
 
-    /** 共通コピー処理 */
+    /** 回転・Pose・装備コピー共通 */
     private void copyRotationPoseAndEquip(Player player) {
+        if (entity == null) return;
+
         entity.setYRot(player.getYRot());
         entity.setXRot(player.getXRot());
         entity.setYHeadRot(player.getYHeadRot());
@@ -100,7 +79,16 @@ public class BaseMonsterIdentity {
         }
     }
 
-    /** 描画（Tick で同期済みの値を補間） */
+    /** GeckoLib アニメーション更新 */
+    private void updateAnimation() {
+        if (entity == null) return;
+        String animName = entity.decideAnimation();
+        if (animName != null && !animName.isEmpty()) {
+            entity.setAnimation(animName);
+        }
+    }
+
+    /** 描画（partialTicks補間 + Axis Y回転統合） */
     public void render(Player player, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int light) {
         if (entity == null) return;
@@ -109,13 +97,16 @@ public class BaseMonsterIdentity {
         float pitch = Mth.lerp(partialTicks, entity.xRotO, entity.getXRot());
 
         poseStack.pushPose();
+        poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
+
         Minecraft.getInstance().getEntityRenderDispatcher()
                 .getRenderer(entity)
                 .render(entity, yaw, partialTicks, poseStack, buffer, light);
+
         poseStack.popPose();
     }
 
-    /** クライアント入力処理 */
+    /** クライアント入力 */
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
@@ -124,38 +115,23 @@ public class BaseMonsterIdentity {
     protected void handleAbility(Player player, int skillIndex) {
         if (abilityCooldowns[skillIndex] > 0) return;
     }
+
     protected void handleMenu(Player player) {}
 
     /** NBT保存 */
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
-
-        ListTag cooldownList = new ListTag();
-        for (int cd : abilityCooldowns) {
-            CompoundTag cdTag = new CompoundTag();
-            cdTag.putInt("cd", cd);
-            cooldownList.add(cdTag);
+        for (int i = 0; i < abilityCooldowns.length; i++) {
+            tag.putInt("cd_" + i, abilityCooldowns[i]);
         }
-        tag.put("abilityCooldowns", cooldownList);
         return tag;
     }
 
     /** NBT復元 */
     public void deserializeNBT(CompoundTag tag) {
-        if (tag.contains("abilityCooldowns")) {
-            ListTag cooldownList = tag.getList("abilityCooldowns", 10);
-            for (int i = 0; i < cooldownList.size() && i < abilityCooldowns.length; i++) {
-                abilityCooldowns[i] = cooldownList.getCompound(i).getInt("cd");
-            }
+        for (int i = 0; i < abilityCooldowns.length; i++) {
+            if (tag.contains("cd_" + i)) abilityCooldowns[i] = tag.getInt("cd_" + i);
         }
-    }
-
-    public int getCooldown(int index) {
-        return (index < 0 || index >= abilityCooldowns.length) ? 0 : abilityCooldowns[index];
-    }
-
-    public void setCooldown(int index, int ticks) {
-        if (index >= 0 && index < abilityCooldowns.length) abilityCooldowns[index] = ticks;
     }
 }
