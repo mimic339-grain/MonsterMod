@@ -59,10 +59,7 @@ public class ModCommands {
                             return;
                         }
 
-                        transformation.setTransformedMobId(identityId);
-                        transformation.setTransformed(true);
-
-                        // 変身開始
+                        // ここで startTransformation を呼ぶだけで内部の状態管理や同期も行われる
                         transformation.startTransformation(targetPlayer, identityId);
 
                         source.sendSuccess(() -> Component.literal(
@@ -70,17 +67,13 @@ public class ModCommands {
 
                     } else {
                         // 変身解除
-                        transformation.setTransformed(false);
-                        transformation.setTransformedMobId(null);
-
                         transformation.stopTransformation(targetPlayer);
 
                         source.sendSuccess(() -> Component.literal(
                                 targetPlayer.getName().getString() + " の変身を解除しました。"), true);
                     }
 
-                    // クライアント同期
-                    transformation.syncToClient(targetPlayer);
+                    // クライアント同期も start/stop 内で行われるので追加不要
                 });
 
         return 1;

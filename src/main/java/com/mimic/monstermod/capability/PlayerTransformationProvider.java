@@ -27,8 +27,8 @@ public class PlayerTransformationProvider implements ICapabilityProvider {
         return transformation.serializeNBT();
     }
 
-    public void deserializeNBT(CompoundTag tag) {
-        transformation.deserializeNBT(tag);
+    public void deserializeNBT(CompoundTag tag, net.minecraft.world.level.Level level) {
+        transformation.deserializeNBT(tag, level);
     }
 
     public static class PlayerTransformationCapability {

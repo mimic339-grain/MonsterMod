@@ -2,7 +2,6 @@ package com.mimic.monstermod.identity.impl;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
-import com.mimic.monstermod.variable.entity.IMonsterData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Pose;
@@ -11,7 +10,10 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Mimic Identity 完全版（BaseMonsterIdentity対応）
+ * Mimic Identity 完全版
+ * - BaseMonsterIdentity に準拠
+ * - サーバー側 Tick は BaseMonsterIdentity に統合
+ * - クライアント入力は BaseMonsterIdentity で統一
  */
 public class MimicIdentity extends BaseMonsterIdentity {
 
@@ -20,12 +22,10 @@ public class MimicIdentity extends BaseMonsterIdentity {
 
     private static final int SKILL_COUNT = 3;
 
-    /** Entity から作るコンストラクタ */
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
         super(entity, SKILL_COUNT);
     }
 
-    /** IDだけで作る場合 */
     public MimicIdentity() {
         super(null, SKILL_COUNT);
     }
@@ -42,29 +42,14 @@ public class MimicIdentity extends BaseMonsterIdentity {
     }
 
     // -----------------------------
-    // サーバー専用 Tick（能力・クールタイム更新）
-    // -----------------------------
-    @Override
-    public void tickServer(Player player) {
-        super.tickServer(player); // abilityCooldowns 減算
-
-        BaseMonsterEntity entity = getEntity();
-        if (entity != null) {
-            IMonsterData data = entity.getMonsterData();
-            if (data != null) {
-                // MonsterData にも反映
-                data.setAbilityCooldown(Math.max(0, data.getAbilityCooldown() - 1));
-                data.setRemainingHostilityTime(Math.max(0, data.getRemainingHostilityTime() - 1));
-            }
-        }
-    }
-
-    // -----------------------------
-    // Identity固有能力 / メニュー処理
+    // 能力処理（固有スキル）
     // -----------------------------
     @Override
     protected void handleAbility(Player player, int skillIndex) {
         if (abilityCooldowns[skillIndex] > 0) return;
+
+        BaseMonsterEntity entity = getEntity();
+        if (entity == null) return;
 
         switch (skillIndex) {
             case 0 -> triggerAttack(player);
@@ -72,7 +57,8 @@ public class MimicIdentity extends BaseMonsterIdentity {
             case 2 -> someOtherSkill(player);
         }
 
-        abilityCooldowns[skillIndex] = 20; // 1秒クール
+        // クールタイムは BaseMonsterIdentity の handleAbility にも設定済み
+        // MonsterData 側も必要なら自動反映させる
     }
 
     @Override
@@ -80,46 +66,40 @@ public class MimicIdentity extends BaseMonsterIdentity {
         // Mimic専用GUIやメニュー処理
     }
 
-    @Override
-    public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
-        if (menuKey) handleMenu(player);
-        if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
-    }
-
     // -----------------------------
-    // Mimic固有能力例
+    // Mimic固有能力
     // -----------------------------
     private void triggerAttack(Player player) {
         BaseMonsterEntity entity = getEntity();
         if (entity == null) return;
-        // TODO: 攻撃処理
+        entity.performAbility(0);
     }
 
     private void deployTrap(Player player) {
         BaseMonsterEntity entity = getEntity();
         if (entity == null) return;
-        // TODO: トラップ設置処理
+        entity.performAbility(1);
     }
 
     private void someOtherSkill(Player player) {
         BaseMonsterEntity entity = getEntity();
         if (entity == null) return;
-        // TODO: 追加スキル処理
+        entity.performAbility(2);
     }
 
     // -----------------------------
-    // NBT保存 / 読み込み
+    // NBT保存 / 復元
     // -----------------------------
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = super.serializeNBT();
-        // Mimic固有ステート保存
+        // Mimic固有ステートがあればここに追加
         return tag;
     }
 
     @Override
     public void deserializeNBT(CompoundTag tag) {
         super.deserializeNBT(tag);
-        // Mimic固有ステート復元
+        // Mimic固有ステートがあればここから復元
     }
 }

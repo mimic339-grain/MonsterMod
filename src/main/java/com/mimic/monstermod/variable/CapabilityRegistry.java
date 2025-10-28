@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
@@ -113,22 +114,28 @@ public class CapabilityRegistry {
         }
     }
 
+    // ====== COPY CAPS ======
     private static void copyCaps(Player oldPlayer, Player newPlayer) {
+        Level level = newPlayer.level();
+
+        // PlayerData
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
                         newCap.deserializeNBT(oldCap.serializeNBT())
                 )
         );
 
+        // MonsterData
         oldPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(newCap ->
                         newCap.deserializeNBT(oldCap.serializeNBT())
                 )
         );
 
+        // PlayerTransformation
         oldPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
+                        newCap.deserializeNBT(oldCap.serializeNBT(), level)
                 )
         );
     }

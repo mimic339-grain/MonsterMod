@@ -49,7 +49,7 @@ public class S2CTransformSyncPacket {
             player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
                         // 変身NBTを適用（能力クールタイム・装備など）
-                        transformation.deserializeNBT(nbt);
+                        transformation.deserializeNBT(nbt, player.level());
 
                         // 描画用Identityの取得（renderMixinで描画前にPlayerからコピー）
                         BaseMonsterIdentity identity = transformation.getIdentity();

@@ -10,14 +10,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * モンスター IdentityType を管理
- * - Entityクラス → IdentityType
- * - ID → IdentityType
- * - Identity生成を一元管理
+ * IdentityType
+ * - Entityクラス・ID から Identity を一元生成・管理
  */
 public class IdentityType {
 
+    /** Entityクラス → IdentityType */
     private static final Map<Class<? extends BaseMonsterEntity>, IdentityType> ENTITY_MAP = new HashMap<>();
+    /** ResourceLocation ID → IdentityType */
     static final Map<ResourceLocation, IdentityType> ID_MAP = new HashMap<>();
 
     private final ResourceLocation id;
@@ -40,7 +40,7 @@ public class IdentityType {
     public ResourceLocation getId() { return id; }
     public Class<? extends BaseMonsterEntity> getEntityClass() { return entityClass; }
 
-    /** この IdentityType から Identity を生成 */
+    /** Identity を生成 */
     public BaseMonsterIdentity createIdentity(@Nullable BaseMonsterEntity entity) {
         return factory.create(entity);
     }
@@ -73,13 +73,13 @@ public class IdentityType {
     }
 
     // -----------------------------
-    // 初期登録（Mimic）
+    // 初期登録（例：Mimic）
     // -----------------------------
     static {
         register(
                 new ResourceLocation("monstermod", "mimic"),
                 MimicEntity.class,
-                MimicIdentity::new // これで @Nullable BaseMonsterEntity entity に対応
+                MimicIdentity::new
         );
     }
 

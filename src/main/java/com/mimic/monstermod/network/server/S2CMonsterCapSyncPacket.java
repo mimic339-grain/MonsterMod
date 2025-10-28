@@ -1,6 +1,7 @@
 package com.mimic.monstermod.network.server;
 
-import com.mimic.monstermod.variable.CapabilityRegistry;
+import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -10,6 +11,9 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
+/**
+ * YSMMOD方式: クライアントの Identity 側に NBT を反映する
+ */
 public class S2CMonsterCapSyncPacket {
 
     private final CompoundTag tag;
@@ -27,18 +31,21 @@ public class S2CMonsterCapSyncPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> syncClient(tag));
+        ctx.get().enqueueWork(this::syncClient);
         ctx.get().setPacketHandled(true);
     }
 
     @OnlyIn(Dist.CLIENT)
-    private void syncClient(CompoundTag tag) {
+    private void syncClient() {
         var player = Minecraft.getInstance().player;
         if (player == null) return;
 
-        // MONSTER_CAPABILITY を取得して同期
-        player.getCapability(CapabilityRegistry.MONSTER_CAPABILITY).ifPresent(cap -> {
-            cap.deserializeNBT(tag);
-        });
+        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+                .ifPresent(trans -> {
+                    BaseMonsterIdentity identity = trans.getIdentity();
+                    if (identity != null) {
+                        identity.deserializeNBT(tag);
+                    }
+                });
     }
 }

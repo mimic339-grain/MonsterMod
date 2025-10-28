@@ -13,9 +13,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Identity Registry
- * - IdentityType と統合
- * - Entity がまだ生成されていなくても Identity を生成可能
+ * BaseMonsterIdentityRegistry
+ * - ID → BaseMonsterIdentity キャッシュ
+ * - Entity が生成されていなくても Identity を保持
  */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class BaseMonsterIdentityRegistry {
@@ -28,7 +28,6 @@ public class BaseMonsterIdentityRegistry {
     public static void registerIdentities(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
-                // Entity がいない場合は null を渡す
                 BaseMonsterIdentity identity = IdentityType.createIdentity(id, null);
                 IDENTITY_CACHE.put(id, identity);
             }
@@ -40,7 +39,7 @@ public class BaseMonsterIdentityRegistry {
     /**
      * ID から Identity を取得
      * @param id ResourceLocation ID
-     * @param entity 実際の Entity（まだ生成されていない場合は null）
+     * @param entity 実体の Entity（まだ生成されていない場合は null）
      */
     public static BaseMonsterIdentity getIdentity(ResourceLocation id, BaseMonsterEntity entity) {
         IdentityType type = IdentityType.fromId(id);
@@ -49,11 +48,10 @@ public class BaseMonsterIdentityRegistry {
             return null;
         }
 
-        // Entity が null ならキャッシュ済みの Identity を返す
-        if (entity == null) {
-            return IDENTITY_CACHE.get(id);
-        }
+        // Entity が null ならキャッシュ済み Identity を返す
+        if (entity == null) return IDENTITY_CACHE.get(id);
 
+        // Entity があれば新規生成
         return type.createIdentity(entity);
     }
 
@@ -62,7 +60,7 @@ public class BaseMonsterIdentityRegistry {
         return IDENTITY_CACHE.containsKey(id);
     }
 
-    /** 全 Identity ID の取得 */
+    /** 全 Identity ID を取得 */
     public static Set<ResourceLocation> getAllIdentityIds() {
         return new HashSet<>(IDENTITY_CACHE.keySet());
     }
