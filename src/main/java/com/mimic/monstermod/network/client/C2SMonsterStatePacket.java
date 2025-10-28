@@ -2,33 +2,31 @@ package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMonsterSyncPacket;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
+/**
+ * クライアント→サーバー: プレイヤー変身中のアニメーション同期要求
+ */
 public class C2SMonsterStatePacket {
     private final int entityId;
     private final String animation;
-    private final String skill;
 
-    public C2SMonsterStatePacket(int entityId, String animation, String skill) {
+    public C2SMonsterStatePacket(int entityId, String animation) {
         this.entityId = entityId;
         this.animation = animation;
-        this.skill = skill;
     }
 
-    public static void encode(C2SMonsterStatePacket msg, FriendlyByteBuf buf) {
+    public static void encode(C2SMonsterStatePacket msg, net.minecraft.network.FriendlyByteBuf buf) {
         buf.writeInt(msg.entityId);
-        buf.writeUtf(msg.animation);
-        buf.writeUtf(msg.skill);
+        buf.writeUtf(msg.animation != null ? msg.animation : "");
     }
 
-    public static C2SMonsterStatePacket decode(FriendlyByteBuf buf) {
+    public static C2SMonsterStatePacket decode(net.minecraft.network.FriendlyByteBuf buf) {
         return new C2SMonsterStatePacket(
                 buf.readInt(),
-                buf.readUtf(),
                 buf.readUtf()
         );
     }
@@ -38,15 +36,21 @@ public class C2SMonsterStatePacket {
             ServerPlayer sender = ctx.get().getSender();
             if (sender == null || sender.level() == null) return;
 
-            // サーバー受信時に全クライアントに送信（送信者も含む場合は除外しない）
+            // null/空文字チェック
+            String anim = msg.animation != null ? msg.animation : "";
+
+            // サーバー側でアニメーションイベントを作成
             S2CMonsterSyncPacket sync = new S2CMonsterSyncPacket(
                     msg.entityId,
-                    msg.animation,
-                    msg.skill
+                    anim, // そのままマッピング済みアニメーション名を送信
+                    null
             );
 
-            ModMessages.sendToAllClients(sync); // 送信者も含めて全員同期
+            // 全クライアントに送信
+            ModMessages.sendToAllClients(sync);
         });
+
+        // PacketHandled を必ず true に
         ctx.get().setPacketHandled(true);
     }
 }

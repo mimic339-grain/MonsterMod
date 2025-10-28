@@ -4,10 +4,12 @@ import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMonsterSyncPacket;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.variable.entity.IMonsterData;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -23,16 +25,14 @@ import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInst
 import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
 
-/**
- * BaseMonsterEntity 完全版（GeckoLib + アニメーションリセット防止）
- */
 public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity {
 
     protected final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
     public static EntityDataAccessor<String> ANIMATION_NAME;
 
-    private String currentAnim = "idle";
-    private String lastControllerAnim = null; // predicate 内で最後に再生したアニメーション
+    /** ローカル用の現在アニメーション */
+    protected String currentAnim = "idle";
+    private String lastControllerAnim = null;
     private boolean initialSynced = false;
 
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
@@ -48,7 +48,8 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         if (ANIMATION_NAME == null) {
             ANIMATION_NAME = SynchedEntityData.defineId(this.getClass(), EntityDataSerializers.STRING);
         }
-        this.entityData.define(ANIMATION_NAME, "idle");
+        // サーバー側で mapAnimation を通す前提: 初期値もマッピング済み
+        this.entityData.define(ANIMATION_NAME, mapAnimation("idle"));
     }
 
     // -----------------------------
@@ -69,13 +70,11 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         if (animName == null || animName.isEmpty()) return PlayState.STOP;
 
         AnimationController<?> controller = state.getController();
-
-        // 前回と同じなら再セットせず継続
+        // サーバーから送られたマッピング済みアニメーション名をそのまま使用
         if (!animName.equals(lastControllerAnim)) {
             lastControllerAnim = animName;
             controller.setAnimation(RawAnimation.begin().then(animName, Animation.LoopType.LOOP));
         }
-
         return PlayState.CONTINUE;
     }
 
@@ -86,21 +85,30 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         return this.entityData.get(ANIMATION_NAME);
     }
 
-    public void setAnimation(String animName) {
+    /**
+     * サーバー側からアニメーション開始イベントを送信
+     */
+    public void playAnimationEvent(String animName) {
         if (animName == null || animName.isEmpty()) return;
-        if (!animName.equals(currentAnim)) {
-            currentAnim = animName;
-            this.entityData.set(ANIMATION_NAME, animName);
-            if (!level().isClientSide) syncToClients();
+
+        currentAnim = animName;
+        String mappedAnim = mapAnimation(animName);
+        entityData.set(ANIMATION_NAME, mappedAnim);
+
+        if (!level().isClientSide && level() instanceof ServerLevel) {
+            S2CMonsterSyncPacket packet = new S2CMonsterSyncPacket(getId(), mappedAnim, null);
+            ModMessages.INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this), packet);
         }
     }
 
-    private void syncToClients() {
-        if (!(level() instanceof ServerLevel serverLevel)) return;
-        IMonsterData data = getMonsterData();
-        if (data == null) return;
-        S2CMonsterSyncPacket packet = new S2CMonsterSyncPacket(getId(), currentAnim, data.getSkill());
-        ModMessages.INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this), packet);
+    /**
+     * サーバー専用: "animation.<entity>.<anim>" に変換
+     */
+    private String mapAnimation(String anim) {
+        if (anim == null || anim.isEmpty()) return "";
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(this.getType());
+        if (id == null) return anim;
+        return "animation." + id.getPath() + "." + anim;
     }
 
     // -----------------------------
@@ -110,27 +118,18 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public void tick() {
         super.tick();
 
+        // 初回同期: サーバー → クライアント
         if (!level().isClientSide && !initialSynced) {
             initialSynced = true;
-            setAnimation("idle"); // 初期化
+            playAnimationEvent("idle");
         }
 
         if (level().isClientSide) return;
 
+        // クールダウンやスキルTickのみ
         IMonsterData data = getMonsterData();
         if (data != null) data.tick();
-
-        // decideAnimation の変化があった場合のみセット
-        String decidedAnim = decideAnimation();
-        if (decidedAnim != null && !decidedAnim.equals(currentAnim)) {
-            setAnimation(decidedAnim);
-        }
     }
-
-    // -----------------------------
-    // 抽象メソッド
-    // -----------------------------
-    public abstract String decideAnimation();
 
     // -----------------------------
     // Capability
@@ -186,4 +185,9 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     }
 
     public static final Attribute GRAVITY = Attributes.ATTACK_KNOCKBACK;
+
+    // -----------------------------
+    // 抽象メソッド
+    // -----------------------------
+    public abstract String decideAnimation();
 }

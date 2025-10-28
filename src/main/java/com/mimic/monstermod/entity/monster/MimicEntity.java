@@ -16,7 +16,6 @@ import net.minecraft.world.level.Level;
  * - Open/Close 状態と Skill を反映したアニメーションを返す
  */
 public class MimicEntity extends BaseMonsterEntity {
-
     private static final EntityDataAccessor<Boolean> OPEN =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
 
@@ -40,12 +39,10 @@ public class MimicEntity extends BaseMonsterEntity {
     public boolean isBiting() { return this.entityData.get(BITE); }
     public void setBiting(boolean bite) { this.entityData.set(BITE, bite); }
 
-    protected String currentAnim = "animation.mimic.idle";
     @Override
     public String decideAnimation() {
         IMonsterData data = getMonsterData();
 
-        // Skill > Walk > Idle
         if (data != null && data.getSkill() != null && !data.getSkill().isEmpty()) {
             return "animation.mimic." + data.getSkill();
         }

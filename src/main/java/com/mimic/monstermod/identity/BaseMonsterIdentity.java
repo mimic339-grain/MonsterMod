@@ -8,7 +8,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,38 +27,37 @@ public class BaseMonsterIdentity {
     public String getId() { return id; }
     @Nullable public BaseMonsterEntity getEntity() { return entity; }
 
-    /** サーバー Tick: クールタイムのみ */
+    /** サーバー Tick: クールダウンのみ */
     public void tickServer(Player player) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (abilityCooldowns[i] > 0) abilityCooldowns[i]--;
         }
     }
 
-    /** サーバー用コピー */
+    /** サーバー用コピー: 座標・回転・装備同期 */
     public void copyFromPlayerServer(Player player) {
         if (entity == null) return;
+
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
-        Vec3 prevPos = entity.position();
-        boolean moving = prevPos.distanceToSqr(player.position()) > 0.001;
+
+        boolean moving = entity.position().distanceToSqr(player.position()) > 0.001;
         entity.setPlayerActiveMove(moving);
     }
 
     /** クライアント用コピー（毎フレーム） */
     public void copyFromPlayerClient(Player player) {
         if (entity == null) return;
-        copyRotationPoseAndEquip(player);
 
-        Vec3 prevPos = entity.position();
+        copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
 
-        boolean moving = prevPos.distanceToSqr(entity.position()) > 0.001;
+        boolean moving = entity.position().distanceToSqr(player.position()) > 0.001;
         entity.setPlayerActiveMove(moving);
 
-        // GeckoLibアニメーション制御
-        updateAnimation();
+        // アニメーションはサーバー同期イベントのみで更新
     }
 
     /** 回転・Pose・装備コピー共通 */
@@ -79,16 +77,7 @@ public class BaseMonsterIdentity {
         }
     }
 
-    /** GeckoLib アニメーション更新 */
-    private void updateAnimation() {
-        if (entity == null) return;
-        String animName = entity.decideAnimation();
-        if (animName != null && !animName.isEmpty()) {
-            entity.setAnimation(animName);
-        }
-    }
-
-    /** 描画（partialTicks補間 + Axis Y回転統合） */
+    /** 描画: partialTicks 補間 + Axis Y回転統合 */
     public void render(Player player, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int light) {
         if (entity == null) return;
@@ -106,7 +95,7 @@ public class BaseMonsterIdentity {
         poseStack.popPose();
     }
 
-    /** クライアント入力 */
+    /** クライアント入力処理 */
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
@@ -114,11 +103,12 @@ public class BaseMonsterIdentity {
 
     protected void handleAbility(Player player, int skillIndex) {
         if (abilityCooldowns[skillIndex] > 0) return;
+        // サーバーへスキル使用パケット送信、サーバーで playAnimationEvent("skillX") 呼ぶ
     }
 
     protected void handleMenu(Player player) {}
 
-    /** NBT保存 */
+    /** NBT 保存 */
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
@@ -128,7 +118,7 @@ public class BaseMonsterIdentity {
         return tag;
     }
 
-    /** NBT復元 */
+    /** NBT 復元 */
     public void deserializeNBT(CompoundTag tag) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (tag.contains("cd_" + i)) abilityCooldowns[i] = tag.getInt("cd_" + i);

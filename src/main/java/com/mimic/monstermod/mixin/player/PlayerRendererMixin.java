@@ -35,7 +35,7 @@ public class PlayerRendererMixin {
                     if (!transformation.isTransformed()) return;
 
                     BaseMonsterIdentity identity = transformation.getIdentity();
-                    if (identity == null) return;
+                    if (identity == null || identity.getEntity() == null) return;
 
                     // 描画呼び出し（位置・回転は Tick 内で同期済み、ここでは partialTicks 補間のみ）
                     identity.render(player, partialTicks, poseStack, buffer, packedLight);

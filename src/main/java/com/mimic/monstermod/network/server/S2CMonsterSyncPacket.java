@@ -2,20 +2,20 @@ package com.mimic.monstermod.network.server;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.variable.CapabilityRegistry;
-import com.mimic.monstermod.variable.entity.IMonsterData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
+/**
+ * サーバー→クライアント: モンスター/変身アニメーション・スキル同期パケット
+ */
 public class S2CMonsterSyncPacket {
 
     private final int entityId;
-    private final String animation;
+    private final String animation; // マッピング済みアニメーション名
     private final String skill;
 
     public S2CMonsterSyncPacket(int entityId, String animation, String skill) {
@@ -26,8 +26,8 @@ public class S2CMonsterSyncPacket {
 
     public static void encode(S2CMonsterSyncPacket msg, FriendlyByteBuf buf) {
         buf.writeInt(msg.entityId);
-        buf.writeUtf(msg.animation);
-        buf.writeUtf(msg.skill);
+        buf.writeUtf(msg.animation != null ? msg.animation : "");
+        buf.writeUtf(msg.skill != null ? msg.skill : "");
     }
 
     public static S2CMonsterSyncPacket decode(FriendlyByteBuf buf) {
@@ -40,25 +40,29 @@ public class S2CMonsterSyncPacket {
 
     public static void handle(S2CMonsterSyncPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
+            // クライアント側のみ処理
             Minecraft mc = Minecraft.getInstance();
             if (mc.level == null) return;
 
             Entity entity = mc.level.getEntity(msg.entityId);
-            if (entity instanceof BaseMonsterEntity monster) {
-                // 安全に同期：必ず setAnimation() を呼ぶ
-                monster.setAnimation(msg.animation);
+            if (!(entity instanceof BaseMonsterEntity monster)) return;
 
-                IMonsterData data = CapabilityRegistry.getMonsterData(monster);
-                if (data != null) {
-                    data.setSkill(msg.skill);
-                    // skillTick は送信しない設計
-                }
+            // animation が存在する場合はそのまま entityData にセット
+            if (msg.animation != null && !msg.animation.isEmpty()) {
+                monster.getEntityData().set(BaseMonsterEntity.ANIMATION_NAME, msg.animation);
+            }
+
+            // skill が存在する場合は MonsterData にセット
+            if (msg.skill != null && !msg.skill.isEmpty() && monster.getMonsterData() != null) {
+                monster.getMonsterData().setSkill(msg.skill);
             }
         });
+
         ctx.get().setPacketHandled(true);
     }
 
-    public void sendToPlayer(ServerPlayer player) {
+    /** 特定プレイヤーに送信 */
+    public void sendToPlayer(net.minecraft.server.level.ServerPlayer player) {
         ModMessages.sendToPlayer(this, player);
     }
 }
