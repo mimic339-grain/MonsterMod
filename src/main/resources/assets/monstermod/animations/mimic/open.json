@@ -1,0 +1,33 @@
+{
+  "animations": {
+    "open": {
+      "length": 0.5,
+      "loop": false,
+      "bones": {
+        "bodyover": {
+          "rotation": [
+            { "time": 0, "rotation": [0,0,0], "interpolation": "linear" },
+            { "time": 0.25, "rotation": [22.5,0,0], "interpolation": "linear" },
+            { "time": 0.5, "rotation": [45,0,0], "interpolation": "linear" }
+          ]
+        },
+        "unederteeth": {
+          "scale": [
+            { "time": 0, "scale": [0,0,0], "interpolation": "linear" },
+            { "time": 0.02083, "scale": [0.5,0.5,0.5], "interpolation": "linear" },
+            { "time": 0.04167, "scale": [1,1,1], "interpolation": "linear" },
+            { "time": 0.5, "scale": [1,1,1], "interpolation": "linear" }
+          ]
+        },
+        "bero": {
+          "scale": [
+            { "time": 0, "scale": [0,0,0], "interpolation": "linear" },
+            { "time": 0.2495, "scale": [0.005,0.005,0.005], "interpolation": "linear" },
+            { "time": 0.499, "scale": [0.01,0.01,0.01], "interpolation": "linear" },
+            { "time": 0.5, "scale": [0,0,0], "interpolation": "linear" }
+          ]
+        }
+      }
+    }
+  }
+}

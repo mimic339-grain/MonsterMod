@@ -1,0 +1,61 @@
+{
+  "animations": {
+    "open": {
+      "length": 1.00309,
+      "loop": true,
+      "bones": {
+        "all": {
+          "position": [
+            {"time": 0, "position": [0,0,0], "interpolation": "catmullrom"},
+            {"time": 0.30864, "position": [0,-3,0], "interpolation": "catmullrom"},
+            {"time": 0.3858, "position": [0,3.07,0], "interpolation": "catmullrom"},
+            {"time": 0.50154, "position": [0,7,0], "interpolation": "catmullrom"},
+            {"time": 0.61728, "position": [0,4.77,0], "interpolation": "catmullrom"},
+            {"time": 0.73302, "position": [0,-2,0], "interpolation": "catmullrom"},
+            {"time": 1.00309, "position": [0,0,0], "interpolation": "catmullrom"}
+          ],
+          "rotation": [
+            {"time": 0, "rotation": [0,0,0], "interpolation": "catmullrom"},
+            {"time": 0.30864, "rotation": [-2.5,0,0], "interpolation": "catmullrom"},
+            {"time": 0.46296, "rotation": [-7.5,0,0], "interpolation": "catmullrom"},
+            {"time": 0.73302, "rotation": [9.6,0,0], "interpolation": "catmullrom"},
+            {"time": 0.81019, "rotation": [4,0,0], "interpolation": "catmullrom"},
+            {"time": 1.00309, "rotation": [0,0,0], "interpolation": "catmullrom"}
+          ]
+        },
+        "key": {
+          "scale": [
+            {"time": 0, "scale": [1,1,1], "interpolation": "linear"},
+            {"time": 0.50154, "scale": [1.001,1.001,1.001], "interpolation": "linear"},
+            {"time": 0.751545, "scale": [1.0005,1.0005,1.0005], "interpolation": "linear"},
+            {"time": 1.00309, "scale": [1,1,1], "interpolation": "linear"}
+          ]
+        },
+        "overteeth": {
+          "scale": [
+            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
+            {"time": 0.50154, "scale": [0.001,0.001,0.001], "interpolation": "linear"},
+            {"time": 0.751545, "scale": [0.0005,0.0005,0.0005], "interpolation": "linear"},
+            {"time": 1.00309, "scale": [0,0,0], "interpolation": "linear"}
+          ]
+        },
+        "unederteeth": {
+          "scale": [
+            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
+            {"time": 0.50154, "scale": [0.001,0.001,0.001], "interpolation": "linear"},
+            {"time": 0.751545, "scale": [0.0005,0.0005,0.0005], "interpolation": "linear"},
+            {"time": 1.00309, "scale": [0,0,0], "interpolation": "linear"}
+          ]
+        },
+        "bero": {
+          "scale": [
+            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
+            {"time": 0.50154, "scale": [0.001,0.001,0.001], "interpolation": "linear"},
+            {"time": 0.751545, "scale": [0.0005,0.0005,0.0005], "interpolation": "linear"},
+            {"time": 1.00309, "scale": [0,0,0], "interpolation": "linear"}
+          ]
+        }
+      }
+    }
+  }
+}

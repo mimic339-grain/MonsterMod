@@ -1,7 +1,8 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.capability.PlayerTransformation;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -12,9 +13,9 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * クライアント → サーバー 変身リクエストパケット。
- * - クライアントが mobId を指定して送信。
- * - サーバー側で PlayerTransformation を更新し、全クライアントへ同期。
+ * クライアント → サーバー 変身リクエストパケット
+ * - クライアントが mobId を指定して送信
+ * - サーバー側で PlayerTransformation を更新し、全クライアントへ同期
  */
 public class PlayerTransformC2SPacket {
 
@@ -52,45 +53,47 @@ public class PlayerTransformC2SPacket {
             if (player == null) return;
 
             ServerLevel level = player.serverLevel();
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(cap -> {
 
-                if (requestTransform) {
-                    // 変身リクエスト
-                    if (mobId == null) {
-                        MonsterMod.getLogger().warn("[C2SPacket] mobId が null のため無視");
-                        return;
-                    }
+            // 型安全に PlayerTransformation を取得
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION_CAPABILITY)
+                    .ifPresent(cap -> {
+                        if (requestTransform) {
+                            // 変身リクエスト
+                            if (mobId == null) {
+                                MonsterMod.getLogger().warn("[C2SPacket] mobId が null のため無視");
+                                return;
+                            }
 
-                    // レジストリに存在しないmobIdを防止
-                    if (!BaseMonsterIdentityRegistry.hasIdentity(mobId)) {
-                        MonsterMod.getLogger().warn("[C2SPacket] 未登録のmobId: {}", mobId);
-                        return;
-                    }
+                            // レジストリに存在しない mobId は無視
+                            if (!BaseMonsterIdentityRegistry.hasIdentity(mobId)) {
+                                MonsterMod.getLogger().warn("[C2SPacket] 未登録の mobId: {}", mobId);
+                                return;
+                            }
 
-                    // すでに変身中ならスキップ
-                    if (cap.isTransformed()) {
-                        MonsterMod.getLogger().debug("[C2SPacket] {} は既に変身中です", player.getName().getString());
-                        return;
-                    }
+                            // すでに変身中ならスキップ
+                            if (cap.isTransformed()) {
+                                MonsterMod.getLogger().debug("[C2SPacket] {} は既に変身中です", player.getName().getString());
+                                return;
+                            }
 
-                    // 変身開始
-                    cap.startTransformation(player, mobId);
-                    MonsterMod.getLogger().info("[C2SPacket] {} が変身: {}", player.getName().getString(), mobId);
+                            // 変身開始
+                            cap.startTransformation(player, mobId);
+                            MonsterMod.getLogger().info("[C2SPacket] {} が変身: {}", player.getName().getString(), mobId);
 
-                } else {
-                    // 変身解除
-                    if (!cap.isTransformed()) {
-                        MonsterMod.getLogger().debug("[C2SPacket] {} は変身していません", player.getName().getString());
-                        return;
-                    }
+                        } else {
+                            // 変身解除
+                            if (!cap.isTransformed()) {
+                                MonsterMod.getLogger().debug("[C2SPacket] {} は変身していません", player.getName().getString());
+                                return;
+                            }
 
-                    cap.stopTransformation(player);
-                    MonsterMod.getLogger().info("[C2SPacket] {} が変身解除", player.getName().getString());
-                }
+                            cap.stopTransformation(player);
+                            MonsterMod.getLogger().info("[C2SPacket] {} が変身解除", player.getName().getString());
+                        }
 
-                // 状態同期
-                cap.syncToClient(player);
-            });
+                        // 状態同期
+                        cap.syncToClient(player);
+                    });
         });
         ctx.get().setPacketHandled(true);
     }

@@ -1,163 +1,144 @@
 package com.mimic.monstermod.capability;
 
-import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
-import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
-import net.minecraftforge.network.PacketDistributor;
+import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.Nullable;
-
+/**
+ * PlayerTransformation 完全版
+ * - BaseMonsterIdentity + AnimationPlayerTemplate + BaseMonsterEntity に対応
+ * - 入力・アニメーションはすべて BaseMonsterIdentity に委譲
+ * - サーバー／クライアント同期を完全サポート
+ */
 public class PlayerTransformation {
 
-    // -----------------------------
-    // 元のプレイヤー情報
-    // -----------------------------
-    private boolean originalStatsSaved = false;
-    private double originalHealth, originalMaxHealth, originalAttack, originalArmor, originalSpeed;
-
-    // -----------------------------
-    // 変身状態
-    // -----------------------------
     private boolean isTransformed = false;
-    @Nullable
-    private ResourceLocation transformedMobId = null;
+    @Nullable private ResourceLocation transformedMobId = null;
+    @Nullable private BaseMonsterIdentity identity = null;
+    private int abilitySlotCount = 3;
+    @Nullable private BaseMonsterEntity entity = null;
 
-    @Nullable
-    private BaseMonsterEntity transformedEntity = null;
-
-    // ======================
-    // 元のステータス管理
-    // ======================
-    public boolean hasSavedOriginalStats() { return originalStatsSaved; }
-    public void setOriginalHealth(double hp) { originalHealth = hp; originalStatsSaved = true; }
-    public void setOriginalMaxHealth(double maxHp) { originalMaxHealth = maxHp; }
-    public void setOriginalAttackDamage(double dmg) { originalAttack = dmg; }
-    public void setOriginalArmor(double armor) { originalArmor = armor; }
-    public void setOriginalMoveSpeed(double speed) { originalSpeed = speed; }
-    public double getOriginalHealth() { return originalHealth; }
-    public double getOriginalMaxHealth() { return originalMaxHealth; }
-    public double getOriginalAttackDamage() { return originalAttack; }
-    public double getOriginalArmor() { return originalArmor; }
-    public double getOriginalMoveSpeed() { return originalSpeed; }
-    public void clearOriginalStats() { originalStatsSaved = false; }
-
-    // ======================
-    // 変身管理
-    // ======================
+    // -----------------------------
+    // Getter / Setter
+    // -----------------------------
     public boolean isTransformed() { return isTransformed; }
-    public void setTransformed(boolean transformed) { isTransformed = transformed; }
-
-    @Nullable
-    public ResourceLocation getTransformedMobId() { return transformedMobId; }
-    public void setTransformedMobId(ResourceLocation mobId) { transformedMobId = mobId; }
-
-    @Nullable
-    public BaseMonsterEntity getTransformedEntity(Level level) {
-        if (!isTransformed || transformedMobId == null) return null;
-
-        if (transformedEntity != null) return transformedEntity;
-
-        if (!level.isClientSide) return transformedEntity;
-
-        var type = ModEntitieType.getEntityType(transformedMobId);
-        if (type == null) return null;
-
-        transformedEntity = (BaseMonsterEntity) type.create(level);
-        return transformedEntity;
+    @Nullable public ResourceLocation getMobId() { return transformedMobId; }
+    @Nullable public BaseMonsterIdentity getIdentity() { return identity; }
+    @Nullable public BaseMonsterEntity getEntity() { return entity; }
+    public void setAbilitySlotCount(int count) { this.abilitySlotCount = count; }
+    public void setTransformed(boolean transformed) {
+        this.isTransformed = transformed;
     }
 
-    // ======================
-    // 変身開始/解除
-    // ======================
+    public void setTransformedMobId(@Nullable ResourceLocation mobId) {
+        this.transformedMobId = mobId;
+    }
+    // -----------------------------
+// Tick統合（サーバ／クライアント両方）
+// -----------------------------
+    public void tick(Player player, float deltaSeconds) {
+        if (!isTransformed || identity == null) return;
+        identity.tick(player, deltaSeconds);
+    }
+
+    // -----------------------------
+    // Transformation
+    // -----------------------------
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (isTransformed) return;
-        isTransformed = true;
-        transformedMobId = mobId;
 
-        Level level = player.getCommandSenderWorld();
-        if (!level.isClientSide) {
-            var type = ModEntitieType.getEntityType(mobId);
-            if (type != null) {
-                transformedEntity = (BaseMonsterEntity) type.create(level);
-                if (transformedEntity != null) {
-                    transformedEntity.setPos(player.getX(), player.getY(), player.getZ());
-                    level.addFreshEntity(transformedEntity);
-                }
-            }
-        }
+        this.isTransformed = true;
+        this.transformedMobId = mobId;
+        this.identity = new BaseMonsterIdentity(mobId, abilitySlotCount);
+
+        // 描画用Entityはまだ作らない
+        this.entity = null;
+        identity.setEntity(null);
+
+        // 初期アニメーション
+        identity.playAnimation("idle", true, 0f, 0f);
 
         syncToClient(player);
     }
 
     public void stopTransformation(Player player) {
         if (!isTransformed) return;
-        isTransformed = false;
 
-        if (transformedEntity != null) {
-            transformedEntity.discard();
-            transformedEntity = null;
-        }
+        this.isTransformed = false;
+        this.transformedMobId = null;
+        if (identity != null) identity.setEntity(null);
+        this.identity = null;
+        this.entity = null;
 
-        transformedMobId = null;
         syncToClient(player);
     }
 
-    // ======================
-    // サーバー → クライアント同期（NBT版）
-    // ======================
-    public void syncToClient(Player player) {
-        if (!(player instanceof ServerPlayer sp)) return;
-
-        // NBT丸ごと同期版に変更
-        CompoundTag nbt = this.serializeNBT();
-        S2CTransformSyncPacket packet = new S2CTransformSyncPacket(player.getUUID(), nbt);
-        ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> sp), packet);
-
-        MonsterMod.getLogger().debug("[syncToClient] player={} transformed={} mobId={}",
-                player.getName().getString(), isTransformed, transformedMobId);
+    // -----------------------------
+    // Entity連携
+    // -----------------------------
+    public void attachEntity(BaseMonsterEntity entity) {
+        this.entity = entity;
+        if (identity != null) identity.setEntity(entity);
     }
 
-    // ======================
-    // NBT 保存 / 読み込み
-    // ======================
+    // -----------------------------
+    // Identity 入力委譲
+    // -----------------------------
+    public void handleSkillInput(int skillIndex) {
+        if (identity != null) identity.handleClientInput(null, skillIndex);
+    }
+
+    public void setPendingAttack(boolean attack) {
+        if (identity != null) identity.setPendingAttack(attack);
+    }
+
+    public void setPendingDodge(boolean dodge) {
+        if (identity != null) identity.setPendingDodge(dodge);
+    }
+
+    public void handleMenuInput(Player player) {
+        if (identity != null) identity.handleMenuInput(player);
+    }
+
+    // -----------------------------
+    // NBT保存/復元
+    // -----------------------------
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("isTransformed", isTransformed);
-        if (transformedMobId != null) tag.putString("transformedMobId", transformedMobId.toString());
-        tag.putBoolean("originalStatsSaved", originalStatsSaved);
-        tag.putDouble("originalHealth", originalHealth);
-        tag.putDouble("originalMaxHealth", originalMaxHealth);
-        tag.putDouble("originalAttack", originalAttack);
-        tag.putDouble("originalArmor", originalArmor);
-        tag.putDouble("originalSpeed", originalSpeed);
+        if (transformedMobId != null) tag.putString("mobId", transformedMobId.toString());
+        tag.putInt("abilitySlotCount", abilitySlotCount);
+        if (identity != null) tag.put("identity", identity.serializeNBT());
         return tag;
     }
 
-    public void deserializeNBT(CompoundTag tag) {
-        isTransformed = tag.getBoolean("isTransformed");
-        transformedMobId = tag.contains("transformedMobId") ? new ResourceLocation(tag.getString("transformedMobId")) : null;
+    public void deserializeNBT(Player player, CompoundTag tag) {
+        this.isTransformed = tag.getBoolean("isTransformed");
+        this.transformedMobId = tag.contains("mobId") ? new ResourceLocation(tag.getString("mobId")) : null;
+        this.abilitySlotCount = tag.getInt("abilitySlotCount");
 
-        originalStatsSaved = tag.getBoolean("originalStatsSaved");
-        originalHealth = tag.getDouble("originalHealth");
-        originalMaxHealth = tag.getDouble("originalMaxHealth");
-        originalAttack = tag.getDouble("originalAttack");
-        originalArmor = tag.getDouble("originalArmor");
-        originalSpeed = tag.getDouble("originalSpeed");
-
-        MonsterMod.getLogger().debug("[deserializeNBT] transformed={} mobId={}", isTransformed, transformedMobId);
+        if (isTransformed && transformedMobId != null) {
+            this.identity = new BaseMonsterIdentity(transformedMobId, abilitySlotCount);
+            if (tag.contains("identity")) identity.deserializeNBT(tag.getCompound("identity"));
+            identity.setEntity(null);
+            identity.playAnimation("idle", true, 0f, 0f);
+        } else {
+            this.identity = null;
+            this.entity = null;
+        }
     }
 
-    /**
-     * Provider 側で使用する get()
-     */
-    public PlayerTransformation get() {
-        return this;
+    // -----------------------------
+    // Client Sync（サーバー → クライアント）
+    // -----------------------------
+    public void syncToClient(Player player) {
+        if (!(player instanceof ServerPlayer sp)) return;
+        ModMessages.sendToPlayer(new S2CTransformSyncPacket(player.getUUID(), serializeNBT()), sp);
     }
 }

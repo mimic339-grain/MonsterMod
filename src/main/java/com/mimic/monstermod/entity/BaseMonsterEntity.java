@@ -1,176 +1,98 @@
 package com.mimic.monstermod.entity;
 
-import com.mimic.monstermod.network.server.S2CMonsterSyncPacket;
+import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.variable.entity.IMonsterData;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
-import org.jetbrains.annotations.NotNull;
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.*;
-import software.bernie.geckolib.core.object.PlayState;
-
-import java.util.List;
-
-import static software.bernie.geckolib.util.ClientUtils.getLevel;
+import net.minecraft.client.model.geom.ModelPart;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 完全版 BaseMonsterEntity
- * - GeoEntity 対応
- * - IMONSTERDATA 連動（Skill / SkillTick）
- * - 状態変化時のみクライアント同期
- * - AnimationController は GeckoLib 標準
- * - 各モンスターは decideAnimation() を override 可能
+ * - BaseMonsterIdentity / AnimationPlayerTemplate (YSM方式) 互換
+ * - 描画用 ModelPart root を提供
  */
-public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity {
+public abstract class BaseMonsterEntity extends BaseEntity {
 
-    // ==============================
-    // GeckoLib Animation
-    // ==============================
-    protected final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
-    public static EntityDataAccessor<String> ANIMATION_NAME;
+    @Nullable
+    private BaseMonsterIdentity identity;
 
-    // ==============================
-    // サーバー同期用状態
-    // ==============================
-    private String currentAnim = "idle";
-
-    // クライアント依存フラグ（WASD 判定）
-    public boolean playerActiveMove = false;
+    // 描画モデルの root (Blockbench 等で定義)
+    protected ModelPart modelRoot;
 
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
-    }
 
-    // -----------------------------
-    // SynchedEntityData 初期化
-    // -----------------------------
-    @Override
-    protected void defineSynchedData() {
-        super.defineSynchedData();
-        if (ANIMATION_NAME == null) {
-            ANIMATION_NAME = SynchedEntityData.defineId(this.getClass(), EntityDataSerializers.STRING);
+        // Client 側でモデル生成
+        if (level.isClientSide) {
+            this.modelRoot = createModel();
         }
-        this.entityData.define(ANIMATION_NAME, "idle");
     }
+
+    /** Identity 用 getter */
+    @Nullable
+    public BaseMonsterIdentity getIdentity() {
+        return identity;
+    }
+
+    /** Identity セット */
+    public void setIdentity(@Nullable BaseMonsterIdentity identity) {
+        this.identity = identity;
+        if (identity != null) identity.autoInitBoneMap(this);
+    }
+
+    /** 描画用モデル root */
+    @Nullable
+    public ModelPart getModelRoot() {
+        return modelRoot;
+    }
+
+    /** クライアント専用: モデル生成 */
+    protected abstract ModelPart createModel();
 
     // -----------------------------
-    // Capability / MonsterData
-    // -----------------------------
-    public IMonsterData getMonsterData() {
-        return CapabilityRegistry.getMonsterData(this);
-    }
-
-    // -----------------------------
-    // GeckoLib Controller
-    // -----------------------------
-    @Override
-    public AnimatableInstanceCache getAnimatableInstanceCache() {
-        return cache;
-    }
-
-    @Override
-    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "controller", 0, this::predicate));
-    }
-
-    // -----------------------------
-    // クライアント WASD 判定フラグ操作
-    // -----------------------------
-    public void setPlayerActiveMove(boolean moving) {
-        this.playerActiveMove = moving;
-    }
-
-    public boolean isPlayerActivelyMoving() {
-        return this.playerActiveMove;
-    }
-
-    /**
-     * AnimationController 用の基本 predicate
-     */
-    protected <T extends GeoEntity> PlayState predicate(AnimationState<T> state) {
-        String animName = decideAnimation();
-        state.getController().setAnimation(RawAnimation.begin().then(animName, Animation.LoopType.LOOP));
-        return PlayState.CONTINUE;
-    }
-
-    /**
-     * decideAnimation() は各派生クラスで override 可能
-     */
-    protected String decideAnimation() {
-        IMonsterData data = getMonsterData();
-        if (data != null && data.getSkill() != null && !data.getSkill().isEmpty()) {
-            return "animation.monster." + data.getSkill();
-        }
-        return "animation.monster.idle";
-    }
-
-    public String getAnimation() {
-        return this.entityData.get(ANIMATION_NAME);
-    }
-
-    // -----------------------------
-    // Tick / SkillTick 管理（サーバー側）
+    // Tick
     // -----------------------------
     @Override
     public void tick() {
         super.tick();
 
-        Level lvl = getLevel();
-        if (lvl == null) return;
-
-        // サーバー専用処理
-        if (!lvl.isClientSide) {
+        // サーバー側: CapabilityやクールダウンTick
+        if (!level().isClientSide) {
             IMonsterData data = getMonsterData();
-            if (data != null) {
-                data.tick();
+            if (data != null) data.tick();
+        }
 
-                String nextAnim = decideAnimation();
-
-                // アニメーションが変化した時のみクライアント同期
-                if (!nextAnim.equals(currentAnim)) {
-                    currentAnim = nextAnim;
-                    syncToClients(data);
-                }
-            }
+        // クライアント側: IdentityアニメーションTick
+        if (level().isClientSide && identity != null) {
+            float delta = 1f / 20f; // 1tick=1/20秒
+            identity.tickClient(delta);
         }
     }
 
     // -----------------------------
-    // クライアント同期
+    // Capability取得
     // -----------------------------
-    private void syncToClients(IMonsterData data) {
-        Level lvl = getLevel();
-        if (!(lvl instanceof ServerLevel serverLevel)) return;
-
-        List<ServerPlayer> players = serverLevel.players();
-        for (ServerPlayer player : players) {
-            S2CMonsterSyncPacket packet = new S2CMonsterSyncPacket(
-                    getId(), currentAnim, data.getSkill()
-            );
-            packet.sendToPlayer(player);
-        }
+    @Nullable
+    public IMonsterData getMonsterData() {
+        return CapabilityRegistry.getMonsterData(this);
     }
 
     // -----------------------------
-    // NBT 保存 / 読み込み
+    // NBT保存/復元
     // -----------------------------
     @Override
-    public void addAdditionalSaveData(@NotNull CompoundTag tag) {
+    public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putString("AnimationName", getAnimation());
+
+        if (identity != null) tag.put("IdentityData", identity.serializeNBT());
+
         IMonsterData data = getMonsterData();
         if (data != null) {
             tag.putString("Skill", data.getSkill());
@@ -179,9 +101,13 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     }
 
     @Override
-    public void readAdditionalSaveData(@NotNull CompoundTag tag) {
+    public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("AnimationName")) this.entityData.set(ANIMATION_NAME, tag.getString("AnimationName"));
+
+        if (identity != null && tag.contains("IdentityData")) {
+            identity.deserializeNBT(tag.getCompound("IdentityData"));
+        }
+
         IMonsterData data = getMonsterData();
         if (data != null) {
             if (tag.contains("Skill")) data.setSkill(tag.getString("Skill"));
@@ -190,7 +116,14 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     }
 
     // -----------------------------
-    // 属性作成
+    // Identity BoneMap 初期化
+    // -----------------------------
+    public void initIdentityBoneMap() {
+        if (identity != null) identity.autoInitBoneMap(this);
+    }
+
+    // -----------------------------
+    // 属性生成ユーティリティ
     // -----------------------------
     public static AttributeSupplier.Builder createDefaultAttributes(
             double health, double speed, double damage, double resistance, double armor, double gravity) {
@@ -203,6 +136,5 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
                 .add(BaseMonsterEntity.GRAVITY, gravity);
     }
 
-    // 独自GRAVITY属性
     public static final Attribute GRAVITY = Attributes.ATTACK_KNOCKBACK;
 }

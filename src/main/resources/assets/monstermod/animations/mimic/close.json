@@ -1,0 +1,43 @@
+{
+  "animations": {
+    "open": {
+      "length": 0.5,
+      "loop": true,
+      "bones": {
+        "key": {
+          "scale": [
+            { "time": 0.45833, "scale": [0,0,0], "interpolation": "linear" },
+            { "time": 0.479165, "scale": [0.001,0.001,0.001], "interpolation": "linear" },
+            { "time": 0.495, "scale": [0.5,0.5,0.5], "interpolation": "linear" },
+            { "time": 0.5, "scale": [1,1,1], "interpolation": "linear" }
+          ]
+        },
+        "bodyover": {
+          "rotation": [
+            { "time": 0, "rotation": [45,0,0], "interpolation": "linear" },
+            { "time": 0.125, "rotation": [33.75,0,0], "interpolation": "linear" },
+            { "time": 0.25, "rotation": [22.5,0,0], "interpolation": "linear" },
+            { "time": 0.375, "rotation": [11.25,0,0], "interpolation": "linear" },
+            { "time": 0.5, "rotation": [0,0,0], "interpolation": "linear" }
+          ]
+        },
+        "unederteeth": {
+          "scale": [
+            { "time": 0.45833, "scale": [1,1,1], "interpolation": "linear" },
+            { "time": 0.479165, "scale": [0.75,0.75,0.75], "interpolation": "linear" },
+            { "time": 0.495, "scale": [0.25,0.25,0.25], "interpolation": "linear" },
+            { "time": 0.5, "scale": [0,0,0], "interpolation": "linear" }
+          ]
+        },
+        "bero": {
+          "scale": [
+            { "time": 0, "scale": [0,0,0], "interpolation": "linear" },
+            { "time": 0.125, "scale": [0.001,0.001,0.001], "interpolation": "linear" },
+            { "time": 0.25, "scale": [0.001,0.001,0.001], "interpolation": "linear" },
+            { "time": 0.5, "scale": [0,0,0], "interpolation": "linear" }
+          ]
+        }
+      }
+    }
+  }
+}

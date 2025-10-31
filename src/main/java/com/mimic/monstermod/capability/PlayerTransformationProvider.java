@@ -1,77 +1,54 @@
 package com.mimic.monstermod.capability;
 
-import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.common.util.INBTSerializable;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.server.ServerLifecycleHooks;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-public class PlayerTransformationProvider implements ICapabilityProvider, INBTSerializable<CompoundTag> {
+import javax.annotation.Nonnull;
 
-    public static final Capability<PlayerTransformation> PLAYER_TRANSFORMATION =
-            CapabilityManager.get(new CapabilityToken<PlayerTransformation>() {});
+public class PlayerTransformationProvider implements ICapabilityProvider {
 
-    private PlayerTransformation transformation = null;
-    private final LazyOptional<PlayerTransformation> optional = LazyOptional.of(this::createPlayerTransformation);
+    private final PlayerTransformation transformation = new PlayerTransformation();
+    private final LazyOptional<PlayerTransformation> optional = LazyOptional.of(() -> transformation);
 
-    private PlayerTransformation createPlayerTransformation() {
-        if (transformation == null) {
-            transformation = new PlayerTransformation();
-        }
-        return transformation;
-    }
-
+    @Nonnull
     @Override
-    public @NotNull <T> LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side) {
-        if (cap == PLAYER_TRANSFORMATION) return optional.cast();
+    public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, net.minecraft.core.Direction side) {
+        if (cap == PlayerTransformationCapability.PLAYER_TRANSFORMATION) {
+            return optional.cast();
+        }
         return LazyOptional.empty();
     }
 
-    @Override
+    /** NBT保存 */
     public CompoundTag serializeNBT() {
-        return createPlayerTransformation().serializeNBT();
+        return transformation.serializeNBT();
     }
 
-    @Override
-    public void deserializeNBT(CompoundTag nbt) {
-        createPlayerTransformation().deserializeNBT(nbt);
+    /** NBT復元 */
+    public void deserializeNBT(@Nonnull Player player, @Nonnull CompoundTag tag) {
+        transformation.deserializeNBT(player, tag);
     }
 
-    public void invalidate() {
-        optional.invalidate();
+    /** Capability定義 */
+    public static class PlayerTransformationCapability {
+        public static final Capability<PlayerTransformation> PLAYER_TRANSFORMATION =
+                CapabilityManager.get(new CapabilityToken<PlayerTransformation>() {});
     }
 
-    // ====== 同期処理 ======
-    public void syncToClient(Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer)) return;
-
-        // NBT丸ごと同期版に合わせる
-        CompoundTag nbt = createPlayerTransformation().serializeNBT();
-        S2CTransformSyncPacket packet = new S2CTransformSyncPacket(player.getUUID(), nbt);
-
-        ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> serverPlayer), packet);
-    }
-
-    // 全プレイヤーに同期パケットを送る
-    public static void sendToAllPlayers(S2CTransformSyncPacket packet) {
-        for (ServerPlayer player : ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers()) {
-            ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), packet);
-        }
-    }
-
-    // Getter
+    /** Getter */
+    @Nonnull
     public PlayerTransformation get() {
-        return createPlayerTransformation();
+        return transformation;
+    }
+
+    /** Getter（LazyOptional） */
+    @Nonnull
+    public LazyOptional<PlayerTransformation> getOptional() {
+        return optional;
     }
 }

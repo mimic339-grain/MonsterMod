@@ -1,84 +1,72 @@
 package com.mimic.monstermod.network.server;
 
-import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * サーバー → クライアント間の変身状態同期パケット。
- * NBT を使って PlayerTransformation の状態を丸ごと同期する。
+ * サーバー → クライアント
+ * Playerの変身状態（Identity）同期用
+ * 回転情報は送らず描画前コピーに任せる
  */
 public class S2CTransformSyncPacket {
-    private final UUID playerUUID;
-    private final net.minecraft.nbt.CompoundTag nbt;
 
-    // ========================
-    // コンストラクタ
-    // ========================
-    public S2CTransformSyncPacket(UUID playerUUID, net.minecraft.nbt.CompoundTag nbt) {
-        this.playerUUID = playerUUID;
+    private final UUID playerId;
+    private final CompoundTag nbt;
+
+    public S2CTransformSyncPacket(UUID playerId, CompoundTag nbt) {
+        this.playerId = playerId;
         this.nbt = nbt;
     }
 
-    // ========================
-    // デコード / エンコード
-    // ========================
-    public S2CTransformSyncPacket(FriendlyByteBuf buf) {
-        this.playerUUID = buf.readUUID();
-        this.nbt = buf.readNbt();
+    /** エンコード */
+    public static void encode(S2CTransformSyncPacket msg, FriendlyByteBuf buf) {
+        buf.writeUUID(msg.playerId);
+        buf.writeNbt(msg.nbt);
     }
 
-    public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUUID(playerUUID);
-        buf.writeNbt(nbt);
+    /** デコード */
+    public static S2CTransformSyncPacket decode(FriendlyByteBuf buf) {
+        return new S2CTransformSyncPacket(buf.readUUID(), buf.readNbt());
     }
 
-    // ========================
-    // ハンドラー
-    // ========================
+    /** クライアント側で処理 */
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(this::handleClient);
+        ctx.get().enqueueWork(() -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null) return;
+
+            Player player = mc.level.getPlayerByUUID(playerId);
+            if (player == null) return;
+
+            player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+                    .ifPresent(transformation -> {
+                        // 変身NBTを適用（能力クールタイム・装備など）
+                        transformation.deserializeNBT(player, nbt); // Player 引数を追加
+
+                        // 描画用Identityの取得（renderMixinで描画前にPlayerからコピー）
+                        BaseMonsterIdentity identity = transformation.getIdentity();
+                    });
+        });
         ctx.get().setPacketHandled(true);
     }
 
-    @OnlyIn(Dist.CLIENT)
-    private void handleClient() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
+    /** サーバー側で送信するNBT作成 */
+    public static CompoundTag createNBT(Player player) {
+        CompoundTag tag = new CompoundTag();
 
-        Player targetPlayer = mc.level.getPlayerByUUID(playerUUID);
-        if (targetPlayer == null) {
-            MonsterMod.getLogger().warn("[S2CTransformSyncPacket] Client: 対象プレイヤーが見つかりません UUID={}", playerUUID);
-            return;
-        }
+        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+                .ifPresent(transformation -> tag.merge(transformation.serializeNBT()));
 
-        // PlayerTransformationProvider の NBT を直接読み込む
-        targetPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(cap -> {
-            cap.deserializeNBT(nbt);
+        // ここでは回転情報は含めない（描画前コピーに任せる）
 
-            // クライアント側エンティティ処理
-            if (!cap.get().isTransformed()) {
-                if (cap.get().getTransformedEntity(mc.level) != null) {
-                    cap.get().getTransformedEntity(mc.level).discard();
-                }
-                MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Client: 変身解除 {}", targetPlayer.getName().getString());
-            } else {
-                var entity = cap.get().getTransformedEntity(mc.level);
-                if (entity != null) {
-                    entity.setPos(targetPlayer.getX(), targetPlayer.getY(), targetPlayer.getZ());
-                    MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Client: 変身同期 {} -> mobId={}", targetPlayer.getName().getString(), cap.get().getTransformedMobId());
-                } else {
-                    MonsterMod.getLogger().warn("[S2CTransformSyncPacket] Client: Entity生成失敗 mobId={}", cap.get().getTransformedMobId());
-                }
-            }
-        });
+        return tag;
     }
 }

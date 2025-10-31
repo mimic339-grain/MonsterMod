@@ -6,7 +6,8 @@
   "refmap": "monstermod.refmap.json",
   "mixins": [
     "LivingEntityMixin",
-    "PlayerMixin"
+    "PlayerMixin",
+    "PlayerTickMixin"
   ],
   "client": [
     "client.PlayerRendererMixin"

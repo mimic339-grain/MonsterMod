@@ -1,6 +1,7 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.capability.PlayerTransformation;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
@@ -32,7 +33,7 @@ public class CapabilityRegistry {
             CapabilityManager.get(new CapabilityToken<>() {});
     public static final Capability<IMonsterData> MONSTER_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
-    public static final Capability<PlayerTransformationProvider> PLAYER_TRANSFORMATION_CAPABILITY =
+    public static final Capability<PlayerTransformation> PLAYER_TRANSFORMATION_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
 
     // ====== GETTERS ======
@@ -52,7 +53,7 @@ public class CapabilityRegistry {
         return entity.getCapability(MONSTER_CAPABILITY);
     }
 
-    public static LazyOptional<PlayerTransformationProvider> getPlayerTransformation(Player player) {
+    public static LazyOptional<PlayerTransformation> getPlayerTransformation(Player player) {
         return player.getCapability(PLAYER_TRANSFORMATION_CAPABILITY);
     }
 
@@ -61,7 +62,7 @@ public class CapabilityRegistry {
     public static void registerCaps(RegisterCapabilitiesEvent event) {
         event.register(IPlayerData.class);
         event.register(IMonsterData.class);
-        event.register(PlayerTransformationProvider.class); // 追加
+        event.register(PlayerTransformation.class); // 修正: Provider ではなく PlayerTransformation を登録
     }
 
     // ====== ATTACH PROVIDERS ======
@@ -101,12 +102,12 @@ public class CapabilityRegistry {
                         newCap.deserializeNBT(oldCap.serializeNBT())
                 ));
 
-        // TRANSFORMATION CAP
+// TRANSFORMATION CAP
         oldPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                ));
-
+                        newCap.deserializeNBT(newPlayer, oldCap.serializeNBT()) // Player 引数を追加
+                )
+        );
         syncToClient(newPlayer);
     }
 

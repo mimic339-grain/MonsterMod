@@ -1,51 +1,69 @@
 package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.identity.impl.MimicIdentity;
+import com.mimic.monstermod.entity.BaseMonsterEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Identity Registry
+ * - IdentityType と統合
+ * - Entity がまだ生成されていなくても Identity を生成可能
+ */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class BaseMonsterIdentityRegistry {
 
-    private static final Map<ResourceLocation, BaseMonsterIdentity> IDENTITIES = new HashMap<>();
+    /** ID → BaseMonsterIdentity のキャッシュ */
+    private static final Map<ResourceLocation, BaseMonsterIdentity> IDENTITY_CACHE = new HashMap<>();
 
-    public static final BaseMonsterIdentity MIMIC_IDENTITY = new MimicIdentity();
-
+    /** 初期登録 */
     @SubscribeEvent
     public static void registerIdentities(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
-            registerIdentity(MIMIC_IDENTITY);
-            MonsterMod.getLogger().debug("BaseMonsterIdentityRegistry: {}個のIdentityを登録しました。", IDENTITIES.size());
+            for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
+                // Entity がいない場合は null を渡す
+                BaseMonsterIdentity identity = IdentityType.createIdentity(id, null);
+                IDENTITY_CACHE.put(id, identity);
+            }
+
+            MonsterMod.getLogger().debug("BaseMonsterIdentityRegistry: {} 個の Identity を登録しました", IDENTITY_CACHE.size());
         });
     }
 
-    public static void registerIdentity(BaseMonsterIdentity identity) {
-        ResourceLocation id = new ResourceLocation(identity.getId()); // String → ResourceLocation
-        if (IDENTITIES.containsKey(id)) {
-            MonsterMod.getLogger().warn("Identity IDが重複しています: {}", identity.getId());
-            return;
+    /**
+     * ID から Identity を取得
+     * @param id ResourceLocation ID
+     * @param entity 実際の Entity（まだ生成されていない場合は null）
+     */
+    public static BaseMonsterIdentity getIdentity(ResourceLocation id, BaseMonsterEntity entity) {
+        IdentityType type = IdentityType.fromId(id);
+        if (type == null) {
+            MonsterMod.getLogger().warn("BaseMonsterIdentityRegistry: ID が存在しません {}", id);
+            return null;
         }
-        IDENTITIES.put(id, identity);
-    }
-    @Nullable
-    public static BaseMonsterIdentity getIdentity(ResourceLocation id) {
-        return IDENTITIES.get(id);
+
+        // Entity が null ならキャッシュ済みの Identity を返す
+        if (entity == null) {
+            return IDENTITY_CACHE.get(id);
+        }
+
+        return type.createIdentity(entity);
     }
 
+    /** ID の存在確認 */
     public static boolean hasIdentity(ResourceLocation id) {
-        return IDENTITIES.containsKey(id);
+        return IDENTITY_CACHE.containsKey(id);
     }
 
+    /** 全 Identity ID の取得 */
     public static Set<ResourceLocation> getAllIdentityIds() {
-        return new HashSet<>(IDENTITIES.keySet());
+        return new HashSet<>(IDENTITY_CACHE.keySet());
     }
 }
