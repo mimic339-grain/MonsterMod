@@ -32,7 +32,7 @@ public class BaseMonsterIdentity {
     @Nullable protected BaseMonsterEntity entity;
     @Nullable public AnimationPlayerTemplate.AnimationPlayer animationPlayer;
     protected final Map<String, AnimationPlayerTemplate.ModelPartProxy> boneMap = new HashMap<>();
-    public Map<String, Map<String, Vector3f>> lastBoneTransforms = new HashMap<>();
+    protected Map<String, Map<String, Vector3f>> lastBoneTransforms = new HashMap<>();
 
     public String currentState = "idle";
     public boolean loop = true;
@@ -42,21 +42,7 @@ public class BaseMonsterIdentity {
     private boolean pendingDodge = false;
     private int pendingSkill = -1;
     private boolean pendingMenu = false;
-// BaseMonsterIdentity に追加
-    /**
-     * この Identity に対応する描画用 Entity クラスを返す
-     * 必要に応じて各 Identity サブクラスでオーバーライド
-     */
-    public Class<? extends BaseMonsterEntity> getEntityClass() {
-        // 現状は MimicEntity を返すデフォルト実装
-        // 将来的に Identity Registry などでモブごとに切り替える
-        return com.mimic.monstermod.entity.MimicEntity.class;
-    }
 
-    /** Identity の ID を返す */
-    public String getId() {
-        return id;
-    }
     public BaseMonsterIdentity(ResourceLocation mobId, int abilityCount) {
         this.id = mobId.toString();
         this.abilityCooldowns = new int[Math.max(abilityCount, 1)];
