@@ -1,28 +1,28 @@
 {
   "animations": {
-    "open": {
-      "length": 2,
+    "open_idle": {
+      "length": 2.0,
       "loop": true,
       "bones": {
         "key": {
           "scale": [
-            { "time": 0, "scale": [0,0,0], "interpolation": "linear" },
-            { "time": 1, "scale": [0.0005,0.0005,0.0005], "interpolation": "linear" },
-            { "time": 2, "scale": [0.001,0.001,0.001], "interpolation": "linear" }
+            { "time": 0.0, "value": [0, 0, 0], "interpolation": "linear" },
+            { "time": 1.0, "value": [0.0005, 0.0005, 0.0005], "interpolation": "linear" },
+            { "time": 2.0, "value": [0.001, 0.001, 0.001], "interpolation": "linear" }
           ]
         },
         "bodyover": {
           "rotation": [
-            { "time": 0, "rotation": [45,0,0], "interpolation": "linear" },
-            { "time": 1, "rotation": [45.0005,0,0], "interpolation": "linear" },
-            { "time": 2, "rotation": [45.001,0,0], "interpolation": "linear" }
+            { "time": 0.0, "value": [45, 0, 0], "interpolation": "linear" },
+            { "time": 1.0, "value": [45.0005, 0, 0], "interpolation": "linear" },
+            { "time": 2.0, "value": [45.001, 0, 0], "interpolation": "linear" }
           ]
         },
         "bero": {
           "scale": [
-            { "time": 0, "scale": [0,0,0], "interpolation": "linear" },
-            { "time": 1, "scale": [0.0005,0.0005,0.0005], "interpolation": "linear" },
-            { "time": 2, "scale": [0.001,0.001,0.001], "interpolation": "linear" }
+            { "time": 0.0, "value": [0, 0, 0], "interpolation": "linear" },
+            { "time": 1.0, "value": [0.0005, 0.0005, 0.0005], "interpolation": "linear" },
+            { "time": 2.0, "value": [0.001, 0.001, 0.001], "interpolation": "linear" }
           ]
         }
       }

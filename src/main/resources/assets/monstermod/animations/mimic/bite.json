@@ -1,65 +1,65 @@
 {
   "animations": {
-    "open": {
+    "bite": {
       "length": 0.50505,
       "loop": true,
       "bones": {
         "bodyover": {
           "position": [
-            {"time": 0, "position": [0,0,0], "interpolation": "linear"},
-            {"time": 0.25253, "position": [0,6,3], "interpolation": "linear"},
-            {"time": 0.29461, "position": [0,6.001,3], "interpolation": "linear"},
-            {"time": 0.50505, "position": [0,0,0], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.25253, "value": [0,6,3], "interpolation": "linear"},
+            {"time": 0.29461, "value": [0,6.001,3], "interpolation": "linear"},
+            {"time": 0.50505, "value": [0,0,0], "interpolation": "linear"}
           ],
           "rotation": [
-            {"time": 0, "rotation": [0,0,0], "interpolation": "linear"},
-            {"time": 0.25253, "rotation": [45,0,0], "interpolation": "linear"},
-            {"time": 0.29461, "rotation": [45.001,0,0], "interpolation": "linear"},
-            {"time": 0.50505, "rotation": [0,0,0], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.25253, "value": [45,0,0], "interpolation": "linear"},
+            {"time": 0.29461, "value": [45.001,0,0], "interpolation": "linear"},
+            {"time": 0.50505, "value": [0,0,0], "interpolation": "linear"}
           ],
           "scale": [
-            {"time": 0, "scale": [1,1,1], "interpolation": "linear"},
-            {"time": 0.25253, "scale": [1.5,1.5,1.5], "interpolation": "linear"},
-            {"time": 0.29461, "scale": [1.5001,1.5001,1.5001], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [1,1,1], "interpolation": "linear"}
+            {"time": 0, "value": [1,1,1], "interpolation": "linear"},
+            {"time": 0.25253, "value": [1.5,1.5,1.5], "interpolation": "linear"},
+            {"time": 0.29461, "value": [1.5001,1.5001,1.5001], "interpolation": "linear"},
+            {"time": 0.50505, "value": [1,1,1], "interpolation": "linear"}
           ]
         },
         "overteeth": {
           "scale": [
-            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
-            {"time": 0.04209, "scale": [0.999,0.999,0.999], "interpolation": "linear"},
-            {"time": 0.46296, "scale": [1,1,1], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [0.001,0.001,0.001], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.04209, "value": [0.999,0.999,0.999], "interpolation": "linear"},
+            {"time": 0.46296, "value": [1,1,1], "interpolation": "linear"},
+            {"time": 0.50505, "value": [0.001,0.001,0.001], "interpolation": "linear"}
           ]
         },
         "bodyunder": {
           "scale": [
-            {"time": 0, "scale": [1,1,1], "interpolation": "linear"},
-            {"time": 0.25253, "scale": [1.5,1.5,1.5], "interpolation": "linear"},
-            {"time": 0.29461, "scale": [1.5001,1.5001,1.5001], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [1,1,1], "interpolation": "linear"}
+            {"time": 0, "value": [1,1,1], "interpolation": "linear"},
+            {"time": 0.25253, "value": [1.5,1.5,1.5], "interpolation": "linear"},
+            {"time": 0.29461, "value": [1.5001,1.5001,1.5001], "interpolation": "linear"},
+            {"time": 0.50505, "value": [1,1,1], "interpolation": "linear"}
           ]
         },
         "unederteeth": {
           "scale": [
-            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
-            {"time": 0.04209, "scale": [0.999,0.999,0.999], "interpolation": "linear"},
-            {"time": 0.46296, "scale": [1,1,1], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [0.001,0.001,0.001], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.04209, "value": [0.999,0.999,0.999], "interpolation": "linear"},
+            {"time": 0.46296, "value": [1,1,1], "interpolation": "linear"},
+            {"time": 0.50505, "value": [0.001,0.001,0.001], "interpolation": "linear"}
           ]
         },
         "bero": {
           "scale": [
-            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
-            {"time": 0.25253, "scale": [0.001,0.001,0.001], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [0,0,0], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.25253, "value": [0.001,0.001,0.001], "interpolation": "linear"},
+            {"time": 0.50505, "value": [0,0,0], "interpolation": "linear"}
           ]
         },
         "key": {
           "scale": [
-            {"time": 0, "scale": [0,0,0], "interpolation": "linear"},
-            {"time": 0.45833, "scale": [0,0,0], "interpolation": "linear"},
-            {"time": 0.50505, "scale": [1,1,1], "interpolation": "linear"}
+            {"time": 0, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.45833, "value": [0,0,0], "interpolation": "linear"},
+            {"time": 0.50505, "value": [1,1,1], "interpolation": "linear"}
           ]
         }
       }

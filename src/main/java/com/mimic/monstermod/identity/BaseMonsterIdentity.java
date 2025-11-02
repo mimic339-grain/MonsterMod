@@ -21,25 +21,45 @@ import org.joml.Vector3f;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 完全版 BaseMonsterIdentity
+ * AnimationPlayerTemplate互換 / Pose補間 / NBT保存 / 同期対応
+ * GeckoLib非依存 / YSM方式
+ */
 public class BaseMonsterIdentity {
 
     protected final String id;
     @Nullable protected BaseMonsterEntity entity;
-    public int[] abilityCooldowns;
     @Nullable public AnimationPlayerTemplate.AnimationPlayer animationPlayer;
-    protected Map<String, AnimationPlayerTemplate.ModelPartProxy> boneMap = new HashMap<>();
+    protected final Map<String, AnimationPlayerTemplate.ModelPartProxy> boneMap = new HashMap<>();
+    public Map<String, Map<String, Vector3f>> lastBoneTransforms = new HashMap<>();
+
     public String currentState = "idle";
     public boolean loop = true;
-    public Map<String, Map<String, Vector3f>> lastBoneTransforms = new HashMap<>();
+    public int[] abilityCooldowns;
 
     private boolean pendingAttack = false;
     private boolean pendingDodge = false;
     private int pendingSkill = -1;
     private boolean pendingMenu = false;
+// BaseMonsterIdentity に追加
+    /**
+     * この Identity に対応する描画用 Entity クラスを返す
+     * 必要に応じて各 Identity サブクラスでオーバーライド
+     */
+    public Class<? extends BaseMonsterEntity> getEntityClass() {
+        // 現状は MimicEntity を返すデフォルト実装
+        // 将来的に Identity Registry などでモブごとに切り替える
+        return com.mimic.monstermod.entity.MimicEntity.class;
+    }
 
+    /** Identity の ID を返す */
+    public String getId() {
+        return id;
+    }
     public BaseMonsterIdentity(ResourceLocation mobId, int abilityCount) {
         this.id = mobId.toString();
-        this.abilityCooldowns = new int[abilityCount];
+        this.abilityCooldowns = new int[Math.max(abilityCount, 1)];
     }
 
     @Nullable
@@ -50,107 +70,108 @@ public class BaseMonsterIdentity {
         autoInitBoneMap(entity);
     }
 
-    public Map<String, AnimationPlayerTemplate.ModelPartProxy> getBoneMap() { return boneMap; }
-
-    public void autoInitBoneMap(BaseMonsterEntity entity) {
-        if (entity == null || entity.getModelRoot() == null) return;
+    /* ---------------------------
+       BoneMap 自動初期化
+       --------------------------- */
+    public void autoInitBoneMap(@Nullable BaseMonsterEntity entity) {
         boneMap.clear();
-        registerPartsRecursive(entity.getModelRoot(), "");
-        MonsterMod.LOGGER.info("Initialized boneMap for " + id + " : " + boneMap.keySet());
+        if (entity == null) return;
+        entity.ensureModelInitialized();
+
+        ModelPart root = entity.getModelRoot();
+        if (root == null) return;
+
+        registerPartsRecursive(root, "root");
+        MonsterMod.LOGGER.info("[MonsterMod] Initialized boneMap for " + id + ": " + boneMap.keySet());
     }
 
-    private void registerPartsRecursive(ModelPart part, String prefix) {
-        String name = prefix.isEmpty() ? part.toString() : prefix;
+    private void registerPartsRecursive(ModelPart part, String name) {
         boneMap.put(name, new AnimationPlayerTemplate.ModelPartProxy() {
             @Override public void setRotation(Vector3f rot) { part.xRot = rot.x(); part.yRot = rot.y(); part.zRot = rot.z(); }
             @Override public void setPosition(Vector3f pos) { part.x = pos.x(); part.y = pos.y(); part.z = pos.z(); }
-            @Override public void setScale(Vector3f scale) { }
+            @Override public void setScale(Vector3f scale) { /* optional */ }
         });
 
         try {
             var field = ModelPart.class.getDeclaredField("children");
             field.setAccessible(true);
             Map<String, ModelPart> children = (Map<String, ModelPart>) field.get(part);
-            for (var entry : children.entrySet())
+            for (var entry : children.entrySet()) {
                 registerPartsRecursive(entry.getValue(), entry.getKey());
+            }
         } catch (Exception e) {
-            e.printStackTrace();
+            MonsterMod.LOGGER.error("[MonsterMod] Bone registration failed", e);
         }
     }
 
-    /**------------------------
-     * Tick 系
-     ------------------------*/
+    /* ---------------------------
+       Tick処理
+       --------------------------- */
     public void tick(Player player, float deltaSeconds) {
         if (player.level().isClientSide) tickClient(deltaSeconds);
         else tickServer(player, deltaSeconds);
     }
 
     protected void tickServer(Player player, float deltaSeconds) {
-        // クールダウン減少
+        // クールタイム進行
         for (int i = 0; i < abilityCooldowns.length; i++)
             if (abilityCooldowns[i] > 0) abilityCooldowns[i]--;
 
         updateAnimationStateServer(player);
 
-        if (animationPlayer != null) animationPlayer.tick(deltaSeconds);
-
-        // サーバー → クライアント同期
-        if (player instanceof ServerPlayer sp && animationPlayer != null) {
-            S2CIdentityAnimSyncPacket packet = new S2CIdentityAnimSyncPacket(sp.getUUID(), getPoseArrayForSync());
-            ModMessages.sendToAllClientsExcept(packet, sp);
+        if (animationPlayer != null) {
+            animationPlayer.tick(deltaSeconds);
+            lastBoneTransforms = animationPlayer.getCurrentPose();
         }
 
-        if (animationPlayer != null) lastBoneTransforms = animationPlayer.getCurrentPose();
+        // サーバー→クライアント同期
+        if (player instanceof ServerPlayer sp && animationPlayer != null) {
+            var packet = new S2CIdentityAnimSyncPacket(sp.getUUID(), getPoseArrayForSync());
+            ModMessages.sendToAllClientsExcept(packet, sp);
+        }
     }
 
     public void tickClient(float deltaSeconds) {
-        if (animationPlayer == null) return;
-        animationPlayer.tick(deltaSeconds);
-        lastBoneTransforms = animationPlayer.getCurrentPose();
+        if (animationPlayer != null) {
+            animationPlayer.tick(deltaSeconds);
+            lastBoneTransforms = animationPlayer.getCurrentPose();
+        }
     }
 
-    /**------------------------
-     * Render (render 側では tickClient を呼ばず補間のみ)
-     ------------------------*/
-    /**------------------------
-     * Render (Entity用)
-     ------------------------*/
+    /* ---------------------------
+       レンダリング補間
+       --------------------------- */
     public void renderInterpolated(BaseMonsterEntity entity, float partialTicks,
                                    PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-        if (animationPlayer == null || entity == null || entity.getModelRoot() == null) return;
+        if (entity == null || animationPlayer == null) return;
+        entity.ensureModelInitialized();
+        ModelPart root = entity.getModelRoot();
+        if (root == null) return;
 
         poseStack.pushPose();
-
         Map<String, Map<String, Vector3f>> interpolatedPose = AnimationPlayerTemplate.blend(
                 lastBoneTransforms, animationPlayer.getCurrentPose(), partialTicks
         );
 
         for (var entry : boneMap.entrySet()) {
-            var proxy = entry.getValue();
             var transforms = interpolatedPose.get(entry.getKey());
-            if (transforms != null) AnimationPlayerTemplate.applyPoseToProxy(proxy, transforms);
+            if (transforms != null)
+                AnimationPlayerTemplate.applyPoseToProxy(entry.getValue(), transforms);
         }
 
-        // ModelPart 描画
-        VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutout(getTexture()));
-        entity.getModelRoot().render(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, 1f);
-
+        VertexConsumer vc = buffer.getBuffer(RenderType.entityCutout(getTexture()));
+        root.render(poseStack, vc, packedLight, OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, 1f);
         poseStack.popPose();
     }
 
-    /**------------------------
-     *  getTexture 操作
-     ------------------------*/
     @Nullable
     public ResourceLocation getTexture() {
-        // Identityごとに適切なテクスチャを返す
         return new ResourceLocation(MonsterMod.MOD_ID, "textures/entity/mimic.png");
     }
 
-    /**------------------------
-     * Animation 操作
-     ------------------------*/
+    /* ---------------------------
+       アニメーション管理
+       --------------------------- */
     protected void updateAnimationStateServer(Player player) {
         boolean isMoving = player.getDeltaMovement().lengthSqr() > 0.01;
         boolean attackPressed = consumeAttack();
@@ -159,22 +180,27 @@ public class BaseMonsterIdentity {
 
         String next = "idle";
         boolean nextLoop = true;
+
         if (dodgePressed) { next = "dodge"; nextLoop = false; }
         else if (attackPressed) { next = "attack"; nextLoop = false; }
-        else if (skillPressed >= 0) { next = "skill_" + (skillPressed + 1); nextLoop = false; }
-        else if (isMoving) { next = "walk"; nextLoop = true; }
+        else if (skillPressed >= 0) { next = "skill_" + (skillPressed+1); nextLoop = false; }
+        else if (isMoving) { next = "walk"; }
 
         if (!next.equals(currentState) || loop != nextLoop)
-            playAnimation(next, nextLoop, getAnimationTime(), 0.1f);
+            playAnimation(next, nextLoop, getAnimationTime(), 0.15f);
     }
 
     public void playAnimation(String state, boolean loop, float startTime, float blendTime) {
         AnimationPlayerTemplate.AnimationClip clip = loadClip(state);
-        if (clip == null) return;
+        if (clip == null) {
+            MonsterMod.LOGGER.warn("[MonsterMod] Missing animation: " + state + " for " + id);
+            return;
+        }
 
-        AnimationPlayerTemplate.AnimationPlayer prev = animationPlayer;
-        AnimationPlayerTemplate.AnimationPlayer newPlayer = new AnimationPlayerTemplate.AnimationPlayer(clip);
-        if (prev != null && blendTime > 0f) newPlayer.blendFromPrevious(prev, blendTime);
+        var prev = animationPlayer;
+        var newPlayer = new AnimationPlayerTemplate.AnimationPlayer(clip);
+        if (prev != null && blendTime > 0f)
+            newPlayer.blendFromPrevious(prev, blendTime);
 
         newPlayer.setLoop(loop);
         newPlayer.setTime(startTime);
@@ -183,35 +209,42 @@ public class BaseMonsterIdentity {
         this.loop = loop;
     }
 
-    public float getAnimationTime() { return animationPlayer != null ? animationPlayer.getTime() : 0f; }
+    public float getAnimationTime() {
+        return animationPlayer != null ? animationPlayer.getTime() : 0f;
+    }
 
+    @Nullable
     protected AnimationPlayerTemplate.AnimationClip loadClip(String name) {
         try {
             String[] parts = id.split(":");
             String modid = parts.length > 1 ? parts[0] : MonsterMod.MOD_ID;
             String path = parts.length > 1 ? parts[1] : parts[0];
+            ResourceLocation res = new ResourceLocation(modid, "animations/" + path + "/" + name + ".json");
 
-            AnimationPlayerTemplate player = AnimationPlayerTemplate.load(
-                    new ResourceLocation(modid, "animations/" + path + "/" + name)
-            );
-            if (player == null) return null;
-
-            AnimationPlayerTemplate.Animation anim = player.getAnimation(name);
-            if (anim == null) return null;
-
+            AnimationPlayerTemplate player = AnimationPlayerTemplate.load(res);
+            if (player == null) {
+                MonsterMod.LOGGER.warn("[MonsterMod] Failed to load animation file: " + res);
+                return null;
+            }
+            var anim = player.getAnimation(name);
+            if (anim == null) {
+                MonsterMod.LOGGER.warn("[MonsterMod] Animation node not found: " + name + " in " + res);
+                return null;
+            }
             return new AnimationPlayerTemplate.AnimationClip(anim);
         } catch (Exception e) {
-            MonsterMod.LOGGER.warn("Failed to load animation: " + name + " for " + id, e);
+            MonsterMod.LOGGER.error("[MonsterMod] Exception loading animation " + name + " for " + id, e);
             return null;
         }
     }
 
-    /**------------------------
-     * サーバー同期用 Pose
-     ------------------------*/
+    /* ---------------------------
+       同期処理
+       --------------------------- */
     public Map<String, float[]> getPoseArrayForSync() {
         Map<String, float[]> map = new HashMap<>();
         if (animationPlayer == null) return map;
+
         for (String bone : boneMap.keySet()) {
             var transforms = lastBoneTransforms.get(bone);
             if (transforms == null) continue;
@@ -227,49 +260,42 @@ public class BaseMonsterIdentity {
         for (var entry : serverPose.entrySet()) {
             float[] arr = entry.getValue();
             if (arr == null || arr.length < 6) continue;
-            Map<String, Vector3f> t = Map.of(
+            Map<String, Vector3f> target = Map.of(
                     "position", new Vector3f(arr[0], arr[1], arr[2]),
                     "rotation", new Vector3f(arr[3], arr[4], arr[5])
             );
-            Map<String, Vector3f> prev = lastBoneTransforms.getOrDefault(entry.getKey(), t);
-            lastBoneTransforms.put(entry.getKey(), AnimationPlayerTemplate.lerpPose(prev, t, 0.3f));
+            Map<String, Vector3f> prev = lastBoneTransforms.getOrDefault(entry.getKey(), target);
+            lastBoneTransforms.put(entry.getKey(), AnimationPlayerTemplate.lerpPose(prev, target, 0.25f));
         }
     }
 
-    /**------------------------
-     * 入力ペンディング管理
-     ------------------------*/
+    /* ---------------------------
+       入力処理 / NBT保存
+       --------------------------- */
     public void setPendingAttack(boolean attack) { this.pendingAttack = attack; }
     public void setPendingDodge(boolean dodge) { this.pendingDodge = dodge; }
     public void setPendingSkill(int skillIndex) { this.pendingSkill = skillIndex; }
     public void setPendingMenu(boolean menu) { this.pendingMenu = menu; }
-    public boolean consumeAttack() { boolean val = pendingAttack; pendingAttack = false; return val; }
-    public boolean consumeDodge() { boolean val = pendingDodge; pendingDodge = false; return val; }
-    public int consumeSkill() { int val = pendingSkill; pendingSkill = -1; return val; }
-    public boolean consumeMenu() { boolean val = pendingMenu; pendingMenu = false; return val; }
 
-    public void handleClientInput(Player player, int skillIndex) {
-        if (skillIndex >= 0) setPendingSkill(skillIndex);
-    }
+    public boolean consumeAttack() { boolean v = pendingAttack; pendingAttack = false; return v; }
+    public boolean consumeDodge() { boolean v = pendingDodge; pendingDodge = false; return v; }
+    public int consumeSkill() { int v = pendingSkill; pendingSkill = -1; return v; }
+    public boolean consumeMenu() { boolean v = pendingMenu; pendingMenu = false; return v; }
 
-    public void handleMenuInput(Player player) {
-        setPendingMenu(true);
-        MonsterMod.LOGGER.info("Menu input handled for player: " + player.getName().getString());
-    }
+    public void handleClientInput(Player player, int skillIndex) { if (skillIndex >= 0) setPendingSkill(skillIndex); }
+    public void handleMenuInput(Player player) { setPendingMenu(true); }
 
-    public void onOpenMenu(Player player) { }//将来GUIを開く処理を実装可能
-
-    /**------------------------
-     * NBT 保存
-     ------------------------*/
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
         tag.putInt("cooldownCount", abilityCooldowns.length);
-        for (int i = 0; i < abilityCooldowns.length; i++) tag.putInt("cd_" + i, abilityCooldowns[i]);
+        for (int i = 0; i < abilityCooldowns.length; i++)
+            tag.putInt("cd_" + i, abilityCooldowns[i]);
+
         tag.putString("state", currentState);
         tag.putBoolean("loop", loop);
-        if (animationPlayer != null) tag.putFloat("anim_time", animationPlayer.getTime());
+        if (animationPlayer != null)
+            tag.putFloat("anim_time", animationPlayer.getTime());
         return tag;
     }
 
@@ -281,6 +307,7 @@ public class BaseMonsterIdentity {
         String state = tag.getString("state");
         boolean loopSaved = tag.getBoolean("loop");
         float savedTime = tag.getFloat("anim_time");
+
         playAnimation(state.isEmpty() ? "idle" : state, loopSaved, savedTime, 0f);
     }
 }

@@ -167,38 +167,45 @@ public class AnimationPlayerTemplate {
     public static AnimationPlayerTemplate load(ResourceLocation loc) {
         AnimationPlayerTemplate player = new AnimationPlayerTemplate();
         try {
-            String path = "assets/" + loc.getNamespace() + "/animations/" + loc.getPath() + ".json";
-            InputStreamReader reader = new InputStreamReader(
-                    Objects.requireNonNull(AnimationPlayerTemplate.class.getClassLoader().getResourceAsStream(path)),
-                    StandardCharsets.UTF_8
-            );
-            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
-            JsonObject anims = root.has("animations") ? root.getAsJsonObject("animations") : root;
+            // Forge標準のResourceManagerを使用
+            var optional = net.minecraft.client.Minecraft.getInstance()
+                    .getResourceManager()
+                    .getResource(loc);
+            if (optional.isEmpty()) {
+                System.err.println("[MonsterMod] Animation resource not found: " + loc);
+                return player;
+            }
 
-            for (Map.Entry<String, JsonElement> entry : anims.entrySet()) {
-                String name = entry.getKey();
-                try {
-                    JsonObject obj = entry.getValue().getAsJsonObject();
-                    float len = obj.has("length") ? obj.get("length").getAsFloat() : 1f;
-                    Animation anim = new Animation(name, len);
+            try (InputStreamReader reader = new InputStreamReader(optional.get().open(), StandardCharsets.UTF_8)) {
+                JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+                JsonObject anims = root.has("animations") ? root.getAsJsonObject("animations") : root;
 
-                    JsonObject bones = obj.getAsJsonObject("bones");
-                    for (Map.Entry<String, JsonElement> boneEntry : bones.entrySet()) {
-                        String boneName = boneEntry.getKey();
-                        JsonObject boneObj = boneEntry.getValue().getAsJsonObject();
-                        BoneTrack track = new BoneTrack();
+                for (Map.Entry<String, JsonElement> entry : anims.entrySet()) {
+                    String name = entry.getKey();
+                    try {
+                        JsonObject obj = entry.getValue().getAsJsonObject();
+                        float len = obj.has("length") ? obj.get("length").getAsFloat() : 1f;
+                        Animation anim = new Animation(name, len);
 
-                        if (boneObj.has("rotation")) readKeyframes(boneObj.getAsJsonArray("rotation"), track.rotation);
-                        if (boneObj.has("position")) readKeyframes(boneObj.getAsJsonArray("position"), track.position);
-                        if (boneObj.has("scale")) readKeyframes(boneObj.getAsJsonArray("scale"), track.scale);
+                        JsonObject bones = obj.getAsJsonObject("bones");
+                        for (Map.Entry<String, JsonElement> boneEntry : bones.entrySet()) {
+                            String boneName = boneEntry.getKey();
+                            JsonObject boneObj = boneEntry.getValue().getAsJsonObject();
+                            BoneTrack track = new BoneTrack();
 
-                        anim.bones.put(boneName, track);
+                            if (boneObj.has("rotation")) readKeyframes(boneObj.getAsJsonArray("rotation"), track.rotation);
+                            if (boneObj.has("position")) readKeyframes(boneObj.getAsJsonArray("position"), track.position);
+                            if (boneObj.has("scale")) readKeyframes(boneObj.getAsJsonArray("scale"), track.scale);
+
+                            anim.bones.put(boneName, track);
+                        }
+                        player.animations.put(name, anim);
+                    } catch (Exception e) {
+                        System.err.println("[MonsterMod] Failed to parse animation: " + name + " -> " + e);
                     }
-                    player.animations.put(name, anim);
-                } catch (Exception e) {
-                    System.err.println("[MonsterMod] Failed to parse animation: " + name + " -> " + e);
                 }
             }
+
         } catch (Exception e) {
             System.err.println("[MonsterMod] Failed to load animation file: " + loc + " -> " + e);
         }
