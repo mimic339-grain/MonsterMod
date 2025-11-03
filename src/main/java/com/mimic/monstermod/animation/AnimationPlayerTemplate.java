@@ -56,7 +56,10 @@ public class AnimationPlayerTemplate {
         private float time = 0f;
         private boolean loop = true;
         private Map<String, Map<String, Vector3f>> currentPose = new HashMap<>();
-
+        // 現在再生中のアニメーション名（clipがnullなら "none"）
+        public String getCurrentAnimationName() {
+            return (clip != null && clip.animation != null) ? clip.animation.name : "none";
+        }
         public AnimationPlayer(AnimationClip clip) { this.clip = clip; }
 
         /** 秒単位でtick */

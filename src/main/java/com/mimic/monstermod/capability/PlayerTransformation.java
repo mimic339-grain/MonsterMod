@@ -1,20 +1,25 @@
 package com.mimic.monstermod.capability;
 
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.entity.ModEntitieType;
+import com.mimic.monstermod.entity.monster.MimicEntity;
+import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
+import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * PlayerTransformation 完全版
- * - BaseMonsterIdentity + AnimationPlayerTemplate + BaseMonsterEntity に対応
- * - 入力・アニメーションはすべて BaseMonsterIdentity に委譲
- * - サーバー／クライアント同期を完全サポート
+ * PlayerTransformation 完全版（YSMMOD方式・Identity同期改良）
+ *
+ * - Entity生成前にIdentityをattachし、描画タイミングのズレを完全解消
+ * - サーバー・クライアント双方で確実にIdentityが結びついた状態を維持
  */
 public class PlayerTransformation {
 
@@ -32,70 +37,125 @@ public class PlayerTransformation {
     @Nullable public BaseMonsterIdentity getIdentity() { return identity; }
     @Nullable public BaseMonsterEntity getEntity() { return entity; }
     public void setAbilitySlotCount(int count) { this.abilitySlotCount = count; }
-    public void setTransformed(boolean transformed) {
-        this.isTransformed = transformed;
-    }
+    public void setTransformed(boolean transformed) { this.isTransformed = transformed; }
+    public void setTransformedMobId(@Nullable ResourceLocation mobId) { this.transformedMobId = mobId; }
 
-    public void setTransformedMobId(@Nullable ResourceLocation mobId) {
-        this.transformedMobId = mobId;
-    }
     // -----------------------------
-// Tick統合（サーバ／クライアント両方）
-// -----------------------------
+    // Tick
+    // -----------------------------
     public void tick(Player player, float deltaSeconds) {
         if (!isTransformed || identity == null) return;
         identity.tick(player, deltaSeconds);
     }
 
     // -----------------------------
-    // Transformation
+    // 変身開始
     // -----------------------------
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (isTransformed) return;
 
         this.isTransformed = true;
         this.transformedMobId = mobId;
+
+        // Identity生成
         this.identity = new BaseMonsterIdentity(mobId, abilitySlotCount);
-
-        // 描画用Entityはまだ作らない
-        this.entity = null;
-        identity.setEntity(null);
-
-        // 初期アニメーション
         identity.playAnimation("idle", true, 0f, 0f);
+
+        Level level = player.level();
+
+        if (!level.isClientSide) {
+            // -----------------------------
+            // サーバー側
+            // -----------------------------
+            MimicEntity newEntity = new MimicEntity(ModEntitieType.MIMIC.get(), level);
+
+            // ✅ 先にIdentityをattach（spawn前）
+            attachEntity(newEntity);
+
+            // 座標セット後にspawn
+            newEntity.setPos(player.getX(), player.getY(), player.getZ());
+            level.addFreshEntity(newEntity);
+
+            MonsterMod.LOGGER.info("[PlayerTransformation] Spawned and attached mimic on server side: {}", newEntity.getUUID());
+        } else {
+            // -----------------------------
+            // クライアント側
+            // -----------------------------
+            ensureClientEntity();
+        }
 
         syncToClient(player);
     }
 
+    // -----------------------------
+    // 変身解除
+    // -----------------------------
     public void stopTransformation(Player player) {
         if (!isTransformed) return;
-
         this.isTransformed = false;
         this.transformedMobId = null;
+
         if (identity != null) identity.setEntity(null);
         this.identity = null;
+
+        if (entity != null) {
+            entity.remove(BaseMonsterEntity.RemovalReason.DISCARDED);
+            MonsterMod.LOGGER.info("[PlayerTransformation] Entity removed: {}", entity);
+        }
         this.entity = null;
 
         syncToClient(player);
     }
 
     // -----------------------------
-    // Entity連携
+    // Entity attach
     // -----------------------------
     public void attachEntity(BaseMonsterEntity entity) {
         this.entity = entity;
-        if (identity != null) identity.setEntity(entity);
+        if (identity != null) {
+            entity.ensureModelInitialized();     // モデル初期化
+            identity.setEntity(entity);
+            identity.autoInitBoneMap(entity);    // BoneMap 初期化
+            entity.setIdentity(identity);        // Renderer参照用
+            MonsterMod.LOGGER.info("[attachEntity] Identity & model attached to entity: {}", entity.getType().toShortString());
+        } else {
+            MonsterMod.LOGGER.warn("[attachEntity] Tried to attach entity but identity is null");
+        }
     }
 
     // -----------------------------
-    // Identity 入力委譲
+    // クライアント用Entity生成
+    // -----------------------------
+    private void ensureClientEntity() {
+        if (entity == null && identity != null) {
+            Level clientLevel = Minecraft.getInstance().level;
+            if (clientLevel == null) return;
+
+            MimicEntity clientEntity = new MimicEntity(ModEntitieType.MIMIC.get(), clientLevel);
+            clientEntity.setPos(
+                    Minecraft.getInstance().player.getX(),
+                    Minecraft.getInstance().player.getY(),
+                    Minecraft.getInstance().player.getZ()
+            );
+
+            // ✅ Identityを先にattach
+            attachEntity(clientEntity);
+
+            // ✅ その後すぐにワールドに追加（RendererがIdentityを即参照可能）
+            clientLevel.addFreshEntity(clientEntity);
+
+            // ✅ アニメーション再生はspawn後でもOK
+            identity.playAnimation("idle", true, 0f, 0f);
+
+            MonsterMod.LOGGER.info("[ensureClientEntity] Client mimic entity spawned & identity linked: {}", clientEntity.getUUID());
+        }
+    }
+
+    // -----------------------------
+    // 入力委譲
     // -----------------------------
     public void handleSkillInput(int skillIndex) {
         if (identity != null) identity.handleClientInput(null, skillIndex);
-    }
-
-    public void setPendingAttack(boolean attack) {
-        if (identity != null) identity.setPendingAttack(attack);
     }
 
     public void setPendingDodge(boolean dodge) {
@@ -126,8 +186,8 @@ public class PlayerTransformation {
         if (isTransformed && transformedMobId != null) {
             this.identity = new BaseMonsterIdentity(transformedMobId, abilitySlotCount);
             if (tag.contains("identity")) identity.deserializeNBT(tag.getCompound("identity"));
-            identity.setEntity(null);
             identity.playAnimation("idle", true, 0f, 0f);
+            ensureClientEntity();
         } else {
             this.identity = null;
             this.entity = null;
@@ -135,10 +195,11 @@ public class PlayerTransformation {
     }
 
     // -----------------------------
-    // Client Sync（サーバー → クライアント）
+    // クライアント同期
     // -----------------------------
     public void syncToClient(Player player) {
-        if (!(player instanceof ServerPlayer sp)) return;
-        ModMessages.sendToPlayer(new S2CTransformSyncPacket(player.getUUID(), serializeNBT()), sp);
+        if (player instanceof ServerPlayer sp) {
+            ModMessages.sendToPlayer(new S2CTransformSyncPacket(player.getUUID(), serializeNBT()), sp);
+        }
     }
 }

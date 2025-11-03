@@ -1,50 +1,60 @@
 package com.mimic.monstermod.entity;
 
+import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.variable.entity.IMonsterData;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
-import net.minecraft.client.model.geom.ModelPart;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 完全版 BaseMonsterEntity
- * - BaseMonsterIdentity / AnimationPlayerTemplate (YSM方式) 互換
- * - 描画用 ModelPart root を提供
+ * BaseMonsterEntity 完全版（GeoJSONモデル対応）
+ *
+ * - 描画専用ダミーEntity
+ * - BaseMonsterIdentity / AnimationPlayerTemplate 互換
+ * - ensureModelInitialized()でGeoJSONモデル自動読み込み
  */
 public abstract class BaseMonsterEntity extends BaseEntity {
 
     @Nullable
     private BaseMonsterIdentity identity;
 
-    // 描画モデルの root (Blockbench 等で定義)
+    // 描画モデル root
     protected ModelPart modelRoot;
 
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
 
-        // Client 側でモデル生成
         if (level.isClientSide) {
-            this.modelRoot = createModel();
+            ensureModelInitialized(); // ★ 起動時に初期化
         }
     }
 
-    /** Identity 用 getter */
+    /** Identity getter */
     @Nullable
     public BaseMonsterIdentity getIdentity() {
         return identity;
     }
 
-    /** Identity セット */
+    /** Identity setter */
     public void setIdentity(@Nullable BaseMonsterIdentity identity) {
         this.identity = identity;
-        if (identity != null) identity.autoInitBoneMap(this);
+        if (identity != null) {
+            MonsterMod.LOGGER.info("[BaseMonsterEntity] Identity attached: " + identity.getId());
+            identity.setEntity(this);
+            identity.autoInitBoneMap(this);
+            ensureModelInitialized(); // モデルも確実にロード
+        } else {
+            MonsterMod.LOGGER.warn("[BaseMonsterEntity] Identity cleared");
+        }
     }
 
     /** 描画用モデル root */
@@ -53,8 +63,21 @@ public abstract class BaseMonsterEntity extends BaseEntity {
         return modelRoot;
     }
 
-    /** クライアント専用: モデル生成 */
-    protected abstract ModelPart createModel();
+    /** クライアント専用: モデル生成（必要ならサブクラスで上書き） */
+    protected ModelPart createModel() {
+        // Entityクラス名から自動的にモデル名を決定
+        String modelName = this.getType().toShortString().toLowerCase();
+        ResourceLocation geoLoc = new ResourceLocation(MonsterMod.MOD_ID, "models/" + modelName + ".geo.json");
+        MonsterMod.LOGGER.info("[MonsterMod] createModel() -> " + geoLoc);
+
+        ModelPart root = BaseMonsterIdentity.generateModelFromGeoJSON(geoLoc);
+        if (root == null) {
+            MonsterMod.LOGGER.error("[MonsterMod] Failed to load GeoJSON model: " + geoLoc);
+        } else {
+            MonsterMod.LOGGER.info("[MonsterMod] Model loaded successfully. Parts: " + root.getAllParts().count());
+        }
+        return root;
+    }
 
     // -----------------------------
     // Tick
@@ -63,21 +86,21 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     public void tick() {
         super.tick();
 
-        // サーバー側: CapabilityやクールダウンTick
+        // サーバー側: Capability やクールダウン Tick
         if (!level().isClientSide) {
             IMonsterData data = getMonsterData();
             if (data != null) data.tick();
         }
 
-        // クライアント側: IdentityアニメーションTick
+        // クライアント側: Identity アニメーション Tick
         if (level().isClientSide && identity != null) {
-            float delta = 1f / 20f; // 1tick=1/20秒
+            float delta = 1f / 20f;
             identity.tickClient(delta);
         }
     }
 
     // -----------------------------
-    // Capability取得
+    // Capability 取得
     // -----------------------------
     @Nullable
     public IMonsterData getMonsterData() {
@@ -85,12 +108,11 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     }
 
     // -----------------------------
-    // NBT保存/復元
+    // NBT 保存/復元
     // -----------------------------
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-
         if (identity != null) tag.put("IdentityData", identity.serializeNBT());
 
         IMonsterData data = getMonsterData();
@@ -103,7 +125,6 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-
         if (identity != null && tag.contains("IdentityData")) {
             identity.deserializeNBT(tag.getCompound("IdentityData"));
         }
@@ -124,10 +145,20 @@ public abstract class BaseMonsterEntity extends BaseEntity {
 
     /** クライアント専用: モデルが未生成なら生成 */
     public void ensureModelInitialized() {
-        if (modelRoot == null && level().isClientSide) {
+        if (!level().isClientSide) return;
+        if (modelRoot == null) {
+            MonsterMod.LOGGER.info("[MonsterMod] ensureModelInitialized() called for " + this.getType().toShortString());
             modelRoot = createModel();
+            if (modelRoot == null) {
+                MonsterMod.LOGGER.error("[MonsterMod] ensureModelInitialized: modelRoot is still null!");
+            } else {
+                MonsterMod.LOGGER.info("[MonsterMod] Model root successfully created with parts: " + modelRoot.getAllParts().count());
+            }
+        } else {
+            MonsterMod.LOGGER.debug("[MonsterMod] ensureModelInitialized() skipped: already initialized");
         }
     }
+
     // -----------------------------
     // 属性生成ユーティリティ
     // -----------------------------
