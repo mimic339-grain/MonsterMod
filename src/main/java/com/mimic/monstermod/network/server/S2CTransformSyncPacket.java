@@ -1,6 +1,8 @@
 package com.mimic.monstermod.network.server;
 
+import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
@@ -48,11 +50,34 @@ public class S2CTransformSyncPacket {
 
             player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
-                        // 変身NBTを適用（能力クールタイム・装備など）
-                        transformation.deserializeNBT(player, nbt); // Player 引数を追加
+                        // --- ① NBT反映（変身データ読み込み） ---
+                        transformation.deserializeNBT(player, nbt);
 
-                        // 描画用Identityの取得（renderMixinで描画前にPlayerからコピー）
+                        // --- ② Identity取得 ---
                         BaseMonsterIdentity identity = transformation.getIdentity();
+                        if (identity == null) return;
+
+                        try {
+                            // --- ③ Entity 確保（なければ生成） ---
+                            BaseMonsterEntity entity = identity.getEntity();
+                            if (entity == null) {
+                                // identity がクライアントで自前 entity を作れるなら作らせる（ensureClientEntity は public）
+                                identity.ensureClientEntity(player);
+                                entity = identity.getEntity();
+                            }
+
+                            // --- ④ モデル初期化（Entity 側で実行） ---
+                            if (entity != null) {
+                                entity.ensureModelInitialized();
+                                // BoneMap が未初期化なら明示的に初期化（冪等）
+                                identity.autoInitBoneMap(entity);
+                            } else {
+                                // entity が確保できなかった場合はログだけ出しておく
+                                MonsterMod.LOGGER.warn("[S2CTransformSyncPacket] Could not obtain client entity for identity {}", identity.getId());
+                            }
+                        } catch (Exception e) {
+                            MonsterMod.LOGGER.error("[S2CTransformSyncPacket] Identity initialization failed", e);
+                        }
                     });
         });
         ctx.get().setPacketHandled(true);
@@ -65,8 +90,7 @@ public class S2CTransformSyncPacket {
         player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> tag.merge(transformation.serializeNBT()));
 
-        // ここでは回転情報は含めない（描画前コピーに任せる）
-
+        // 回転情報は描画前コピーに任せる
         return tag;
     }
 }

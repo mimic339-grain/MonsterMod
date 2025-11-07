@@ -29,7 +29,7 @@ public class BaseMonsterIdentity {
     protected final String id;
     @Nullable protected BaseMonsterEntity entity;
     @Nullable public AnimationPlayerTemplate.AnimationPlayer animationPlayer;
-    protected final Map<String, AnimationPlayerTemplate.ModelPartProxy> boneMap = new HashMap<>();
+    public final Map<String, AnimationPlayerTemplate.ModelPartProxy> boneMap = new HashMap<>();
     protected Map<String, Map<String, Vector3f>> lastBoneTransforms = new HashMap<>();
     public String currentState = "idle";
     public boolean loop = true;
@@ -108,26 +108,74 @@ public class BaseMonsterIdentity {
     public static ModelPart generateModelFromGeoJSON(ResourceLocation geoLoc) {
         try {
             var optRes = net.minecraft.client.Minecraft.getInstance().getResourceManager().getResource(geoLoc);
-            if (optRes.isEmpty()) { MonsterMod.LOGGER.warn("[MonsterMod] GeoJSON not found: " + geoLoc); return null; }
+            if (optRes.isEmpty()) {
+                MonsterMod.LOGGER.warn("[MonsterMod] GeoJSON not found: " + geoLoc);
+                return null;
+            }
+
             try (InputStreamReader reader = new InputStreamReader(optRes.get().open(), StandardCharsets.UTF_8)) {
                 JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
                 JsonArray bones = root.has("minecraft:geometry") ?
-                        root.getAsJsonArray("minecraft:geometry").get(0).getAsJsonObject().getAsJsonArray("bones")
+                        root.getAsJsonArray("minecraft:geometry")
+                                .get(0).getAsJsonObject().getAsJsonArray("bones")
                         : root.getAsJsonArray("bones");
+
                 if (bones == null || bones.size() == 0) return null;
+
+                // ✅ rootPart をここで作成して最後まで有効にする
                 ModelPart rootPart = new ModelPart(Collections.emptyList(), new HashMap<>());
                 Map<String, ModelPart> boneMap = new HashMap<>();
-                for (JsonElement e : bones) parseBoneRecursive(e.getAsJsonObject(), boneMap);
+
+                for (JsonElement e : bones)
+                    parseBoneRecursive(e.getAsJsonObject(), boneMap);
+
                 try {
                     var field = ModelPart.class.getDeclaredField("children");
                     field.setAccessible(true);
                     Map<String, ModelPart> map = (Map<String, ModelPart>) field.get(rootPart);
                     for (var entry : boneMap.entrySet()) map.put(entry.getKey(), entry.getValue());
-                } catch (Exception ex) { MonsterMod.LOGGER.error("[MonsterMod] Failed to attach bones to root", ex); }
-                return rootPart;
+                } catch (Exception ex) {
+                    MonsterMod.LOGGER.error("[MonsterMod] Failed to attach bones to root", ex);
+                }
+
+                // --- debug: count total cubes in the generated model ---
+                try {
+                    var field = ModelPart.class.getDeclaredField("cubes"); // もしくは "cubeList" の場合もある
+                    field.setAccessible(true);
+                    int totalCubes = 0;
+                    int totalBones = 0;
+                    Deque<ModelPart> queue = new ArrayDeque<>();
+                    queue.add(rootPart);
+
+                    while (!queue.isEmpty()) {
+                        ModelPart p = queue.poll();
+                        totalBones++;
+                        Object cubes = field.get(p);
+                        if (cubes instanceof Collection<?> coll) totalCubes += coll.size();
+
+                        var childField = ModelPart.class.getDeclaredField("children");
+                        childField.setAccessible(true);
+                        Map<String, ModelPart> children = (Map<String, ModelPart>) childField.get(p);
+                        if (children != null) queue.addAll(children.values());
+                    }
+
+                    MonsterMod.LOGGER.info("[MonsterMod] Generated model from " + geoLoc +
+                            " -> Bones: " + totalBones + ", Cubes: " + totalCubes);
+                } catch (Exception ex) {
+                    MonsterMod.LOGGER.error("[MonsterMod] Cube count debug failed", ex);
+                }
+                // --- end debug ---
+
+                return rootPart; // ✅ 最後に返す
+
             }
-        } catch (Exception ex) { MonsterMod.LOGGER.error("[MonsterMod] Failed to parse GeoJSON: " + geoLoc, ex); return null; }
+
+        } catch (Exception ex) {
+            MonsterMod.LOGGER.error("[MonsterMod] Failed to parse GeoJSON: " + geoLoc, ex);
+            return null;
+        }
     }
+
 
     /** BoneMap初期化 */
     public void autoInitBoneMap(@Nullable BaseMonsterEntity entity) {
