@@ -16,21 +16,22 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * PlayerTransformation 完全版（YSMMOD方式・Identity同期改良）
+ * PlayerTransformation — 完全版 YSMMOD対応
  *
- * - Entity生成前にIdentityをattachし、描画タイミングのズレを完全解消
- * - サーバー・クライアント双方で確実にIdentityが結びついた状態を維持
+ * - Identity / Entity / BoneMap の初期化を完全保証
+ * - アニメーション呼び出しも安全に行う
+ * - NBT 保存/復元・クライアント同期対応
  */
 public class PlayerTransformation {
 
     private boolean isTransformed = false;
     @Nullable private ResourceLocation transformedMobId = null;
     @Nullable private BaseMonsterIdentity identity = null;
-    private int abilitySlotCount = 3;
     @Nullable private BaseMonsterEntity entity = null;
+    private int abilitySlotCount = 3;
 
     // -----------------------------
-    // Getter / Setter
+    // Getter
     // -----------------------------
     public boolean isTransformed() { return isTransformed; }
     @Nullable public ResourceLocation getMobId() { return transformedMobId; }
@@ -54,34 +55,25 @@ public class PlayerTransformation {
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (isTransformed) return;
 
+        MonsterMod.LOGGER.debug("[PlayerTransformation] startTransformation called for {}", player.getName().getString());
+
         this.isTransformed = true;
         this.transformedMobId = mobId;
-
-        // Identity生成
         this.identity = new BaseMonsterIdentity(mobId, abilitySlotCount);
+
+        // アニメーション初期化
         identity.playAnimation("idle", true, 0f, 0f);
 
         Level level = player.level();
 
         if (!level.isClientSide) {
-            // -----------------------------
-            // サーバー側
-            // -----------------------------
             MimicEntity newEntity = new MimicEntity(ModEntitieType.MIMIC.get(), level);
-
-            // ✅ 先にIdentityをattach（spawn前）
-            attachEntity(newEntity);
-
-            // 座標セット後にspawn
             newEntity.setPos(player.getX(), player.getY(), player.getZ());
+            attachEntity(newEntity);
             level.addFreshEntity(newEntity);
-
-            MonsterMod.LOGGER.info("[PlayerTransformation] Spawned and attached mimic on server side: {}", newEntity.getUUID());
+            MonsterMod.LOGGER.info("[PlayerTransformation] Server entity spawned & Identity attached: {}", newEntity.getUUID());
         } else {
-            // -----------------------------
-            // クライアント側
-            // -----------------------------
-            ensureClientEntity();
+            ensureClientEntity(player);
         }
 
         syncToClient(player);
@@ -92,6 +84,9 @@ public class PlayerTransformation {
     // -----------------------------
     public void stopTransformation(Player player) {
         if (!isTransformed) return;
+
+        MonsterMod.LOGGER.debug("[PlayerTransformation] stopTransformation called for {}", player.getName().getString());
+
         this.isTransformed = false;
         this.transformedMobId = null;
 
@@ -100,54 +95,45 @@ public class PlayerTransformation {
 
         if (entity != null) {
             entity.remove(BaseMonsterEntity.RemovalReason.DISCARDED);
-            MonsterMod.LOGGER.info("[PlayerTransformation] Entity removed: {}", entity);
+            entity = null;
         }
-        this.entity = null;
 
         syncToClient(player);
     }
 
     // -----------------------------
-    // Entity attach
+    // Entity attach / Identity attach
     // -----------------------------
     public void attachEntity(BaseMonsterEntity entity) {
+        MonsterMod.LOGGER.debug("[attachEntity] Attaching entity: {}", entity);
         this.entity = entity;
+
         if (identity != null) {
-            entity.ensureModelInitialized();     // モデル初期化
+            entity.ensureModelInitialized();
             identity.setEntity(entity);
-            identity.autoInitBoneMap(entity);    // BoneMap 初期化
-            entity.setIdentity(identity);        // Renderer参照用
-            MonsterMod.LOGGER.info("[attachEntity] Identity & model attached to entity: {}", entity.getType().toShortString());
-        } else {
-            MonsterMod.LOGGER.warn("[attachEntity] Tried to attach entity but identity is null");
+            if (identity.boneMap == null || identity.boneMap.isEmpty()) identity.autoInitBoneMap(entity);
+            entity.setIdentity(identity);
+            MonsterMod.LOGGER.info("[attachEntity] Identity attached to entity: {}", entity.getType().toShortString());
         }
     }
 
     // -----------------------------
-    // クライアント用Entity生成
+    // クライアント用 Entity 生成
     // -----------------------------
-    private void ensureClientEntity() {
-        if (entity == null && identity != null) {
-            Level clientLevel = Minecraft.getInstance().level;
-            if (clientLevel == null) return;
+    private void ensureClientEntity(Player player) {
+        if (entity != null || identity == null) return;
 
-            MimicEntity clientEntity = new MimicEntity(ModEntitieType.MIMIC.get(), clientLevel);
-            clientEntity.setPos(
-                    Minecraft.getInstance().player.getX(),
-                    Minecraft.getInstance().player.getY(),
-                    Minecraft.getInstance().player.getZ()
-            );
+        Level clientLevel = Minecraft.getInstance().level;
+        if (clientLevel == null) return;
 
-            // ✅ Identityを先にattach
-            attachEntity(clientEntity);
+        MimicEntity clientEntity = new MimicEntity(ModEntitieType.MIMIC.get(), clientLevel);
+        clientEntity.setPos(player.getX(), player.getY(), player.getZ());
 
-            // ✅ その後すぐにワールドに追加（RendererがIdentityを即参照可能）
-            clientLevel.addFreshEntity(clientEntity);
+        attachEntity(clientEntity);
+        clientLevel.addFreshEntity(clientEntity);
 
-            // ✅ アニメーション再生はspawn後でもOK
+        if (identity.getAnimationTime() <= 0f) {
             identity.playAnimation("idle", true, 0f, 0f);
-
-            MonsterMod.LOGGER.info("[ensureClientEntity] Client mimic entity spawned & identity linked: {}", clientEntity.getUUID());
         }
     }
 
@@ -167,7 +153,7 @@ public class PlayerTransformation {
     }
 
     // -----------------------------
-    // NBT保存/復元
+    // NBT保存 / 復元
     // -----------------------------
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
@@ -186,8 +172,8 @@ public class PlayerTransformation {
         if (isTransformed && transformedMobId != null) {
             this.identity = new BaseMonsterIdentity(transformedMobId, abilitySlotCount);
             if (tag.contains("identity")) identity.deserializeNBT(tag.getCompound("identity"));
-            identity.playAnimation("idle", true, 0f, 0f);
-            ensureClientEntity();
+            if (identity.getAnimationTime() <= 0f) identity.playAnimation("idle", true, 0f, 0f);
+            ensureClientEntity(player);
         } else {
             this.identity = null;
             this.entity = null;

@@ -14,5 +14,6 @@ public class ClientRenderRegister {
     @SubscribeEvent
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntitieType.MIMIC.get(), MimicRenderer::new);
+        MonsterMod.LOGGER.info("[ClientSetup] MimicRenderer registered");
     }
 }

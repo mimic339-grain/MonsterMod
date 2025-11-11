@@ -8,16 +8,21 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import net.minecraft.client.model.geom.ModelPart;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.lang.reflect.Field;
+import java.util.Map;
+
 /**
- * PlayerRenderer Mixin 完全Forge対応版
- * - LazyOptional対応（ifPresentのみ）
- * - 安全なnullチェックとメソッド互換処理
- * - 詳細ログ付き
+ * PlayerRenderer Mixin — 完全版 YSMMOD対応
+ *
+ * - Identity/Entity/BoneMap の安全初期化
+ * - renderInterpolated による正しい描画
+ * - 描画されない問題を回避
  */
 @Mixin(PlayerRenderer.class)
 public class PlayerRendererMixin {
@@ -31,93 +36,73 @@ public class PlayerRendererMixin {
                                 int packedLight,
                                 CallbackInfo ci) {
 
-        MonsterMod.LOGGER.trace("[PlayerRendererMixin] >>> render() called for {}", player.getName().getString());
-
-        // ForgeのLazyOptionalには ifPresentOrElse がないため、ifPresent を使用
         player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
 
-                    // --- 変身中チェック ---
-                    boolean transformed = false;
-                    try {
-                        // あなたのクラスに応じて変更（例: isActive(), hasIdentity() など）
-                        transformed = transformation.isTransformed();
-                    } catch (Throwable ignored) {
-                        MonsterMod.LOGGER.warn("[PlayerRendererMixin] transformation.isTransformed() not found, skipping check");
-                        transformed = true; // 安全のため true 扱い
-                    }
+                    if (!transformation.isTransformed()) return;
 
-                    if (!transformed) {
-                        MonsterMod.LOGGER.trace("[PlayerRendererMixin] Player '{}' is not transformed -> skip custom render", player.getName().getString());
+                    BaseMonsterIdentity identity = transformation.getIdentity();
+                    if (identity == null) {
+                        MonsterMod.LOGGER.warn("[PlayerRendererMixin] Identity is null for transformed player {}", player.getName().getString());
                         return;
                     }
 
-                    // --- Identity取得 ---
-                    BaseMonsterIdentity identity = null;
-                    try {
-                        identity = transformation.getIdentity();
-                    } catch (Throwable ignored) {
-                        MonsterMod.LOGGER.error("[PlayerRendererMixin] transformation.getIdentity() not found");
-                    }
-                    if (identity == null) return;
-
-                    MonsterMod.LOGGER.debug("[PlayerRendererMixin] Rendering transformed player '{}' as identity '{}'",
-                            player.getName().getString(), identity.getId());
-
-                    // --- Entity 確保 ---
                     BaseMonsterEntity entity = identity.getEntity();
                     if (entity == null) {
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] identity.getEntity() returned null, attempting ensureClientEntity...");
                         identity.ensureClientEntity(player);
                         entity = identity.getEntity();
                         if (entity == null) {
-                            MonsterMod.LOGGER.error("[PlayerRendererMixin] Failed to obtain client entity after ensureClientEntity()");
+                            MonsterMod.LOGGER.warn("[PlayerRendererMixin] Failed to spawn client entity for player {}", player.getName().getString());
                             return;
                         }
-                        MonsterMod.LOGGER.info("[PlayerRendererMixin] Client entity created successfully: {}", entity.getType().toShortString());
+                        MonsterMod.LOGGER.info("[PlayerRendererMixin] Client entity spawned: {}", entity.getUUID());
                     }
 
-                    // --- ModelRoot 初期化 ---
-                    if (entity.getModelRoot() == null) {
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] ModelRoot == null, calling ensureModelInitialized...");
-                        entity.ensureModelInitialized();
-                        if (entity.getModelRoot() == null) {
-                            MonsterMod.LOGGER.error("[PlayerRendererMixin] ModelRoot still null after ensureModelInitialized()");
-                            return;
-                        }
-                        MonsterMod.LOGGER.info("[PlayerRendererMixin] ModelRoot successfully initialized for {}", identity.getId());
-                    }
+                    // --- 回転同期 ---
+                    entity.setXRot(player.getXRot());
+                    entity.setYRot(player.getYRot());
+                    entity.yHeadRot = player.yHeadRot;
+                    entity.yBodyRot = player.yBodyRot;
 
-                    // --- BoneMap 初期化確認 ---
-                    boolean hasBoneMap = false;
-                    try {
-                        hasBoneMap = identity.boneMap != null && !identity.boneMap.isEmpty();
-                    } catch (Throwable ignored) {
-                        MonsterMod.LOGGER.warn("[PlayerRendererMixin] boneMap field not accessible in BaseMonsterIdentity");
-                    }
-
-                    if (!hasBoneMap) {
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] BoneMap empty -> autoInitBoneMap()");
+                    // --- モデル初期化 & BoneMap ---
+                    entity.ensureModelInitialized();
+                    if (identity.boneMap == null || identity.boneMap.isEmpty()) {
+                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] BoneMap empty, initializing for entity {}", entity);
                         identity.autoInitBoneMap(entity);
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] BoneMap initialized");
+                    }
+
+                    ModelPart root = entity.getModelRoot();
+                    if (root == null) {
+                        MonsterMod.LOGGER.warn("[PlayerRendererMixin] Model root is null for entity {}", entity);
+                        return;
+                    }
+
+                    // --- BoneMap vs ModelPart nameチェック (任意デバッグ) ---
+                    try {
+                        Field childrenField = ModelPart.class.getDeclaredField("children");
+                        childrenField.setAccessible(true);
+                        Map<String, ModelPart> children = (Map<String, ModelPart>) childrenField.get(root);
+                        for (String key : identity.boneMap.keySet()) {
+                            if (!children.containsKey(key)) {
+                                MonsterMod.LOGGER.warn("[PlayerRendererMixin] BoneMap key '{}' missing in ModelPart children", key);
+                            }
+                        }
+                    } catch (Exception e) {
+                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Error checking BoneMap vs ModelPart", e);
                     }
 
                     // --- 描画 ---
                     poseStack.pushPose();
-                    poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180f - player.getYHeadRot()));
-
                     try {
-                        MonsterMod.LOGGER.trace("[PlayerRendererMixin] Calling renderInterpolated() for identity '{}'", identity.getId());
                         identity.renderInterpolated(entity, partialTicks, poseStack, buffer, packedLight);
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] renderInterpolated() completed successfully");
                     } catch (Exception e) {
-                        MonsterMod.LOGGER.error("[PlayerRendererMixin] renderInterpolated() threw exception", e);
+                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Exception during renderInterpolated", e);
+                    } finally {
+                        poseStack.popPose();
                     }
 
-                    poseStack.popPose();
-
+                    // オリジナル PlayerRenderer 描画をスキップ
                     ci.cancel();
-                    MonsterMod.LOGGER.trace("[PlayerRendererMixin] <<< Cancelled default player render for {}", player.getName().getString());
                 });
     }
 }

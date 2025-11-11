@@ -9,13 +9,12 @@ import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;
 
 /**
-
- * MimicIdentity 完全版
- * * BaseMonsterIdentity を継承
- * * internalOpen による open/close 状態管理
- * * skill 押下で open ↔ close を切り替える
- * * attack 削除
- * * Player attach 時に自動的に Entity を生成
+ * MimicIdentity — 完全版
+ *
+ * - BaseMonsterIdentity を継承
+ * - internalOpen による open/close 状態管理
+ * - skill 押下で open ↔ close を切り替える
+ * - Player attach 時に自動的に Entity を生成・初期化
  */
 public class MimicIdentity extends BaseMonsterIdentity {
 
@@ -24,23 +23,24 @@ public class MimicIdentity extends BaseMonsterIdentity {
     @Nullable private Player attachedPlayer = null;
 
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
-        super(new ResourceLocation("monstermod", "mimic"), 1); // 能力スロット1
+        super(new ResourceLocation("monstermod", "mimic"), 1);
         setEntity(entity); // nullでもOK
     }
 
     /** ------------------------ Player attach ------------------------ */
     public void attachToPlayer(Player player) {
         this.attachedPlayer = player;
-        // attach時に自動生成
-        ensureClientEntity(player);
+        ensureClientEntity(player); // attach時に自動生成
     }
 
     @Override
     @Nullable
     protected BaseMonsterEntity createClientEntity(Player player) {
-        // クライアント専用 MimicEntity を生成（正しい EntityType を渡す）
         MimicEntity mimic = new MimicEntity(ModEntitieType.MIMIC.get(), player.level());
         mimic.setPos(player.getX(), player.getY(), player.getZ());
+        // モデル初期化して BoneMap を構築
+        mimic.ensureModelInitialized();
+        if (this.boneMap.isEmpty()) autoInitBoneMap(mimic);
         return mimic;
     }
 
@@ -49,11 +49,9 @@ public class MimicIdentity extends BaseMonsterIdentity {
     protected void updateAnimationStateServer(Player player) {
         boolean isMoving = player.getDeltaMovement().lengthSqr() > 0.01;
 
-
         int skillPressed = consumeSkill();
         if (skillPressed >= 0) {
             internalOpen = !internalOpen;
-
             // トグルアニメーション再生
             String toggleAnim = internalOpen ? "open" : "close";
             playAnimation(toggleAnim, false, getAnimationTime(), 0.1f);
@@ -71,7 +69,6 @@ public class MimicIdentity extends BaseMonsterIdentity {
         if (!next.equals(currentState) || loop != nextLoop) {
             playAnimation(next, nextLoop, getAnimationTime(), 0.1f);
         }
-
     }
 
     /** ------------------------ 入力管理 ------------------------ */
@@ -81,9 +78,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
 
     /** ------------------------ Entity 状態参照 ------------------------ */
     private boolean isEntityOpen() {
-        if (entity instanceof MimicEntity mimic) {
-            return mimic.isOpen();
-        }
+        if (entity instanceof MimicEntity mimic) return mimic.isOpen();
         return internalOpen;
     }
 
