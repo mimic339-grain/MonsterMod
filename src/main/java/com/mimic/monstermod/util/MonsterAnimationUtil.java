@@ -10,12 +10,7 @@ import org.joml.Vector3f;
 import java.util.*;
 
 /**
- * MonsterAnimationUtil — 完全版 YSMMOD互換
- * - GeoJSON(GeckoLib/Bedrock-style) → ModelPart階層 + BoneMap生成
- * - pivot/origin の補正 (origin を pivot 基準に変換)、Z反転対応
- * - cubeなしボーンも ModelPart 作成
- * - ModelPart と namedParts マップを返す ModelBuildResult 構造
- * - loadBedrockModelAsProxies() で ModelPartProxy マップを生成
+ * MonsterAnimationUtil — 完全版 YSMMOD互換 + Bedrock形式対応
  */
 public class MonsterAnimationUtil {
 
@@ -29,12 +24,12 @@ public class MonsterAnimationUtil {
     }
 
     public static ModelBuildResult buildModelFromJson(JsonObject rootJson, int texWidth, int texHeight) {
-        if (rootJson == null || !rootJson.has("bones")) {
+        JsonArray bones = extractBones(rootJson);
+        if (bones == null) {
             MonsterMod.LOGGER.warn("[MonsterAnimationUtil] Invalid model JSON: missing bones");
             return new ModelBuildResult(new ModelPart(Collections.emptyList(), new HashMap<>()), new HashMap<>());
         }
 
-        JsonArray bones = rootJson.getAsJsonArray("bones");
         Map<String, BoneDef> tempMap = new LinkedHashMap<>();
 
         // 1) BoneDef 作成
@@ -102,6 +97,23 @@ public class MonsterAnimationUtil {
         return new ModelBuildResult(topRoot, partMap);
     }
 
+    /** Bedrock形式対応: minecraft:geometry 配下から bones を抽出 */
+    private static JsonArray extractBones(JsonObject rootJson) {
+        if (rootJson.has("bones")) {
+            return rootJson.getAsJsonArray("bones");
+        }
+        if (rootJson.has("minecraft:geometry")) {
+            JsonArray geometries = rootJson.getAsJsonArray("minecraft:geometry");
+            if (geometries.size() > 0) {
+                JsonObject geom = geometries.get(0).getAsJsonObject();
+                if (geom.has("bones")) {
+                    return geom.getAsJsonArray("bones");
+                }
+            }
+        }
+        return null;
+    }
+
     public static Map<String, AnimationPlayerTemplate.ModelPartProxy> loadBedrockModelAsProxies(JsonObject rootJson, int texWidth, int texHeight) {
         ModelBuildResult res = buildModelFromJson(rootJson, texWidth, texHeight);
         Map<String, AnimationPlayerTemplate.ModelPartProxy> proxies = new LinkedHashMap<>();
@@ -131,7 +143,6 @@ public class MonsterAnimationUtil {
             ));
         }
 
-        // 空のボーンでも ModelPart を作る
         Map<String, ModelPart> children = new LinkedHashMap<>();
         for (BoneDef child : def.children) {
             children.put(child.name, buildPartRecursive(child, partMap, texWidth, texHeight));
@@ -186,8 +197,6 @@ public class MonsterAnimationUtil {
             part.setPos(pos.x(), pos.y(), pos.z());
         }
 
-        @Override public void setScale(Vector3f scale) {
-            // ModelPart標準にscaleはなし
-        }
+        @Override public void setScale(Vector3f scale) { }
     }
 }
