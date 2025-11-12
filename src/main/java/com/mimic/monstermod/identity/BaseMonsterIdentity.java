@@ -218,20 +218,23 @@ public class BaseMonsterIdentity {
     // ---------------------------
     // Rendering + Animation
     // ---------------------------
-    public void renderInterpolated(BaseMonsterEntity entity, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-        if (entity == null || animationPlayer == null) return;
+    public void renderInterpolated(BaseMonsterEntity entity, float partialTicks,
+                                   PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+        if (entity == null) return;
         entity.ensureModelInitialized();
         ModelPart root = entity.getModelRoot();
         if (root == null) return;
 
         poseStack.pushPose();
-        Map<String, Map<String, Vector3f>> interpPose =
-                AnimationPlayerTemplate.blend(lastBoneTransforms, animationPlayer.getCurrentPose(), partialTicks);
 
-        for (var entry : boneMap.entrySet()) {
-            var transforms = interpPose.get(entry.getKey());
-            if (transforms != null)
-                AnimationPlayerTemplate.applyPoseToProxy(entry.getValue(), transforms);
+        if (animationPlayer != null) {
+            Map<String, Map<String, Vector3f>> interpPose =
+                    AnimationPlayerTemplate.blend(lastBoneTransforms, animationPlayer.getCurrentPose(), partialTicks);
+            for (var entry : boneMap.entrySet()) {
+                var transforms = interpPose.get(entry.getKey());
+                if (transforms != null)
+                    AnimationPlayerTemplate.applyPoseToProxy(entry.getValue(), transforms);
+            }
         }
 
         VertexConsumer vc = buffer.getBuffer(RenderType.entityCutout(getTexture()));

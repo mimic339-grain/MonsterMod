@@ -5,6 +5,7 @@ import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
@@ -18,11 +19,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 /**
- * PlayerRenderer Mixin — 完全版 YSMMOD対応
- *
- * - Identity/Entity/BoneMap の安全初期化
- * - renderInterpolated による正しい描画
- * - 描画されない問題を回避
+ * PlayerRenderer Mixin — 修正版
  */
 @Mixin(PlayerRenderer.class)
 public class PlayerRendererMixin {
@@ -32,7 +29,7 @@ public class PlayerRendererMixin {
                                 float entityYaw,
                                 float partialTicks,
                                 PoseStack poseStack,
-                                MultiBufferSource buffer,
+                                MultiBufferSource origBuffer,
                                 int packedLight,
                                 CallbackInfo ci) {
 
@@ -59,8 +56,13 @@ public class PlayerRendererMixin {
                     }
 
                     // --- 回転同期 ---
-                    entity.setXRot(player.getXRot());
-                    entity.setYRot(player.getYRot());
+                    try {
+                        entity.setXRot(player.getXRot());
+                        entity.setYRot(player.getYRot());
+                    } catch (Exception e) {
+                        // 一部環境で setter が無い場合に備えて安全にログ出す
+                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] rotation sync failed: {}", e.toString());
+                    }
                     entity.yHeadRot = player.yHeadRot;
                     entity.yBodyRot = player.yBodyRot;
 
@@ -81,6 +83,7 @@ public class PlayerRendererMixin {
                     try {
                         Field childrenField = ModelPart.class.getDeclaredField("children");
                         childrenField.setAccessible(true);
+                        @SuppressWarnings("unchecked")
                         Map<String, ModelPart> children = (Map<String, ModelPart>) childrenField.get(root);
                         for (String key : identity.boneMap.keySet()) {
                             if (!children.containsKey(key)) {
@@ -92,17 +95,21 @@ public class PlayerRendererMixin {
                     }
 
                     // --- 描画 ---
-                    poseStack.pushPose();
+                    // ここでは確実にレンダーバッファを取得して endBatch() でフラッシュする。
+                    var bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
                     try {
-                        identity.renderInterpolated(entity, partialTicks, poseStack, buffer, packedLight);
-                    } catch (Exception e) {
-                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Exception during renderInterpolated", e);
-                    } finally {
-                        poseStack.popPose();
-                    }
+                        // 注意: BaseMonsterIdentity.renderInterpolated() は内部で push/pop を行う想定
+                        identity.renderInterpolated(entity, partialTicks, poseStack, bufferSource, packedLight);
 
-                    // オリジナル PlayerRenderer 描画をスキップ
-                    ci.cancel();
+                        // 描画を強制フラッシュ（これで頂点が GPU に送られる）
+                        bufferSource.endBatch();
+
+                        // 成功したらオリジナルの PlayerRenderer をキャンセル
+                        ci.cancel();
+                    } catch (Throwable e) {
+                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Exception during renderInterpolated (falling back to normal player render)", e);
+                        // 例外が出た場合はキャンセルしないことでオリジナル描画を行わせる（安全フェールバック）
+                    }
                 });
     }
 }
