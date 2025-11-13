@@ -2,15 +2,22 @@ package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.util.Mth;
-import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.Nullable;
+
+/**
+ * BaseMonsterIdentity (上位互換版)
+ *
+ * - プレイヤー変身状態をBaseMonsterEntityに完全同期
+ * - 歩行アニメーションを直接更新（AllMight版機能統合）
+ * - スプリント・スニーク・座標・装備・回転すべて反映
+ */
 public class BaseMonsterIdentity {
 
     protected final String id;
@@ -27,14 +34,18 @@ public class BaseMonsterIdentity {
     public String getId() { return id; }
     @Nullable public BaseMonsterEntity getEntity() { return entity; }
 
-    /** サーバー Tick: クールダウンのみ */
+    // -----------------------------
+    // サーバー Tick: クールダウンのみ
+    // -----------------------------
     public void tickServer(Player player) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (abilityCooldowns[i] > 0) abilityCooldowns[i]--;
         }
     }
 
-    /** サーバー用コピー: 座標・回転・装備同期 */
+    // -----------------------------
+    // プレイヤー状態をEntityにコピー（サーバー用）
+    // -----------------------------
     public void copyFromPlayerServer(Player player) {
         if (entity == null) return;
 
@@ -46,7 +57,9 @@ public class BaseMonsterIdentity {
         entity.setPlayerActiveMove(moving);
     }
 
-    /** クライアント用コピー（毎フレーム） */
+    // -----------------------------
+    // プレイヤー状態をEntityにコピー（クライアント用、毎フレーム）
+    // -----------------------------
     public void copyFromPlayerClient(Player player) {
         if (entity == null) return;
 
@@ -54,48 +67,78 @@ public class BaseMonsterIdentity {
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
 
-        boolean moving = entity.position().distanceToSqr(player.position()) > 0.001;
+        // tickCount 同期
+        entity.tickCount = player.tickCount;
+
+        // 歩行アニメーション進行
+        boolean moving = player.getDeltaMovement().horizontalDistanceSqr() > 0.001;
+        if (moving) {
+            entity.walkAnimation.update(
+                    (float) player.getDeltaMovement().horizontalDistance(),
+                    1.0f
+            );
+        }
+
+        // 通常の移動フラグ
         entity.setPlayerActiveMove(moving);
 
-        // アニメーションはサーバー同期イベントのみで更新
+        // スプリント・スニーク等も同期
+        entity.setSprinting(player.isSprinting());
+        entity.setShiftKeyDown(player.isCrouching());
     }
 
-    /** 回転・Pose・装備コピー共通 */
+    // -----------------------------
+    // 回転・Pose・装備コピー共通
+    // -----------------------------
     private void copyRotationPoseAndEquip(Player player) {
         if (entity == null) return;
 
+        // 体回転
+        entity.yBodyRot = player.yBodyRot;
+        entity.yBodyRotO = player.yBodyRotO;
+
         entity.setYRot(player.getYRot());
         entity.setXRot(player.getXRot());
-        entity.setYHeadRot(player.getYHeadRot());
+
+        // 頭回転
+        float relativeHeadYaw = Mth.wrapDegrees(player.getYHeadRot() - player.yBodyRot);
+        entity.setYHeadRot(player.yBodyRot + relativeHeadYaw);
+
+        float relativeHeadYawO = Mth.wrapDegrees(player.yHeadRotO - player.yBodyRotO);
         entity.yRotO = player.yRotO;
         entity.xRotO = player.xRotO;
-        entity.yHeadRotO = player.yHeadRotO;
+        entity.yHeadRotO = player.yBodyRotO + relativeHeadYawO;
+
         entity.setPose(player.getPose());
 
+        // 装備コピー
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             entity.setItemSlot(slot, player.getItemBySlot(slot));
         }
     }
 
-    /** 描画: partialTicks 補間 + Axis Y回転統合 */
+    // -----------------------------
+    // 描画: partialTicks補間
+    // -----------------------------
     public void render(Player player, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int light) {
         if (entity == null) return;
 
-        float yaw = Mth.lerp(partialTicks, entity.yRotO, entity.getYRot());
+        float bodyYaw = Mth.lerp(partialTicks, entity.yBodyRotO, entity.yBodyRot);
         float pitch = Mth.lerp(partialTicks, entity.xRotO, entity.getXRot());
 
         poseStack.pushPose();
-        poseStack.mulPose(Axis.YP.rotationDegrees(-player.yBodyRot));
 
         Minecraft.getInstance().getEntityRenderDispatcher()
                 .getRenderer(entity)
-                .render(entity, yaw, partialTicks, poseStack, buffer, light);
+                .render(entity, bodyYaw, partialTicks, poseStack, buffer, light);
 
         poseStack.popPose();
     }
 
-    /** クライアント入力処理 */
+    // -----------------------------
+    // クライアント入力処理
+    // -----------------------------
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
@@ -103,12 +146,14 @@ public class BaseMonsterIdentity {
 
     protected void handleAbility(Player player, int skillIndex) {
         if (abilityCooldowns[skillIndex] > 0) return;
-        // サーバーへスキル使用パケット送信、サーバーで playAnimationEvent("skillX") 呼ぶ
+        // サーバーにスキル使用パケットを送信、サーバーで playAnimationEvent("skillX") を呼ぶ
     }
 
     protected void handleMenu(Player player) {}
 
-    /** NBT 保存 */
+    // -----------------------------
+    // NBT 保存 / 復元
+    // -----------------------------
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
@@ -118,7 +163,6 @@ public class BaseMonsterIdentity {
         return tag;
     }
 
-    /** NBT 復元 */
     public void deserializeNBT(CompoundTag tag) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (tag.contains("cd_" + i)) abilityCooldowns[i] = tag.getInt("cd_" + i);

@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 public class S2CMonsterSyncPacket {
 
     private final int entityId;
-    private final String animation; // マッピング済みアニメーション名
+    private final String animation;
     private final String skill;
 
     public S2CMonsterSyncPacket(int entityId, String animation, String skill) {
@@ -40,19 +40,16 @@ public class S2CMonsterSyncPacket {
 
     public static void handle(S2CMonsterSyncPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            // クライアント側のみ処理
             Minecraft mc = Minecraft.getInstance();
             if (mc.level == null) return;
 
             Entity entity = mc.level.getEntity(msg.entityId);
             if (!(entity instanceof BaseMonsterEntity monster)) return;
 
-            // animation が存在する場合はそのまま entityData にセット
             if (msg.animation != null && !msg.animation.isEmpty()) {
-                monster.getEntityData().set(BaseMonsterEntity.ANIMATION_NAME, msg.animation);
+                monster.setCurrentAnimation(msg.animation);
             }
 
-            // skill が存在する場合は MonsterData にセット
             if (msg.skill != null && !msg.skill.isEmpty() && monster.getMonsterData() != null) {
                 monster.getMonsterData().setSkill(msg.skill);
             }
@@ -61,7 +58,6 @@ public class S2CMonsterSyncPacket {
         ctx.get().setPacketHandled(true);
     }
 
-    /** 特定プレイヤーに送信 */
     public void sendToPlayer(net.minecraft.server.level.ServerPlayer player) {
         ModMessages.sendToPlayer(this, player);
     }
