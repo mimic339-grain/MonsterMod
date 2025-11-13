@@ -19,6 +19,7 @@ import java.util.Collections;
 
 /**
  * BaseMonsterEntity — 完全版 YSMMOD準拠
+ * 修正版：Identity 内で ensureModelInitialized を呼ばず、無限再帰防止
  */
 public abstract class BaseMonsterEntity extends BaseEntity {
 
@@ -28,9 +29,15 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     @Nullable
     protected ModelPart modelRoot;
 
+    // BoneMap 初期化済みフラグ
+    private boolean boneMapInitialized = false;
+
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
-        if (level.isClientSide) ensureModelInitialized();
+        // client ならモデルだけ先に生成しておく
+        if (level.isClientSide) {
+            modelRoot = createModel();
+        }
     }
 
     @Nullable
@@ -41,8 +48,6 @@ public abstract class BaseMonsterEntity extends BaseEntity {
         if (identity != null) {
             MonsterMod.LOGGER.info("[BaseMonsterEntity] Identity attached: {}", identity.getId());
             identity.setEntity(this);
-            identity.autoInitBoneMap(this);
-            ensureModelInitialized();
         }
     }
 
@@ -61,22 +66,36 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     @Nullable
     public ModelPart getModelRoot() { return modelRoot; }
 
+    /**
+     * モデル作成（JSONがあれば読み込み、なければ空モデル）
+     */
     protected ModelPart createModel() {
         String modelName = this.getType().toShortString().toLowerCase();
         JsonObject json = BaseMonsterIdentity.loadModelJson(modelName);
         if (json != null) {
             ModelBuildResult result = MonsterAnimationUtil.buildModelFromJson(json, 64, 64);
-            // modelRootとして top root を保持
-            return result.root;
+            if (result != null && result.root != null) {
+                return result.root;
+            }
         }
         return new ModelPart(Collections.emptyList(), Collections.emptyMap());
     }
 
+    /**
+     * モデル & BoneMap の初期化（Identity 側で ensureModelInitialized を呼ばない）
+     */
     public void ensureModelInitialized() {
         if (!level().isClientSide) return;
+
+        // モデル生成
         if (modelRoot == null) {
             modelRoot = createModel();
-            if (identity != null) identity.autoInitBoneMap(this);
+        }
+
+        // BoneMap 初期化（Identity があれば一度だけ）
+        if (!boneMapInitialized && identity != null) {
+            identity.autoInitBoneMap(this); // ここで再帰しない
+            boneMapInitialized = true;
         }
     }
 
@@ -84,6 +103,8 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     public void tick() {
         super.tick();
         if (!level().isClientSide) return;
+
+        // Identity に tick を任せる
         if (identity != null) identity.tickClient(1f / 20f);
     }
 
@@ -96,17 +117,16 @@ public abstract class BaseMonsterEntity extends BaseEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+
         if (identity == null) identity = createIdentityInstance();
         if (identity != null && tag.contains("IdentityData")) {
             identity.deserializeNBT(tag.getCompound("IdentityData"));
-            identity.autoInitBoneMap(this);
         }
     }
 
-    public void initIdentityBoneMap() {
-        if (identity != null) identity.autoInitBoneMap(this);
-    }
-
+    /**
+     * デフォルトの属性設定
+     */
     public static AttributeSupplier.Builder createDefaultAttributes(
             double health, double speed, double damage, double resistance, double armor, double gravity
     ) {
@@ -116,7 +136,7 @@ public abstract class BaseMonsterEntity extends BaseEntity {
                 .add(Attributes.ATTACK_DAMAGE, damage)
                 .add(Attributes.ARMOR, armor)
                 .add(Attributes.KNOCKBACK_RESISTANCE, resistance)
-                .add(BaseMonsterEntity.GRAVITY, gravity);
+                .add(GRAVITY, gravity);
     }
 
     public static final Attribute GRAVITY = Attributes.ATTACK_KNOCKBACK;

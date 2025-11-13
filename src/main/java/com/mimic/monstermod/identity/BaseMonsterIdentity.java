@@ -19,16 +19,14 @@ import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
-import java.lang.reflect.Field;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 完全版 BaseMonsterIdentity — MonsterAnimationUtil 対応
- * - GeoJSON → ModelPart 階層 + namedParts → boneMap
- * - cubeなしボーンも ModelPart 作成
- * - pivot/origin 補正 + Z反転対応
- * - reflection は modelRoot 注入のみに限定
+ * BaseMonsterIdentity — YSMMOD スタイル対応 完全版
+ * - namedParts から boneMap を作成
+ * - pivot/origin/position の二重加算を避ける
+ * - 描画時に角度は度->ラジアンへ変換して適用
  */
 public class BaseMonsterIdentity {
 
@@ -40,6 +38,9 @@ public class BaseMonsterIdentity {
     public String currentState = "idle";
     public boolean loop = true;
     public int[] abilityCooldowns;
+
+    // 再入防止フラグ（ensureModelInitialized と autoInitBoneMap のループ防止）
+    private boolean boneMapInitializing = false;
 
     public BaseMonsterIdentity(ResourceLocation mobId, int abilityCount) {
         this.id = mobId.toString();
@@ -54,7 +55,7 @@ public class BaseMonsterIdentity {
 
     public void setEntity(@Nullable BaseMonsterEntity entity) {
         this.entity = entity;
-        autoInitBoneMap(entity);
+        // bone map は autoInitBoneMap で初期化（再入防止あり）
     }
 
     @Nullable
@@ -74,84 +75,43 @@ public class BaseMonsterIdentity {
     public String getId() { return id; }
 
     // ---------------------------
-    // Input handling / skills
-    // ---------------------------
-    public void handleClientInput(@Nullable Player player, int skillIndex) {
-        MonsterMod.LOGGER.debug("[BaseMonsterIdentity] handleClientInput called: skillIndex={}", skillIndex);
-    }
-
-    private boolean pendingDodge = false;
-    public void setPendingDodge(boolean dodge) {
-        this.pendingDodge = dodge;
-        MonsterMod.LOGGER.debug("[BaseMonsterIdentity] setPendingDodge called: {}", dodge);
-    }
-
-    public void handleMenuInput(Player player) {
-        if (player == null) return;
-        MonsterMod.LOGGER.debug("[BaseMonsterIdentity] handleMenuInput called for player {}", player.getName().getString());
-    }
-
-    public int consumeSkill() { return -1; }
-
-    protected void updateAnimationStateServer(Player player) { }
-
-    // ---------------------------
     // BoneMap initialization
     // ---------------------------
     public void autoInitBoneMap(@Nullable BaseMonsterEntity entity) {
-        boneMap.clear();
-        if (entity == null) return;
+        if (entity == null || !entity.level().isClientSide) return;
+        if (!boneMap.isEmpty() || boneMapInitializing) return; // 初期化済み or 進行中は抜ける
 
-        entity.ensureModelInitialized();
-        ModelPart existingRoot = entity.getModelRoot();
-        JsonObject modelJson = BaseMonsterIdentity.loadModelJson(id);
-
-        if (modelJson == null) {
-            MonsterMod.LOGGER.warn("[BaseMonsterIdentity] No geo.json for {}, falling back.", id);
-            if (existingRoot != null) registerPartsRecursive(existingRoot, "root");
-            return;
-        }
-
-        int texWidth = modelJson.has("texture_width") ? modelJson.get("texture_width").getAsInt() : 64;
-        int texHeight = modelJson.has("texture_height") ? modelJson.get("texture_height").getAsInt() : 64;
-
-        ModelBuildResult buildResult;
+        boneMapInitializing = true;
         try {
-            buildResult = MonsterAnimationUtil.buildModelFromJson(modelJson, texWidth, texHeight);
-        } catch (Exception ex) {
-            MonsterMod.LOGGER.error("[BaseMonsterIdentity] buildModelFromJson failed for " + id, ex);
-            if (existingRoot != null) registerPartsRecursive(existingRoot, "root");
-            return;
-        }
+            // モデルを確実に用意する（entity 側で深い再帰が起きる設計ならここで guard）
+            try { entity.ensureModelInitialized(); } catch (Exception e) { MonsterMod.LOGGER.warn("[BaseMonsterIdentity] ensureModelInitialized threw: {}", e.toString()); }
 
-        boolean injected = tryInjectModelRootIntoEntity(entity, buildResult.root);
-        if (!injected) {
-            if (existingRoot != null) registerPartsRecursive(existingRoot, "root");
-            else setNamedPartsFromModelMap(buildResult.namedParts);
-            return;
-        }
+            ModelPart root = entity.getModelRoot();
+            if (root == null) return;
 
-        setNamedPartsFromModelMap(buildResult.namedParts);
-        MonsterMod.LOGGER.info("[BaseMonsterIdentity] autoInitBoneMap complete for {}. bones = {}", id, boneMap.size());
-    }
-
-    private boolean tryInjectModelRootIntoEntity(BaseMonsterEntity entity, ModelPart rootToInject) {
-        try {
-            Field f = null;
-            Class<?> cls = entity.getClass();
-            while (cls != null && cls != Object.class) {
-                try { f = cls.getDeclaredField("modelRoot"); break; } catch (NoSuchFieldException ignored) {}
-                try { f = cls.getDeclaredField("root"); break; } catch (NoSuchFieldException ignored) {}
-                try { f = cls.getDeclaredField("model"); break; } catch (NoSuchFieldException ignored) {}
-                cls = cls.getSuperclass();
+            // モデル JSON があるなら json→ModelPart と namedParts を取得する（失敗時は既存 root を使う）
+            JsonObject modelJson = loadModelJson(id);
+            ModelBuildResult buildResult = null;
+            if (modelJson != null) {
+                try {
+                    int texWidth = modelJson.has("texture_width") ? modelJson.get("texture_width").getAsInt() : 64;
+                    int texHeight = modelJson.has("texture_height") ? modelJson.get("texture_height").getAsInt() : 64;
+                    buildResult = MonsterAnimationUtil.buildModelFromJson(modelJson, texWidth, texHeight);
+                } catch (Exception ex) {
+                    MonsterMod.LOGGER.warn("[BaseMonsterIdentity] buildModelFromJson failed for {}: {}", id, ex.toString());
+                }
             }
-            if (f == null) return false;
-            f.setAccessible(true);
-            f.set(entity, rootToInject);
-            return true;
-        } catch (Throwable t) {
-            MonsterMod.LOGGER.warn("[BaseMonsterIdentity] Reflection inject modelRoot failed: {}", t.toString());
-            return false;
+
+            if (buildResult != null && buildResult.namedParts != null && !buildResult.namedParts.isEmpty()) {
+                // namedParts をそのまま使用して boneMap を構築する
+                // 注意: Entity の modelRoot を buildResult.root に差し替えない（意図しない副作用を避ける）
+                setNamedPartsFromModelMap(buildResult.namedParts);
+            } else {
+                // namedParts が無い場合は既存 ModelPart 階層を再帰的に登録する
+                registerPartsRecursive(root, "root");
+            }
+        } finally {
+            boneMapInitializing = false;
         }
     }
 
@@ -164,55 +124,73 @@ public class BaseMonsterIdentity {
             boneMap.put(name, new AnimationPlayerTemplate.ModelPartProxy() {
                 @Override public void setRotation(Vector3f rot) {
                     if (rot == null) return;
-                    part.xRot = rot.x(); part.yRot = rot.y(); part.zRot = rot.z();
+                    // アニメーション JSON が度 (degrees) で指定されていることが多いので rad に変換して入れる
+                    part.xRot = (float) Math.toRadians(rot.x());
+                    part.yRot = (float) Math.toRadians(rot.y());
+                    part.zRot = (float) Math.toRadians(rot.z());
                 }
                 @Override public void setPosition(Vector3f pos) {
                     if (pos == null) return;
                     part.setPos(pos.x(), pos.y(), pos.z());
                 }
-                @Override public void setScale(Vector3f scale) {}
+                @Override public void setScale(Vector3f scale) { /* unused */ }
             });
         }
-        MonsterMod.LOGGER.debug("[BaseMonsterIdentity] setNamedPartsFromModelMap registered {} bones.", boneMap.size());
     }
 
+    // 再帰的に ModelPart を登録する（reflection回避版）
     private void registerPartsRecursive(ModelPart part, String name) {
+        if (part == null || name == null) return;
         boneMap.put(name, new AnimationPlayerTemplate.ModelPartProxy() {
-            @Override public void setRotation(Vector3f rot) { part.xRot = rot.x(); part.yRot = rot.y(); part.zRot = rot.z(); }
-            @Override public void setPosition(Vector3f pos) { part.x = pos.x(); part.y = pos.y(); part.z = pos.z(); }
+            @Override public void setRotation(Vector3f rot) {
+                if (rot == null) return;
+                part.xRot = (float) Math.toRadians(rot.x());
+                part.yRot = (float) Math.toRadians(rot.y());
+                part.zRot = (float) Math.toRadians(rot.z());
+            }
+            @Override public void setPosition(Vector3f pos) {
+                if (pos == null) return;
+                part.setPos(pos.x(), pos.y(), pos.z());
+            }
             @Override public void setScale(Vector3f scale) {}
         });
 
+        // children フィールドへの reflection は避けられない場合があるが、
+        // まず ModelPart#getAllParts() を試す（API による差異があるため安全に）
         try {
-            var childrenField = ModelPart.class.getDeclaredField("children");
-            childrenField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            var children = (Map<String, ModelPart>) childrenField.get(part);
-            if (children != null) for (var e : children.entrySet()) registerPartsRecursive(e.getValue(), e.getKey());
-        } catch (Exception e) {
-            MonsterMod.LOGGER.error("[MonsterMod] registerPartsRecursive failed", e);
+            // getAllParts() は Stream<ModelPart> 返す可能性があるため互換性を考慮して配列化する
+            var stream = part.getAllParts();
+            stream.forEach(child -> {
+                if (child != null) {
+                    String childName = name + "." + Integer.toHexString(System.identityHashCode(child));
+                    registerPartsRecursive(child, childName);
+                }
+            });
+        } catch (Throwable t) {
+            // fallback: reflection で children フィールドを読む（例外が出たら無視）
+            try {
+                var childrenField = ModelPart.class.getDeclaredField("children");
+                childrenField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                var children = (Map<String, ModelPart>) childrenField.get(part);
+                if (children != null) for (var e : children.entrySet()) registerPartsRecursive(e.getValue(), name + "." + e.getKey());
+            } catch (Exception ignored) {}
         }
     }
 
-    // ---------------------------
-    // Model JSON loading
-    // ---------------------------
     @Nullable
     public static JsonObject loadModelJson(String id) {
         try {
             String[] parts = id.split(":");
             String modid = parts.length > 1 ? parts[0] : MonsterMod.MOD_ID;
             String path  = parts.length > 1 ? parts[1] : parts[0];
-            ResourceLocation res = new ResourceLocation(modid, "models/" + path + ".geo.json");
+            var res = new ResourceLocation(modid, "models/" + path + ".geo.json");
             var optRes = Minecraft.getInstance().getResourceManager().getResource(res);
             if (optRes.isEmpty()) return null;
             try (var reader = new java.io.InputStreamReader(optRes.get().open())) {
                 return com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
             }
-        } catch (Exception e) {
-            MonsterMod.LOGGER.error("[BaseMonsterIdentity] Failed to load model JSON for " + id, e);
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 
     // ---------------------------
@@ -221,27 +199,27 @@ public class BaseMonsterIdentity {
     public void renderInterpolated(BaseMonsterEntity entity, float partialTicks,
                                    PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         if (entity == null) return;
-        entity.ensureModelInitialized();
         ModelPart root = entity.getModelRoot();
         if (root == null) return;
 
         poseStack.pushPose();
-
-        if (animationPlayer != null) {
-            Map<String, Map<String, Vector3f>> interpPose =
-                    AnimationPlayerTemplate.blend(lastBoneTransforms, animationPlayer.getCurrentPose(), partialTicks);
-            for (var entry : boneMap.entrySet()) {
-                var transforms = interpPose.get(entry.getKey());
-                if (transforms != null)
-                    AnimationPlayerTemplate.applyPoseToProxy(entry.getValue(), transforms);
+        try {
+            if (animationPlayer != null) {
+                Map<String, Map<String, Vector3f>> interpPose =
+                        AnimationPlayerTemplate.blend(lastBoneTransforms, animationPlayer.getCurrentPose(), partialTicks);
+                for (var e : boneMap.entrySet()) {
+                    var transforms = interpPose.get(e.getKey());
+                    if (transforms != null) AnimationPlayerTemplate.applyPoseToProxy(e.getValue(), transforms);
+                }
             }
+
+            VertexConsumer vc = buffer.getBuffer(RenderType.entityCutout(getTexture()));
+            root.render(poseStack, vc, packedLight, OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, 1f);
+
+        } finally {
+            poseStack.popPose();
         }
-
-        VertexConsumer vc = buffer.getBuffer(RenderType.entityCutout(getTexture()));
-        root.render(poseStack, vc, packedLight, OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, 1f);
-        poseStack.popPose();
     }
-
     @Nullable
     public ResourceLocation getTexture() {
         return new ResourceLocation(MonsterMod.MOD_ID, "textures/entity/mimic.png");
@@ -299,10 +277,7 @@ public class BaseMonsterIdentity {
     // ---------------------------
     public void playAnimation(String state, boolean loop, float startTime, float blendTime) {
         var clip = loadClip(state);
-        if (clip == null) {
-            MonsterMod.LOGGER.warn("[BaseMonsterIdentity] Missing anim: " + state + " for " + id);
-            return;
-        }
+        if (clip == null) return;
         var prev = animationPlayer;
         var newPlayer = new AnimationPlayerTemplate.AnimationPlayer(clip);
         if (prev != null && blendTime > 0) newPlayer.blendFromPrevious(prev, blendTime);
@@ -316,16 +291,13 @@ public class BaseMonsterIdentity {
             String[] parts = id.split(":");
             String modid = parts.length > 1 ? parts[0] : MonsterMod.MOD_ID;
             String path = parts.length > 1 ? parts[1] : parts[0];
-            ResourceLocation res = new ResourceLocation(modid, "animations/" + path + "/" + name + ".json");
+            var res = new ResourceLocation(modid, "animations/" + path + "/" + name + ".json");
             var player = AnimationPlayerTemplate.load(res);
             if (player == null) return null;
             var anim = player.getAnimation(name);
             if (anim == null) return null;
             return new AnimationPlayerTemplate.AnimationClip(anim);
-        } catch (Exception e) {
-            MonsterMod.LOGGER.error("[BaseMonsterIdentity] Load clip failed: " + name + " for " + id, e);
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 
     public float getAnimationTime() { return animationPlayer != null ? animationPlayer.getTime() : 0f; }
@@ -356,4 +328,12 @@ public class BaseMonsterIdentity {
             transforms.put("rotation", new Vector3f(arr[3], arr[4], arr[5]));
         }
     }
+
+    // input/skill placeholders (そのまま)
+    public void handleClientInput(@Nullable Player player, int skillIndex) { }
+    private boolean pendingDodge = false;
+    public void setPendingDodge(boolean dodge) { this.pendingDodge = dodge; }
+    public void handleMenuInput(Player player) { }
+    public int consumeSkill() { return -1; }
+    protected void updateAnimationStateServer(Player player) { }
 }

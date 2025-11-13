@@ -15,11 +15,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-
 /**
- * PlayerRenderer Mixin — 修正版
+ * PlayerRenderer Mixin — 完全版 BaseMonsterIdentity に最適化
  */
 @Mixin(PlayerRenderer.class)
 public class PlayerRendererMixin {
@@ -56,19 +53,14 @@ public class PlayerRendererMixin {
                     }
 
                     // --- 回転同期 ---
-                    try {
-                        entity.setXRot(player.getXRot());
-                        entity.setYRot(player.getYRot());
-                    } catch (Exception e) {
-                        // 一部環境で setter が無い場合に備えて安全にログ出す
-                        MonsterMod.LOGGER.debug("[PlayerRendererMixin] rotation sync failed: {}", e.toString());
-                    }
+                    entity.setXRot(player.getXRot());
+                    entity.setYRot(player.getYRot());
                     entity.yHeadRot = player.yHeadRot;
                     entity.yBodyRot = player.yBodyRot;
 
                     // --- モデル初期化 & BoneMap ---
                     entity.ensureModelInitialized();
-                    if (identity.boneMap == null || identity.boneMap.isEmpty()) {
+                    if (identity.boneMap.isEmpty()) {
                         MonsterMod.LOGGER.debug("[PlayerRendererMixin] BoneMap empty, initializing for entity {}", entity);
                         identity.autoInitBoneMap(entity);
                     }
@@ -79,36 +71,15 @@ public class PlayerRendererMixin {
                         return;
                     }
 
-                    // --- BoneMap vs ModelPart nameチェック (任意デバッグ) ---
-                    try {
-                        Field childrenField = ModelPart.class.getDeclaredField("children");
-                        childrenField.setAccessible(true);
-                        @SuppressWarnings("unchecked")
-                        Map<String, ModelPart> children = (Map<String, ModelPart>) childrenField.get(root);
-                        for (String key : identity.boneMap.keySet()) {
-                            if (!children.containsKey(key)) {
-                                MonsterMod.LOGGER.warn("[PlayerRendererMixin] BoneMap key '{}' missing in ModelPart children", key);
-                            }
-                        }
-                    } catch (Exception e) {
-                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Error checking BoneMap vs ModelPart", e);
-                    }
-
                     // --- 描画 ---
-                    // ここでは確実にレンダーバッファを取得して endBatch() でフラッシュする。
                     var bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
                     try {
-                        // 注意: BaseMonsterIdentity.renderInterpolated() は内部で push/pop を行う想定
                         identity.renderInterpolated(entity, partialTicks, poseStack, bufferSource, packedLight);
-
-                        // 描画を強制フラッシュ（これで頂点が GPU に送られる）
                         bufferSource.endBatch();
-
-                        // 成功したらオリジナルの PlayerRenderer をキャンセル
-                        ci.cancel();
+                        ci.cancel(); // 描画成功したらオリジナルキャンセル
                     } catch (Throwable e) {
-                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Exception during renderInterpolated (falling back to normal player render)", e);
-                        // 例外が出た場合はキャンセルしないことでオリジナル描画を行わせる（安全フェールバック）
+                        MonsterMod.LOGGER.error("[PlayerRendererMixin] Exception during renderInterpolated, falling back", e);
+                        // 例外発生時はキャンセルしない → 通常描画
                     }
                 });
     }
