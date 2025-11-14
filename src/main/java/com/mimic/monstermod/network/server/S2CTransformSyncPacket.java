@@ -46,7 +46,7 @@ public class S2CTransformSyncPacket {
             Player player = mc.level.getPlayerByUUID(playerId);
             if (player == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
                         // 変身NBTを適用（能力クールタイム・装備など）
                         transformation.deserializeNBT(nbt);
@@ -62,7 +62,7 @@ public class S2CTransformSyncPacket {
     public static CompoundTag createNBT(Player player) {
         CompoundTag tag = new CompoundTag();
 
-        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> tag.merge(transformation.serializeNBT()));
 
         // ここでは回転情報は含めない（描画前コピーに任せる）

@@ -2,7 +2,10 @@ package com.mimic.monstermod.capability;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.ModEntitieType;
+import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.identity.impl.MimicIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import net.minecraft.nbt.CompoundTag;
@@ -14,6 +17,12 @@ import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 
+/**
+ * プレイヤー変身管理
+ *
+ * - IdentityRegistry を利用して Entity に応じた Identity を自動生成
+ * - 変身中はプレイヤー状態を Entity に完全同期
+ */
 public class PlayerTransformation {
 
     private boolean isTransformed = false;
@@ -32,25 +41,23 @@ public class PlayerTransformation {
     public void setTransformedEntity(@Nullable BaseMonsterEntity entity) { this.transformedEntity = entity; }
 
     @Nullable public BaseMonsterIdentity getIdentity() { return identity; }
-    public void setIdentity(@Nullable BaseMonsterIdentity identity) { this.identity = identity; }
-
     // ===== Tick =====
     public void tick(Player player) {
         if (!isTransformed) return;
-        Level level = player.level();
 
+        Level level = player.level();
         BaseMonsterEntity entity = ensureEntity(level);
         if (entity == null) return;
 
         BaseMonsterIdentity id = ensureIdentity(level, entity, player);
 
         if (!level.isClientSide) {
-            // サーバー側: クールダウンや状態進行
+            // サーバ側: クールダウンや状態更新
             id.tickServer(player);
-            entity.getMonsterData().tick();
+            if (entity.getMonsterData() != null) entity.getMonsterData().tick();
             id.copyFromPlayerServer(player);
         } else {
-            // クライアント側: Identity情報更新
+            // クライアント側: プレイヤー状態を反映
             id.copyFromPlayerClient(player);
         }
     }
@@ -60,10 +67,9 @@ public class PlayerTransformation {
         if (isTransformed) return;
         isTransformed = true;
         transformedMobId = mobId;
-
         Level level = player.level();
 
-        // サーバー側 Entity生成
+        // サーバ側 Entity 生成
         if (!level.isClientSide) {
             var type = ModEntitieType.getEntityType(mobId);
             if (type != null) {
@@ -77,7 +83,7 @@ public class PlayerTransformation {
                 }
             }
         } else {
-            // クライアント側仮想Entity生成
+            // クライアント側: 仮想 Entity 生成
             transformedEntity = ensureEntity(level);
         }
 
@@ -102,7 +108,7 @@ public class PlayerTransformation {
         syncToClient(player);
     }
 
-    // ===== 同期 =====
+    // ===== クライアント同期 =====
     public void syncToClient(Player player) {
         if (!(player instanceof ServerPlayer sp)) return;
         CompoundTag nbt = serializeNBT();
@@ -110,52 +116,60 @@ public class PlayerTransformation {
                 new S2CTransformSyncPacket(player.getUUID(), nbt));
     }
 
-    // ===== Entity確保 =====
+    // ===== Entity 確保 =====
     @Nullable
     private BaseMonsterEntity ensureEntity(Level level) {
         if (transformedEntity != null) return transformedEntity;
         if (transformedMobId == null) return null;
-
         var type = ModEntitieType.getEntityType(transformedMobId);
         if (type == null) return null;
-
         transformedEntity = (BaseMonsterEntity) type.create(level);
         return transformedEntity;
     }
 
-    // ===== Identity確保 =====
+    // ===== Identity 確保 =====
     private BaseMonsterIdentity ensureIdentity(Level level, BaseMonsterEntity entity, Player player) {
+        if (identity != null) return identity;
+
+        identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, entity);
         if (identity == null) {
-            identity = new BaseMonsterIdentity(entity, 3);
-            if (!level.isClientSide)
-                identity.copyFromPlayerServer(player);
+            identity = (entity instanceof MimicEntity) ? new MimicIdentity(entity) : new BaseMonsterIdentity(entity, 3);
         }
+
+        if (!level.isClientSide && player != null) {
+            identity.copyFromPlayerServer(player);
+        }
+
         return identity;
     }
 
-    // ===== NBT保存 =====
+    // ===== NBT 保存 =====
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("isTransformed", isTransformed);
-        if (transformedMobId != null)
-            tag.putString("mobId", transformedMobId.toString());
+        if (transformedMobId != null) tag.putString("mobId", transformedMobId.toString());
         return tag;
     }
 
-    // ===== NBT復元 =====
+    // ===== NBT 復元 =====
     public void deserializeNBT(CompoundTag tag) {
         isTransformed = tag.getBoolean("isTransformed");
         transformedMobId = tag.contains("mobId") ? new ResourceLocation(tag.getString("mobId")) : null;
 
-        // クライアント側 Identity が null の場合は生成
         if (isTransformed && transformedMobId != null && identity == null) {
             Level level = net.minecraft.client.Minecraft.getInstance().level;
-            if (level != null) {
+            if (level != null && level.isClientSide) {
                 BaseMonsterEntity entity = ensureEntity(level);
                 if (entity != null) {
-                    identity = new BaseMonsterIdentity(entity, 3);
+                    identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, entity);
+                    if (identity == null) identity = new BaseMonsterIdentity(entity, 3);
                 }
             }
         }
+    }
+
+    // ===== Identity 更新（外部用） =====
+    public void setIdentity(@Nullable BaseMonsterIdentity identity) {
+        this.identity = identity;
     }
 }

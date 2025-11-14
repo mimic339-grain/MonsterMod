@@ -26,7 +26,7 @@ public class PlayerEntityTickMixin {
         if (level.isClientSide) return;
         if (!(player instanceof ServerPlayer)) return;
 
-        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     transformation.tick(player);
                 });

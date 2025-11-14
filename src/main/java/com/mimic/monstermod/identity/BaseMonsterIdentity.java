@@ -15,8 +15,8 @@ import javax.annotation.Nullable;
  * BaseMonsterIdentity (上位互換版)
  *
  * - プレイヤー変身状態をBaseMonsterEntityに完全同期
- * - 歩行アニメーションを直接更新（AllMight版機能統合）
- * - スプリント・スニーク・座標・装備・回転すべて反映
+ * - 歩行アニメーションを直接更新
+ * - スプリント・スニーク・座標・装備・回転・回避すべて反映
  */
 public class BaseMonsterIdentity {
 
@@ -48,29 +48,23 @@ public class BaseMonsterIdentity {
     // -----------------------------
     public void copyFromPlayerServer(Player player) {
         if (entity == null) return;
-
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
-
         boolean moving = entity.position().distanceToSqr(player.position()) > 0.001;
         entity.setPlayerActiveMove(moving);
     }
 
     // -----------------------------
-    // プレイヤー状態をEntityにコピー（クライアント用、毎フレーム）
+    // プレイヤー状態をEntityにコピー（クライアント用）
     // -----------------------------
     public void copyFromPlayerClient(Player player) {
         if (entity == null) return;
-
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
         entity.setPos(player.getX(), player.getY(), player.getZ());
-
-        // tickCount 同期
         entity.tickCount = player.tickCount;
 
-        // 歩行アニメーション進行
         boolean moving = player.getDeltaMovement().horizontalDistanceSqr() > 0.001;
         if (moving) {
             entity.walkAnimation.update(
@@ -79,24 +73,17 @@ public class BaseMonsterIdentity {
             );
         }
 
-        // 通常の移動フラグ
         entity.setPlayerActiveMove(moving);
-
-        // スプリント・スニーク等も同期
         entity.setSprinting(player.isSprinting());
         entity.setShiftKeyDown(player.isCrouching());
     }
 
-    // -----------------------------
-    // 回転・Pose・装備コピー共通
-    // -----------------------------
     private void copyRotationPoseAndEquip(Player player) {
         if (entity == null) return;
 
         // 体回転
         entity.yBodyRot = player.yBodyRot;
         entity.yBodyRotO = player.yBodyRotO;
-
         entity.setYRot(player.getYRot());
         entity.setXRot(player.getXRot());
 
@@ -128,11 +115,9 @@ public class BaseMonsterIdentity {
         float pitch = Mth.lerp(partialTicks, entity.xRotO, entity.getXRot());
 
         poseStack.pushPose();
-
         Minecraft.getInstance().getEntityRenderDispatcher()
                 .getRenderer(entity)
                 .render(entity, bodyYaw, partialTicks, poseStack, buffer, light);
-
         poseStack.popPose();
     }
 
@@ -142,14 +127,27 @@ public class BaseMonsterIdentity {
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
+        if (player.isShiftKeyDown()) handleDodge(player); // 例えば Shift で回避（クライアント側）
     }
 
-    protected void handleAbility(Player player, int skillIndex) {
+    public void handleAbility(Player player, int skillIndex) {
         if (abilityCooldowns[skillIndex] > 0) return;
-        // サーバーにスキル使用パケットを送信、サーバーで playAnimationEvent("skillX") を呼ぶ
+        // サーバーでスキル処理
     }
 
-    protected void handleMenu(Player player) {}
+    public void handleMenu(Player player) {}
+
+    /**
+     * 共通回避処理（Monster / Hunter 共通）
+     * 各 Identity はオーバーライドして固有挙動を実装
+     */
+    public void handleDodge(Player player) {
+        if (entity == null) return;
+        // デフォルトは横に小さく移動する簡易回避
+        double dx = Math.sin(Math.toRadians(player.getYRot())) * 1.0;
+        double dz = -Math.cos(Math.toRadians(player.getYRot())) * 1.0;
+        entity.setDeltaMovement(entity.getDeltaMovement().add(dx, 0, dz));
+    }
 
     // -----------------------------
     // NBT 保存 / 復元

@@ -50,7 +50,7 @@ public class PlayerTransformC2SPacket {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                     .ifPresent(cap -> {
                         if (requestTransform) {
                             // 変身リクエスト

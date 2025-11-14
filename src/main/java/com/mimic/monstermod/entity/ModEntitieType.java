@@ -31,9 +31,6 @@ public class ModEntitieType {
         ENTITY_TYPES.register(eventBus);
     }
 
-    /**
-     * ResourceLocation から EntityType を返す汎用メソッド
-     */
     @SuppressWarnings("unchecked")
     public static EntityType<? extends BaseMonsterEntity> getEntityType(ResourceLocation id) {
         // 最初の呼び出し時に RegistryObject を Map に登録

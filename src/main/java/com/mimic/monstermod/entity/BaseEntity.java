@@ -20,22 +20,24 @@ import java.util.UUID;
 
 public abstract class BaseEntity extends Mob {
 
-    // タイマー・スキル進行用
+    // ----------------------------
+    // SynchedEntityData IDs
+    // ----------------------------
     protected static final EntityDataAccessor<Integer> TICK;
     protected static final EntityDataAccessor<Integer> SKILLTICK;
     protected static final EntityDataAccessor<String> SKILL;
     protected static final EntityDataAccessor<Integer> SYNCTICK;
-
-    // Owner 管理
     protected static final EntityDataAccessor<Optional<UUID>> DATA_OWNERUUID_ID;
+    protected static final EntityDataAccessor<Integer> ATTACKTYPE;
+    protected static final EntityDataAccessor<Integer> RESIST;
+
+    // 新規: スクロール管理
+    protected static final EntityDataAccessor<Integer> MAIN_SCROLL;
+    protected static final EntityDataAccessor<Integer> DGK_SCROLL;
 
     // 攻撃アニメーション補間
     protected float attackTime;
     protected float prevAttackTime;
-
-    // 攻撃種別・防御中
-    protected static final EntityDataAccessor<Integer> ATTACKTYPE;
-    protected static final EntityDataAccessor<Integer> RESIST;
 
     protected BaseEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
@@ -47,6 +49,8 @@ public abstract class BaseEntity extends Mob {
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
+
+        // --- 既存
         this.entityData.define(TICK, 0);
         this.entityData.define(SKILLTICK, 0);
         this.entityData.define(SKILL, "");
@@ -54,6 +58,10 @@ public abstract class BaseEntity extends Mob {
         this.entityData.define(DATA_OWNERUUID_ID, Optional.empty());
         this.entityData.define(ATTACKTYPE, 0);
         this.entityData.define(RESIST, 0);
+
+        // --- 新規スクロール
+        this.entityData.define(MAIN_SCROLL, 1); // PlayerCap 初期値に合わせる
+        this.entityData.define(DGK_SCROLL, 1);
     }
 
     // ----------------------------
@@ -110,7 +118,6 @@ public abstract class BaseEntity extends Mob {
     // Capability 取得
     // ----------------------------
     public IMonsterData getMonsterData() {
-        // Capabilityの取得メソッドが正しく機能しているか確認
         return CapabilityRegistry.getMonsterData(this);
     }
 
@@ -122,11 +129,23 @@ public abstract class BaseEntity extends Mob {
     }
 
     // ----------------------------
+    // スクロール管理
+    // ----------------------------
+    public int getMainScroll() { return entityData.get(MAIN_SCROLL); }
+    public void setMainScroll(int val) { entityData.set(MAIN_SCROLL, val); }
+    public void alterMainScroll(int delta) { setMainScroll(getMainScroll() + delta); }
+
+    public int getDGKScroll() { return entityData.get(DGK_SCROLL); }
+    public void setDGKScroll(int val) { entityData.set(DGK_SCROLL, val); }
+    public void alterDGKScroll(int delta) { setDGKScroll(getDGKScroll() + delta); }
+
+    // ----------------------------
     // NBT 保存 / 読み込み
     // ----------------------------
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+
         tag.putInt("Tick", getTick());
         tag.putInt("SkillTick", getSkillTick());
         tag.putString("Skill", getSkill());
@@ -134,11 +153,15 @@ public abstract class BaseEntity extends Mob {
         if (getOwnerUUID() != null) tag.putUUID("Owner", getOwnerUUID());
         tag.putInt("AttackType", getAttackType());
         tag.putInt("Resist", getResist());
+
+        tag.putInt("MainScroll", getMainScroll());
+        tag.putInt("DGKScroll", getDGKScroll());
     }
 
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+
         setTick(tag.getInt("Tick"));
         setSkillTick(tag.getInt("SkillTick"));
         setSkill(tag.getString("Skill"));
@@ -146,6 +169,9 @@ public abstract class BaseEntity extends Mob {
         if (tag.hasUUID("Owner")) setOwnerUUID(tag.getUUID("Owner"));
         setAttackType(tag.getInt("AttackType"));
         setResist(tag.getInt("Resist"));
+
+        if (tag.contains("MainScroll")) setMainScroll(tag.getInt("MainScroll"));
+        if (tag.contains("DGKScroll")) setDGKScroll(tag.getInt("DGKScroll"));
     }
 
     // ----------------------------
@@ -159,5 +185,8 @@ public abstract class BaseEntity extends Mob {
         DATA_OWNERUUID_ID = SynchedEntityData.defineId(BaseEntity.class, EntityDataSerializers.OPTIONAL_UUID);
         ATTACKTYPE = SynchedEntityData.defineId(BaseEntity.class, EntityDataSerializers.INT);
         RESIST = SynchedEntityData.defineId(BaseEntity.class, EntityDataSerializers.INT);
+
+        MAIN_SCROLL = SynchedEntityData.defineId(BaseEntity.class, EntityDataSerializers.INT);
+        DGK_SCROLL = SynchedEntityData.defineId(BaseEntity.class, EntityDataSerializers.INT);
     }
 }

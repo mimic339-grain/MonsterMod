@@ -15,7 +15,7 @@ public class ClientPlayerEntityTickMixin {
     private void tickClient(CallbackInfo ci) {
         Player player = (Player)(Object)this;
 
-        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(trans -> {
                     if(trans.isTransformed()) {
                         var identity = trans.getIdentity();

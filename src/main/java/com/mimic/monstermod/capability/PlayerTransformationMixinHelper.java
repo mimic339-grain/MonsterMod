@@ -14,7 +14,7 @@ public class PlayerTransformationMixinHelper {
      * サーバー側でプレイヤー変身情報をクライアントに同期
      */
     public static void syncTransformation(ServerPlayer player) {
-        player.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(trans -> {
                     // 変身中かどうかで属性設定
                     if (trans.isTransformed()) {

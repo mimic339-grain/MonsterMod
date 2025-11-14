@@ -46,7 +46,7 @@ public class ModCommands {
     }
 
     private static int transformPlayer(CommandSourceStack source, ServerPlayer targetPlayer, boolean transform, ResourceLocation identityId) throws CommandSyntaxException {
-        targetPlayer.getCapability(PlayerTransformationProvider.PlayerTransformationCapability.PLAYER_TRANSFORMATION)
+        targetPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     if (transform) {
                         // 変身
