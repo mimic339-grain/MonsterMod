@@ -5,7 +5,9 @@ import com.mimic.monstermod.variable.entity.IMonsterData;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -27,7 +29,15 @@ public class MimicEntity extends BaseMonsterEntity {
     public MimicEntity(EntityType<? extends BaseMonsterEntity> type, Level level) {
         super(type, level);
     }
+    @Override
+    public float getEyeHeight(Pose pose) {
+        return 0.52f; // 低い目線の Mimic
+    }
 
+    @Override
+    public EntityDimensions getDimensions(Pose pose) {
+        return EntityDimensions.fixed(0.6f, 0.7f); // Mimic のサイズ
+    }
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
@@ -94,8 +104,7 @@ public class MimicEntity extends BaseMonsterEntity {
                 0.25D,
                 4.0D,
                 0.2D,
-                2.0D,
-                1.0D
+                2.0D
         );
     }
 }

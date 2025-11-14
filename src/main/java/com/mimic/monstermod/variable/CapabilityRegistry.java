@@ -1,7 +1,6 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.capability.PlayerTransformationMixinHelper;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
@@ -142,8 +141,9 @@ public class CapabilityRegistry {
         ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()), serverPlayer);
 
         // PlayerTransformation 同期
-        getPlayerTransformation(player).ifPresent(transCap ->
-                PlayerTransformationMixinHelper.syncTransformation(serverPlayer)
-        );
+        getPlayerTransformation(player).ifPresent(transCap -> {
+            // ここで syncToClient を直接呼び出して同期
+            transCap.syncToClient(player);  // PlayerTransformationProvider の syncToClient を直接使用
+        });
     }
 }

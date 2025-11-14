@@ -50,11 +50,7 @@ public class BaseMonsterIdentity {
         if (entity == null) return;
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
-        entity.setPos(player.getX(), player.getY(), player.getZ());
-        boolean moving = entity.position().distanceToSqr(player.position()) > 0.001;
-        entity.setPlayerActiveMove(moving);
     }
-
     // -----------------------------
     // プレイヤー状態をEntityにコピー（クライアント用）
     // -----------------------------
@@ -62,7 +58,6 @@ public class BaseMonsterIdentity {
         if (entity == null) return;
         copyRotationPoseAndEquip(player);
         entity.setDeltaMovement(player.getDeltaMovement());
-        entity.setPos(player.getX(), player.getY(), player.getZ());
         entity.tickCount = player.tickCount;
 
         boolean moving = player.getDeltaMovement().horizontalDistanceSqr() > 0.001;
@@ -78,7 +73,7 @@ public class BaseMonsterIdentity {
         entity.setShiftKeyDown(player.isCrouching());
     }
 
-    private void copyRotationPoseAndEquip(Player player) {
+    public void copyRotationPoseAndEquip(Player player) {
         if (entity == null) return;
 
         // 体回転

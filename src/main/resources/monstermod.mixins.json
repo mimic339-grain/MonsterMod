@@ -5,11 +5,10 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "monstermod.refmap.json",
   "mixins": [
-    "LivingEntityMixin",
     "PlayerMixin",
+    "player.PlayerMixin",
     "player.PlayerEntityTickMixin",
     "player.PlayerRendererMixin",
-    "player.PlayerTransformationSyncMixin",
     "player.ClientPlayerEntityTickMixin"
   ],
   "injectors": {

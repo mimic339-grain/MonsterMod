@@ -11,18 +11,14 @@ import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
-
-/**
- * プレイヤー変身管理
- *
- * - IdentityRegistry を利用して Entity に応じた Identity を自動生成
- * - 変身中はプレイヤー状態を Entity に完全同期
- */
 public class PlayerTransformation {
 
     private boolean isTransformed = false;
@@ -33,14 +29,12 @@ public class PlayerTransformation {
     // ===== Getter / Setter =====
     public boolean isTransformed() { return isTransformed; }
     public void setTransformed(boolean transformed) { this.isTransformed = transformed; }
-
     @Nullable public ResourceLocation getMobId() { return transformedMobId; }
     public void setTransformedMobId(@Nullable ResourceLocation mobId) { this.transformedMobId = mobId; }
-
     @Nullable public BaseMonsterEntity getEntity() { return transformedEntity; }
     public void setTransformedEntity(@Nullable BaseMonsterEntity entity) { this.transformedEntity = entity; }
-
     @Nullable public BaseMonsterIdentity getIdentity() { return identity; }
+
     // ===== Tick =====
     public void tick(Player player) {
         if (!isTransformed) return;
@@ -52,12 +46,14 @@ public class PlayerTransformation {
         BaseMonsterIdentity id = ensureIdentity(level, entity, player);
 
         if (!level.isClientSide) {
-            // サーバ側: クールダウンや状態更新
+            // 攻撃力・移動速度・防御力などの毎tick属性同期
+            syncAttributesEveryTick(player, entity);
+
+            // 回転・装備・モンスター内部処理同期
             id.tickServer(player);
             if (entity.getMonsterData() != null) entity.getMonsterData().tick();
-            id.copyFromPlayerServer(player);
+            id.copyRotationPoseAndEquip(player);
         } else {
-            // クライアント側: プレイヤー状態を反映
             id.copyFromPlayerClient(player);
         }
     }
@@ -65,11 +61,11 @@ public class PlayerTransformation {
     // ===== 変身開始 =====
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (isTransformed) return;
+
         isTransformed = true;
         transformedMobId = mobId;
         Level level = player.level();
 
-        // サーバ側 Entity 生成
         if (!level.isClientSide) {
             var type = ModEntitieType.getEntityType(mobId);
             if (type != null) {
@@ -83,17 +79,23 @@ public class PlayerTransformation {
                 }
             }
         } else {
-            // クライアント側: 仮想 Entity 生成
             transformedEntity = ensureEntity(level);
         }
 
-        ensureIdentity(level, transformedEntity, player);
+        BaseMonsterIdentity id = ensureIdentity(level, transformedEntity, player);
+        // HP回復（変身後の最大HPに基づいて回復）
+        syncHealth(player, transformedEntity);
+
+        // クライアントに同期
         syncToClient(player);
     }
 
     // ===== 変身解除 =====
     public void stopTransformation(Player player) {
         if (!isTransformed) return;
+
+        // 属性を元に戻す
+        resetPlayerAttributes(player);
 
         isTransformed = false;
 
@@ -106,6 +108,48 @@ public class PlayerTransformation {
         transformedMobId = null;
 
         syncToClient(player);
+    }
+    // ===== 毎tick属性同期（HPも含む） =====
+    private void syncAttributesEveryTick(Player player, LivingEntity entity) {
+        copyAttribute(player, Attributes.MAX_HEALTH, entity);
+        copyAttribute(player, Attributes.ATTACK_DAMAGE, entity);
+        copyAttribute(player, Attributes.MOVEMENT_SPEED, entity);
+        copyAttribute(player, Attributes.ARMOR, entity);
+        copyAttribute(player, Attributes.KNOCKBACK_RESISTANCE, entity);
+    }
+
+    private void copyAttribute(Player player, Attribute attr, LivingEntity entity) {
+        if (player.getAttribute(attr) != null && entity.getAttribute(attr) != null) {
+            double current = player.getAttributeValue(attr);
+            double target = entity.getAttributeValue(attr);
+            if (current != target) { // 値が変わったときだけ更新
+                player.getAttribute(attr).setBaseValue(target);
+            }
+        }
+    }
+    // ===== 最大HPに基づいたHP回復（変身後に1回だけ回復） =====
+    private void syncHealth(Player player, LivingEntity entity) {
+        if (entity.getAttribute(Attributes.MAX_HEALTH) != null) {
+            double maxHealth = entity.getAttributeValue(Attributes.MAX_HEALTH);
+            // 最大HPが変わった場合にのみ回復
+            if (player.getHealth() < maxHealth) {
+                player.setHealth((float) maxHealth); // HPを最大値まで回復
+            }
+        }
+    }
+    // ===== 属性リセット =====
+    private void resetPlayerAttributes(Player player) {
+        setAttribute(player, Attributes.MAX_HEALTH, 20.0);
+        player.setHealth(20.0f);
+
+        setAttribute(player, Attributes.ATTACK_DAMAGE, 2.0);
+        setAttribute(player, Attributes.MOVEMENT_SPEED, 0.1);
+        setAttribute(player, Attributes.ARMOR, 0.0);
+        setAttribute(player, Attributes.KNOCKBACK_RESISTANCE, 0.0);
+    }
+
+    private void setAttribute(Player player, Attribute attr, double value) {
+        if (player.getAttribute(attr) != null) player.getAttribute(attr).setBaseValue(value);
     }
 
     // ===== クライアント同期 =====
@@ -143,7 +187,7 @@ public class PlayerTransformation {
         return identity;
     }
 
-    // ===== NBT 保存 =====
+    // ===== NBT 保存 / 復元 =====
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("isTransformed", isTransformed);
@@ -151,7 +195,6 @@ public class PlayerTransformation {
         return tag;
     }
 
-    // ===== NBT 復元 =====
     public void deserializeNBT(CompoundTag tag) {
         isTransformed = tag.getBoolean("isTransformed");
         transformedMobId = tag.contains("mobId") ? new ResourceLocation(tag.getString("mobId")) : null;
@@ -162,14 +205,8 @@ public class PlayerTransformation {
                 BaseMonsterEntity entity = ensureEntity(level);
                 if (entity != null) {
                     identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, entity);
-                    if (identity == null) identity = new BaseMonsterIdentity(entity, 3);
                 }
             }
         }
-    }
-
-    // ===== Identity 更新（外部用） =====
-    public void setIdentity(@Nullable BaseMonsterIdentity identity) {
-        this.identity = identity;
     }
 }

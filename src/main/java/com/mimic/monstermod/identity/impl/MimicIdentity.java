@@ -53,30 +53,29 @@ public class MimicIdentity extends BaseMonsterIdentity {
      */
     @Override
     public void handleDodge(Player player) {
-        BaseMonsterEntity entity = getEntity();
-        if (!(entity instanceof MimicEntity mimic)) return;
+        if (player == null) return;
 
+        // 移動量（回避距離）
         float yaw = player.getYRot();
         double radians = Math.toRadians(yaw);
+        double distance = 15.0;
 
-        double dx = -Math.sin(radians) * 15.0;
-        double dz = Math.cos(radians) * 15.0;
+        double dx = -Math.sin(radians) * distance;
+        double dz = Math.cos(radians) * distance;
 
-        Vec3 targetPos = entity.position().add(dx, 0, dz);
+        // Player を瞬間移動
+        Vec3 targetPos = player.position().add(dx, 0, dz);
+        player.setPos(targetPos.x, targetPos.y, targetPos.z);
+        player.xOld = targetPos.x;
+        player.yOld = targetPos.y;
+        player.zOld = targetPos.z;
+        player.setDeltaMovement(Vec3.ZERO);
 
-        // --- サーバー側を移動 ---
-        entity.setPos(targetPos.x, targetPos.y, targetPos.z);
-        entity.setDeltaMovement(Vec3.ZERO);
-
-        System.out.println("[MimicIdentity] Dodge server teleport to: " + targetPos);
-
-        // --- クライアント側へ同期 ---
-        if (!player.level().isClientSide()) {
-            ServerPlayer sp = (ServerPlayer) player;
-
+        // サーバ側ならクライアントに同期
+        if (!player.level().isClientSide() && player instanceof ServerPlayer sp) {
             ModMessages.INSTANCE.send(
                     PacketDistributor.PLAYER.with(() -> sp),
-                    new S2CMimicDodgePacket(entity.getId(), targetPos)
+                    new S2CMimicDodgePacket(player.getId(), targetPos)
             );
         }
     }

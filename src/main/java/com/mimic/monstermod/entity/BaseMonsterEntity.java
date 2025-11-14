@@ -9,9 +9,10 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
@@ -21,15 +22,10 @@ import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
 
-/**
- * BaseMonsterEntity（MimicEntity対応版）
- * GeckoLib Entity の基本機能。
- */
 public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity {
 
     protected final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
 
-    // ---- 同期データ ----
     private static final EntityDataAccessor<String> CURRENT_ANIMATION =
             SynchedEntityData.defineId(BaseMonsterEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> CURRENT_SKILL =
@@ -37,13 +33,27 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
 
     private boolean initialSynced = false;
 
+    // 独自寸法・目線
+    protected EntityDimensions monsterDimensions = EntityDimensions.fixed(0.6f, 1.8f);
+    protected float monsterEyeHeight = 1.62f;
+
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
     }
 
-    // ============================================================== //
-    // SynchedEntityData
-    // ============================================================== //
+    /** プレイヤー変身時に呼ばれる目線 */
+    @Override
+    public float getEyeHeight(Pose pose) {
+        return monsterEyeHeight;
+    }
+
+    /** プレイヤー変身時に呼ばれる当たり判定 */
+    @Override
+    public EntityDimensions getDimensions(Pose pose) {
+        return monsterDimensions;
+    }
+
+    // ==== SynchedEntityData ====
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
@@ -66,15 +76,10 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public String getSkillState() {
         return this.entityData.get(CURRENT_SKILL);
     }
-    // ==============================================================
-// プレイヤー移動状態（変身中に使用）
-// ==============================================================
+
+    // ==== プレイヤー移動状態 ====
     private boolean playerActiveMove = false;
 
-    /**
-     * プレイヤーが実際に動いているかどうかを示すフラグ
-     * BaseMonsterIdentity から同期される
-     */
     public void setPlayerActiveMove(boolean moving) {
         this.playerActiveMove = moving;
     }
@@ -82,9 +87,8 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public boolean isPlayerActivelyMoving() {
         return this.playerActiveMove;
     }
-    // ============================================================== //
-    // GeckoLib
-    // ============================================================== //
+
+    // ==== GeckoLib ====
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return cache;
@@ -93,13 +97,10 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     @Override
     public abstract void registerControllers(software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar controllers);
 
-    // ============================================================== //
-    // Tick & Network
-    // ============================================================== //
+    // ==== Tick & Network ====
     @Override
     public void tick() {
         super.tick();
-
         if (!level().isClientSide && !initialSynced) {
             initialSynced = true;
             syncMonsterState();
@@ -116,25 +117,20 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         IMonsterData data = getMonsterData();
         String skill = data != null ? data.getSkill() : "";
         String anim = getCurrentAnimation();
-        S2CMonsterSyncPacket packet = new S2CMonsterSyncPacket(getId(), anim, skill);
-        ModMessages.INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this), packet);
+        ModMessages.INSTANCE.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
+                new S2CMonsterSyncPacket(getId(), anim, skill));
     }
 
-    // ============================================================== //
-    // Capability
-    // ============================================================== //
+    // ==== Capability ====
     public IMonsterData getMonsterData() {
         return CapabilityRegistry.getMonsterData(this);
     }
 
-    // ============================================================== //
-    // NBT
-    // ============================================================== //
+    // ==== NBT ====
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putString("AnimationName", getCurrentAnimation());
-
         IMonsterData data = getMonsterData();
         if (data != null) {
             tag.putString("Skill", data.getSkill());
@@ -146,7 +142,6 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         if (tag.contains("AnimationName")) setCurrentAnimation(tag.getString("AnimationName"));
-
         IMonsterData data = getMonsterData();
         if (data != null) {
             if (tag.contains("Skill")) data.setSkill(tag.getString("Skill"));
@@ -154,19 +149,14 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
         }
     }
 
-    // ============================================================== //
-    // 属性生成
-    // ============================================================== //
+    // ==== 属性生成 ====
     public static AttributeSupplier.Builder createDefaultAttributes(
-            double health, double speed, double damage, double resistance, double armor, double gravity) {
+            double health, double speed, double damage, double resistance, double armor) {
         return Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, health)
                 .add(Attributes.MOVEMENT_SPEED, speed)
                 .add(Attributes.ATTACK_DAMAGE, damage)
                 .add(Attributes.ARMOR, armor)
-                .add(Attributes.KNOCKBACK_RESISTANCE, resistance)
-                .add(BaseMonsterEntity.GRAVITY, gravity);
+                .add(Attributes.KNOCKBACK_RESISTANCE, resistance);
     }
-
-    public static final Attribute GRAVITY = Attributes.ATTACK_KNOCKBACK;
 }
