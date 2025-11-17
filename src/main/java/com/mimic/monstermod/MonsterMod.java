@@ -20,7 +20,7 @@ import org.slf4j.Logger;
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class MonsterMod {
     public static final String MOD_ID = "monstermod";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
 
     // 追加: ネットワーク通信チャンネル
     public static SimpleChannel CHANNEL;

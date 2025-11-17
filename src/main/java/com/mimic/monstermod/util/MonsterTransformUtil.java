@@ -27,16 +27,12 @@ public class MonsterTransformUtil {
 
     // UUIDごとの IdentityHP管理
     private static final Map<UUID, Map<BaseMonsterIdentity, Float>> identityHPMap = new HashMap<>();
-
-    // 変身前 Player素HP
     private static final Map<UUID, Float> playerPrevHPMap = new HashMap<>();
 
     // =========================
     // Identity HP
     // =========================
     public static float getIdentityHP(UUID uuid, @Nullable BaseMonsterIdentity identity) {
-        if (identity == null) return 20f;
-
         identityHPMap.putIfAbsent(uuid, new HashMap<>());
         Map<BaseMonsterIdentity, Float> map = identityHPMap.get(uuid);
 
@@ -120,12 +116,6 @@ public class MonsterTransformUtil {
         return player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .map(PlayerTransformation::getIdentity)
                 .orElse(null);
-    }
-
-    public static float getCurrentIdentityHP(Player player) {
-        BaseMonsterIdentity identity = getCurrentIdentity(player);
-        if (identity == null) return player.getHealth();
-        return getIdentityHP(player.getUUID(), identity);
     }
 
     // =========================

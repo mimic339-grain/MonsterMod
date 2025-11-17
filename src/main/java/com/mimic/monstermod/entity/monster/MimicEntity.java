@@ -36,7 +36,7 @@ public class MimicEntity extends BaseMonsterEntity {
 
     @Override
     public EntityDimensions getDimensions(Pose pose) {
-        return EntityDimensions.fixed(0.6f, 0.7f); // Mimic のサイズ
+        return EntityDimensions.fixed(4f, 4f); // Mimic のサイズ
     }
     @Override
     protected void defineSynchedData() {
