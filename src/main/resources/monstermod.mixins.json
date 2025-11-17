@@ -9,7 +9,8 @@
     "player.PlayerMixin",
     "player.PlayerEntityTickMixin",
     "player.PlayerRendererMixin",
-    "player.ClientPlayerEntityTickMixin"
+    "player.ClientPlayerEntityTickMixin",
+    "player.LivingEntityTransformationMixin"
   ],
   "injectors": {
     "defaultRequire": 1

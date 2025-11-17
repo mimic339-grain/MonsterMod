@@ -100,11 +100,11 @@ public class MimicEntity extends BaseMonsterEntity {
 
     public static AttributeSupplier.Builder createAttributes() {
         return BaseMonsterEntity.createDefaultAttributes(
-                200.0D,
+                30.0D,
                 0.25D,
-                4.0D,
-                0.2D,
-                2.0D
+                10000.0D,
+                1D,
+                1.0D
         );
     }
 }

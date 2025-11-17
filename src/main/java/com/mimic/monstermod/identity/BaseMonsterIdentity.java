@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 
 import javax.annotation.Nullable;
@@ -24,7 +25,23 @@ public class BaseMonsterIdentity {
     @Nullable
     protected final BaseMonsterEntity entity;
     protected int[] abilityCooldowns;
+    // BaseMonsterIdentity.java 追加例
+    private float currentHP = -1; // -1なら未初期化
 
+    // 現在HPを持っているか
+    public boolean hasCurrentHP() {
+        return currentHP >= 0;
+    }
+
+    // 現在HPを取得
+    public float getCurrentHP() {
+        return currentHP >= 0 ? currentHP : (float) entity.getAttributeValue(Attributes.MAX_HEALTH);
+    }
+
+    // 現在HPを設定
+    public void setCurrentHP(float hp) {
+        currentHP = hp;
+    }
     public BaseMonsterIdentity(@Nullable BaseMonsterEntity entity, int abilityCount) {
         this.entity = entity;
         this.abilityCooldowns = new int[abilityCount];

@@ -78,8 +78,7 @@ public abstract class PlayerMixin {
                         localPlayer.refreshDimensions(); // 当たり判定・寸法を即時反映
                     }
 
-                    // カメラ高さを即時更新（Shift を押さなくても反映）
-                    // eyeHeight は private なので LocalPlayer のみに代入可
+                    // カメラ高さを即時更新
                     float eyeHeight = transformed.getEyeHeight(localPlayer.getPose());
                     try {
                         java.lang.reflect.Field f = LocalPlayer.class.getDeclaredField("eyeHeight");

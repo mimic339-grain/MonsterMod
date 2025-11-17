@@ -1,6 +1,7 @@
 package com.mimic.monstermod;
 
 import com.mimic.monstermod.command.ModCommands;
+import com.mimic.monstermod.command.ResetIdentityHPCommand;
 import com.mojang.logging.LogUtils;
 import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.entity.ModEntityAttributes;
@@ -43,6 +44,10 @@ public class MonsterMod {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
+        // 既存のModCommands
         ModCommands.register(event.getDispatcher());
+
+        // ResetIdentityHPCommand を別で登録
+        ResetIdentityHPCommand.register(event.getDispatcher());
     }
 }
