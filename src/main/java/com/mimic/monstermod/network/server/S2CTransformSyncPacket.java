@@ -2,6 +2,7 @@ package com.mimic.monstermod.network.server;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.util.MonsterTransformUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -13,7 +14,6 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public class S2CTransformSyncPacket {
-
     private final UUID playerId;
     private final CompoundTag nbt;
 
@@ -38,33 +38,25 @@ public class S2CTransformSyncPacket {
             Player player = mc.level.getPlayerByUUID(playerId);
             if (player == null) return;
 
-            MonsterMod.getLogger().info("[S2CTransformSyncPacket] Received transform sync for {}", playerId);
-            MonsterMod.getLogger().debug("[S2CTransformSyncPacket] NBT Data: {}", nbt);
-
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
                 transformation.deserializeNBT(nbt);
 
-                // 変身解除時の属性復元
                 if (!transformation.isTransformed()) {
-                    // 属性をリセット
-                    transformation.resetAttributes(player, true);
-
-                    // Player HP を変身前のHPに復元
+                    // 変身解除時の Player 属性と HP を復元
+                    MonsterTransformUtil.resetPlayerAttributes(player, true);
                     float prevHP = nbt.contains("playerHealth") ? nbt.getFloat("playerHealth") : 20f;
                     player.setHealth(prevHP);
-
-                    MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Transformation stopped: Player HP restored to {}", prevHP);
                 } else {
                     // 変身中は IdentityHP を Player HP に反映
-                    float identityHP = nbt.contains("identityHP") ? nbt.getFloat("identityHP") : (float) player.getAttributeValue(Attributes.MAX_HEALTH);
-                    float maxHP = (float) (transformation.getEntity() != null
-                            ? transformation.getEntity().getAttributeValue(Attributes.MAX_HEALTH)
-                            : identityHP);
+                    float identityHP = nbt.contains("identityHP")
+                            ? nbt.getFloat("identityHP")
+                            : (float) player.getAttributeValue(Attributes.MAX_HEALTH);
+                    float maxHP = transformation.getEntity() != null
+                            ? (float) transformation.getEntity().getAttributeValue(Attributes.MAX_HEALTH)
+                            : identityHP;
 
-                    // Player HP は IdentityHP を超えないように同期
                     player.setHealth(Math.min(identityHP, maxHP));
 
-                    // MAX_HEALTH も同期
                     if (player.getAttribute(Attributes.MAX_HEALTH) != null) {
                         player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(maxHP);
                     }
@@ -73,7 +65,6 @@ public class S2CTransformSyncPacket {
                 // Dimension refresh
                 if (transformation.consumeDimensionRefresh()) {
                     player.refreshDimensions();
-                    MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Dimensions refreshed for player {}", playerId);
                 }
             });
         });
@@ -82,20 +73,20 @@ public class S2CTransformSyncPacket {
 
     public static CompoundTag createNBT(Player player) {
         CompoundTag tag = new CompoundTag();
+
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             tag.merge(transformation.serializeNBT());
 
-            // IdentityHP は変身中なら必ず反映
+            // IdentityHP は変身中なら必ず保存
             if (transformation.getIdentity() != null && transformation.getIdentity().hasCurrentHP()) {
                 tag.putFloat("identityHP", transformation.getIdentity().getCurrentHP());
-                MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Server: Identity HP saved as {}", transformation.getIdentity().getCurrentHP());
             }
 
             // Player HP は常に保存（変身解除時に復元用）
             float playerHP = player.getHealth();
             tag.putFloat("playerHealth", playerHP);
-            MonsterMod.getLogger().debug("[S2CTransformSyncPacket] Server: Player HP saved as {}", playerHP);
         });
+
         return tag;
     }
 }

@@ -19,7 +19,6 @@ import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.common.util.LazyOptional;
@@ -80,39 +79,7 @@ public class CapabilityRegistry {
         }
     }
 
-    // ====== CLONE / RESPAWN / LOGIN / DIM CHANGE ======
-    @SubscribeEvent
-    public static void onPlayerClone(PlayerEvent.Clone event) {
-        Player oldPlayer = event.getOriginal();
-        Player newPlayer = event.getEntity();
-        oldPlayer.revive();
-
-        copyCaps(oldPlayer, newPlayer);
-        syncToClient(newPlayer);
-    }
-
-    @SubscribeEvent
-    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            syncToClient(serverPlayer);
-        }
-    }
-
-    @SubscribeEvent
-    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            syncToClient(serverPlayer);
-        }
-    }
-
-    @SubscribeEvent
-    public static void onPlayerDimChanged(PlayerEvent.PlayerChangedDimensionEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            syncToClient(serverPlayer);
-        }
-    }
-
-    private static void copyCaps(Player oldPlayer, Player newPlayer) {
+    public static void copyCaps(Player oldPlayer, Player newPlayer) {
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
                         newCap.deserializeNBT(oldCap.serializeNBT())

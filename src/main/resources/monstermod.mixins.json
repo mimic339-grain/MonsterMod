@@ -7,10 +7,9 @@
   "mixins": [
     "PlayerMixin",
     "player.PlayerMixin",
-    "player.PlayerEntityTickMixin",
     "player.PlayerRendererMixin",
     "player.ClientPlayerEntityTickMixin",
-    "player.LivingEntityTransformationMixin"
+    "player.MonsterFoodRecoveryMixin"
   ],
   "injectors": {
     "defaultRequire": 1

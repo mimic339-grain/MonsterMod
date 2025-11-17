@@ -1,6 +1,7 @@
 package com.mimic.monstermod.command;
 
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.util.MonsterTransformUtil;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -25,12 +26,9 @@ public class ResetIdentityHPCommand {
 
                                     AtomicInteger count = new AtomicInteger();
 
-                                    for (ServerPlayer player :
-                                            EntityArgument.getPlayers(ctx, "targets")) {
-
+                                    for (ServerPlayer player : EntityArgument.getPlayers(ctx, "targets")) {
                                         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
-                                                .ifPresent(cap -> cap.resetAllIdentityHP(player));
-
+                                                .ifPresent(cap -> MonsterTransformUtil.resetAllIdentityHPs(player));
                                         count.incrementAndGet();
                                     }
 
