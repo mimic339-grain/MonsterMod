@@ -18,7 +18,7 @@ import java.util.Map;
 public class IdentityType {
 
     private static final Map<Class<? extends BaseMonsterEntity>, IdentityType> ENTITY_MAP = new HashMap<>();
-    static final Map<ResourceLocation, IdentityType> ID_MAP = new HashMap<>();
+    public static final Map<ResourceLocation, IdentityType> ID_MAP = new HashMap<>();
 
     private final ResourceLocation id;
     private final Class<? extends BaseMonsterEntity> entityClass;
