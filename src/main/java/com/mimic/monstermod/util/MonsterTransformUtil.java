@@ -105,7 +105,7 @@ public class MonsterTransformUtil {
     }
 
     // ================================
-    // NBT 保存 / 復元
+    // identity player両方のNBT 保存 / 復元
     // ================================
     public static CompoundTag saveHPToNBT(Player player, CompoundTag tag) {
         tag.putDouble("player_hp", getPlayerHP(player));
@@ -154,6 +154,30 @@ public class MonsterTransformUtil {
         loadHPFromNBT(player, tag);
         loadAttributesFromNBT(player, tag);
     }
+    // =====================================
+    // identity→identity変身用
+    // =====================================
+    public static void saveIdentityHPToNBT(Player player, String identityId) {
+        CompoundTag tag = player.getPersistentData().getCompound("hp_save");
+        Map<String, Double> identityMap = IDENTITY_HP_MAP.getOrDefault(player.getUUID(), new HashMap<>());
+
+        CompoundTag idTag = tag.contains("identity_hp_map") ? tag.getCompound("identity_hp_map") : new CompoundTag();
+        if (identityMap.containsKey(identityId)) {
+            idTag.putDouble(identityId, identityMap.get(identityId));
+        }
+        tag.put("identity_hp_map", idTag);
+
+        player.getPersistentData().put("hp_save", tag);
+    }
+    // =====================================
+    // player→identity変身用
+    // =====================================
+    public static void savePlayerHPToNBT(Player player) {
+        CompoundTag tag = player.getPersistentData().getCompound("hp_save");
+        tag.putDouble("player_hp", getPlayerHP(player));
+        player.getPersistentData().put("hp_save", tag);
+    }
+
 
     // ================================
     // HP リセット（死亡時・コマンド）

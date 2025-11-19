@@ -2,6 +2,7 @@ package com.mimic.monstermod.network.server;
 
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.util.MonsterTransformUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -13,8 +14,13 @@ import java.util.function.Supplier;
 
 /**
  * サーバー → クライアント
- * Playerの変身状態（Identity）同期用
- * 回転情報は送らず描画前コピーに任せる
+ * Playerの変身状態（Identity / HP）同期用（属性は *サーバーだけ* が authoritative）
+ *
+ * クライアント側では：
+ *  - 変身状態の反映
+ *  - playerHP / identityHP の同期
+ *  - DummyEntity の生成（描画用）だけ行う
+ * 属性のコピーや health の変更は行わない。サーバーが全部管理する。
  */
 public class S2CTransformSyncPacket {
 
@@ -26,18 +32,16 @@ public class S2CTransformSyncPacket {
         this.nbt = nbt;
     }
 
-    /** エンコード */
     public static void encode(S2CTransformSyncPacket msg, FriendlyByteBuf buf) {
         buf.writeUUID(msg.playerId);
         buf.writeNbt(msg.nbt);
     }
 
-    /** デコード */
     public static S2CTransformSyncPacket decode(FriendlyByteBuf buf) {
         return new S2CTransformSyncPacket(buf.readUUID(), buf.readNbt());
     }
 
-    /** クライアント側で処理 */
+    /** クライアントでの処理 */
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
@@ -48,24 +52,45 @@ public class S2CTransformSyncPacket {
 
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
-                        // 変身NBTを適用（能力クールタイム・装備など）
+
+                        // 変身状態（isTransformed / mobId）の反映
                         transformation.deserializeNBT(nbt);
 
-                        // 描画用Identityの取得（renderMixinで描画前にPlayerからコピー）
+                        // === HP同期（Mapに入れるだけ） ===
+                        if (nbt.contains("playerHP")) {
+                            MonsterTransformUtil.setPlayerHP(player, nbt.getDouble("playerHP"));
+                        }
+
                         BaseMonsterIdentity identity = transformation.getIdentity();
+                        if (identity != null && nbt.contains("identityHP")) {
+                            MonsterTransformUtil.setIdentityHP(player, identity.getId(), nbt.getDouble("identityHP"));
+                        }
                     });
         });
         ctx.get().setPacketHandled(true);
     }
 
-    /** サーバー側で送信するNBT作成 */
+    /**
+     * サーバー → クライアントへ送る NBT を作成
+     */
     public static CompoundTag createNBT(Player player) {
         CompoundTag tag = new CompoundTag();
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
-                .ifPresent(transformation -> tag.merge(transformation.serializeNBT()));
+                .ifPresent(transformation -> {
+                    // isTransformed / mobId の書き込み
+                    tag.merge(transformation.serializeNBT());
 
-        // ここでは回転情報は含めない（描画前コピーに任せる）
+                    // HP同期
+                    double playerHP = MonsterTransformUtil.getPlayerHP(player);
+                    tag.putDouble("playerHP", playerHP);
+
+                    BaseMonsterIdentity identity = transformation.getIdentity();
+                    if (identity != null) {
+                        double identityHP = MonsterTransformUtil.getIdentityHP(player, identity.getId());
+                        tag.putDouble("identityHP", identityHP);
+                    }
+                });
 
         return tag;
     }

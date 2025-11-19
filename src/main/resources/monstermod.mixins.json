@@ -7,7 +7,6 @@
   "mixins": [
     "PlayerMixin",
     "player.PlayerMixin",
-    "player.PlayerEntityTickMixin",
     "player.PlayerRendererMixin",
     "player.ClientPlayerEntityTickMixin"
   ],
