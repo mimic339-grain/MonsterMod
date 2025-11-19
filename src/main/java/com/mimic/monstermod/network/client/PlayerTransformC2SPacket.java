@@ -89,7 +89,7 @@ public class PlayerTransformC2SPacket {
                         }
 
                         // 状態同期
-                        cap.syncToClient(player);
+                        cap.syncToAllClients(player);
                     });
         });
         ctx.get().setPacketHandled(true);

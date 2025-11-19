@@ -45,6 +45,6 @@ public class PlayerTransformationProvider implements ICapabilityProvider {
     }
 
     public void syncToClient(Player player) {
-        transformation.syncToClient(player);
+        transformation.syncToAllClients(player);
     }
 }
