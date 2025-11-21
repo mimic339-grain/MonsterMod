@@ -15,12 +15,14 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Objects;
+
 /**
  * PlayerTransformation 完全版
+ * - HP 個別管理 (playerHP / identityHP)
+ * - 変身中の属性は DEV(BaseMonsterEntity) に完全依存
  * - サーバ authoritative
- * - HP / 属性管理
- * - クライアントは同期パケットで表示
- * - PlayerRendererMixin は identity を描画する
+ * - 変身/解除後はパケット同期
  */
 public class PlayerTransformation {
 
@@ -30,7 +32,7 @@ public class PlayerTransformation {
     @Nullable private BaseMonsterIdentity identity = null;
     private boolean needsDimensionRefresh = false;
 
-    // ===== Getters / Flags =====
+    // ========= getter/setter =========
     public boolean isTransformed() { return isTransformed; }
     public void setTransformed(boolean t) { isTransformed = t; }
     public ResourceLocation getMobId() { return transformedMobId; }
@@ -40,97 +42,107 @@ public class PlayerTransformation {
     public void markDimensionDirty() { needsDimensionRefresh = true; }
     public boolean consumeDimensionRefresh() { boolean b = needsDimensionRefresh; needsDimensionRefresh = false; return b; }
 
-    // ==============================
+    // ================================//
     // 変身開始
-    // ==============================
+    // ================================//
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (player == null || mobId == null) return;
+
         Level level = player.level();
         double currentHP = player.getHealth();
 
         // HP 保存
         if (isTransformed && identity != null) {
-            MonsterTransformUtil.setIdentityHP(player, identity.getId(), Math.max(0.0, currentHP));
+            MonsterTransformUtil.logAlways("[startTransformation] saving old IdentityHP for id=" + identity.getId() + " hp=" + currentHP);
+            MonsterTransformUtil.setIdentityHP(player, identity.getId(), currentHP);
             MonsterTransformUtil.saveIdentityHPToNBT(player, identity.getId());
         } else {
+            MonsterTransformUtil.logAlways("[startTransformation] saving PlayerHP before transform: hp=" + currentHP);
             MonsterTransformUtil.setPlayerHP(player, currentHP);
             MonsterTransformUtil.savePlayerHPToNBT(player);
         }
 
         if (!level.isClientSide) {
-            // Entity 生成
+            // DEV(Entity) 生成（サーバー）
             var type = ModEntitieType.getEntityType(mobId);
-            if (type != null) {transformedEntity = (BaseMonsterEntity) type.create(level);}
+            if (type != null) transformedEntity = (BaseMonsterEntity) type.create(level);
 
             // Identity 生成
             identity = ensureIdentity(level, transformedEntity, player);
 
-            // DEV に属性を反映
+            // Player に属性コピー
             if (transformedEntity != null) {
                 MonsterTransformUtil.copyAttributesToDEV(player, transformedEntity);
             }
 
-            // Identity HP 取得・Player に適用
+            // Identity HP 適用
             if (identity != null) {
-                double identityHP = MonsterTransformUtil.getIdentityHP(player, identity.getId());
-                MonsterTransformUtil.setIdentityHP(player, identity.getId(), identityHP);
-                player.setHealth((float) Math.min(identityHP, player.getMaxHealth()));
+                double hp = MonsterTransformUtil.getIdentityHP(player, identity.getId());
+                player.setHealth((float) Math.min(hp, player.getMaxHealth()));
             }
 
             isTransformed = true;
             transformedMobId = mobId;
 
-            MonsterTransformUtil.saveAllToNBT(player);
+            MonsterTransformUtil.saveHPToNBT(player, new CompoundTag());
             syncToAllClients(player);
         } else {
-            // クライアント側
+            // クライアント側：描画用 DEV と Identity
             transformedEntity = ensureEntity(level);
             identity = ensureIdentity(level, transformedEntity, player);
         }
-        MonsterTransformUtil.updateViewAndHitbox(player);
+
+        // クライアント側もサーバ側も必ず目線・寸法更新
+        MonsterTransformUtil.updateViewAndHitbox(player, true);
         markDimensionDirty();
     }
 
-    // ==============================
+    // ================================//
     // 変身解除
-    // ==============================
+    // ================================//
     public void stopTransformation(Player player) {
         if (!isTransformed || player == null) return;
 
+        // Identity HP 保存
         if (identity != null) {
-            double currentHP = player.getHealth();
-            MonsterTransformUtil.setIdentityHP(player, identity.getId(), Math.max(0.0, currentHP));
-            MonsterTransformUtil.saveIdentityHPToNBT(player, identity.getId());
+            MonsterTransformUtil.setIdentityHP(player, identity.getId(), player.getHealth());
         }
 
-        // Player 属性とHPを復元
-        MonsterTransformUtil.resetAttributesToPlayer(player, player);
+        // Player 属性リセット
+        MonsterTransformUtil.resetAttributesToPlayer(player);
+
+        // Player HP 戻す
         double prevHP = MonsterTransformUtil.getPlayerHP(player);
-        player.setHealth((float) Math.min(prevHP, player.getAttributeValue(Attributes.MAX_HEALTH)));
+        double maxHP = player.getAttributeValue(Attributes.MAX_HEALTH);
+        player.setHealth((float) Math.min(prevHP, maxHP));
 
-        // Entity破棄
-        if (transformedEntity != null && !player.level().isClientSide) {transformedEntity.discard();}
-
+        // DEV削除（サーバ側のみ）
+        if (transformedEntity != null && !player.level().isClientSide) {
+            transformedEntity.discard();
+        }
         transformedEntity = null;
         identity = null;
         transformedMobId = null;
         isTransformed = false;
 
-        MonsterTransformUtil.saveAllToNBT(player);
-        syncToAllClients(player);
+        // NBT 保存
+        MonsterTransformUtil.saveHPToNBT(player, new CompoundTag());
 
-        MonsterTransformUtil.updateViewAndHitbox(player);
+        // クライアント・サーバ共に目線・寸法更新
+        MonsterTransformUtil.updateViewAndHitbox(player, false);
         markDimensionDirty();
+
+        // 全クライアント同期
+        syncToAllClients(player);
     }
 
-    // ==============================
-    // Identity / Entity生成
-    // ==============================
+    // ================================//
+    // Identity / Entity 生成保証
+    // ================================//
     private BaseMonsterIdentity ensureIdentity(Level level, BaseMonsterEntity ent, Player player) {
         if (identity != null) return identity;
         identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, ent);
         if (identity == null && ent != null) identity = new BaseMonsterIdentity(ent, 3);
-
         if (!level.isClientSide && player != null && identity != null) identity.copyFromPlayerServer(player);
         return identity;
     }
@@ -139,14 +151,16 @@ public class PlayerTransformation {
         if (transformedEntity != null) return transformedEntity;
         if (transformedMobId == null) return null;
         var type = ModEntitieType.getEntityType(transformedMobId);
-        if (type == null) return null;
-        transformedEntity = (BaseMonsterEntity) type.create(level);
+        if (type != null) {
+            transformedEntity = (BaseMonsterEntity) type.create(level);
+            // クライアント側なら位置復元など必要ならここで初期化
+        }
         return transformedEntity;
     }
 
-    // ==============================
-    // サーバ → クライアント同期
-    // ==============================
+    // ================================//
+    // サーバ → 全クライアント同期
+    // ================================//
     public void syncToAllClients(Player player) {
         if (player.level().isClientSide) return;
 
@@ -154,7 +168,8 @@ public class PlayerTransformation {
         nbt.putBoolean("isTransformed", isTransformed);
         nbt.putString("mobId", transformedMobId == null ? "" : transformedMobId.toString());
         nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
-        nbt.putDouble("identityHP", identity != null ? MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth());
+        nbt.putDouble("identityHP",
+                identity != null ? MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth());
 
         ModMessages.sendToAllClients(new S2CTransformSyncPacket(player.getUUID(), nbt));
     }
@@ -166,7 +181,8 @@ public class PlayerTransformation {
         nbt.putBoolean("isTransformed", isTransformed);
         nbt.putString("mobId", transformedMobId == null ? "" : transformedMobId.toString());
         nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
-        nbt.putDouble("identityHP", identity != null ? MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth());
+        nbt.putDouble("identityHP",
+                identity != null ? MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth());
 
         ModMessages.INSTANCE.send(
                 net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> sp),
@@ -174,9 +190,9 @@ public class PlayerTransformation {
         );
     }
 
-    // ==============================
-    // serialize / deserialize
-    // ==============================
+    // ================================//
+    // Capability serialize / deserialize
+    // ================================//
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("isTransformed", isTransformed);
@@ -185,26 +201,19 @@ public class PlayerTransformation {
     }
 
     public void deserializeNBT(CompoundTag tag) {
-        boolean newState = tag.getBoolean("isTransformed");
+        boolean shouldTransform = tag.getBoolean("isTransformed");
         String idStr = tag.getString("mobId");
-        float storedHP = tag.contains("identityHP") ? tag.getFloat("identityHP") : -1f;
         Player player = Minecraft.getInstance().player;
         Level level = Minecraft.getInstance().level;
         if (player == null || level == null) return;
 
-        if (!newState) {
+        if (!shouldTransform) {
             isTransformed = false;
             transformedMobId = null;
             transformedEntity = null;
             identity = null;
-
-            if (tag.contains("playerHP")) {
-                player.setHealth(tag.getFloat("playerHP"));
-                if (player.getAttribute(Attributes.MAX_HEALTH) != null)
-                    player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0);
-            }
-
             markDimensionDirty();
+            MonsterTransformUtil.updateViewAndHitbox(player, false);
             return;
         }
 
@@ -213,14 +222,17 @@ public class PlayerTransformation {
         transformedEntity = ensureEntity(level);
         identity = ensureIdentity(level, transformedEntity, player);
 
-        float maxHP = transformedEntity != null ? (float) transformedEntity.getAttributeValue(Attributes.MAX_HEALTH) : 20f;
-        float hpToApply = storedHP > 0 ? storedHP : maxHP;
+        float maxHP = transformedEntity != null
+                ? (float) transformedEntity.getAttributeValue(Attributes.MAX_HEALTH)
+                : (float) player.getAttributeValue(Attributes.MAX_HEALTH);
 
+        float applyHP = tag.contains("identityHP") ? tag.getFloat("identityHP") : maxHP;
         if (player.getAttribute(Attributes.MAX_HEALTH) != null) {
-            player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(maxHP);
-            player.setHealth(Math.min(hpToApply, maxHP));
+            Objects.requireNonNull(player.getAttribute(Attributes.MAX_HEALTH)).setBaseValue(maxHP);
+            player.setHealth(Math.min(applyHP, maxHP));
         }
 
         markDimensionDirty();
+        MonsterTransformUtil.updateViewAndHitbox(player, isTransformed);
     }
 }
