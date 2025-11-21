@@ -87,7 +87,7 @@ public class PlayerTransformation {
             transformedEntity = ensureEntity(level);
             identity = ensureIdentity(level, transformedEntity, player);
         }
-
+        MonsterTransformUtil.updateViewAndHitbox(player);
         markDimensionDirty();
     }
 
@@ -119,6 +119,7 @@ public class PlayerTransformation {
         MonsterTransformUtil.saveAllToNBT(player);
         syncToAllClients(player);
 
+        MonsterTransformUtil.updateViewAndHitbox(player);
         markDimensionDirty();
     }
 
