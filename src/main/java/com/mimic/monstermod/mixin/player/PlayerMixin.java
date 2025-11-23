@@ -1,8 +1,7 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.util.TransformationUtil;
 import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,25 +18,12 @@ public abstract class PlayerMixin {
             cancellable = true
     )
     private void onGetStandingEyeHeight(Pose pose, EntityDimensions dims, CallbackInfoReturnable<Float> cir) {
-        LivingEntity self = (LivingEntity)(Object)this;
-        self.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            if (trans.isTransformed() && trans.getEntity() != null) {
-                cir.setReturnValue(trans.getEntity().getEyeHeight(pose));
-            }
-        });
+        cir.setReturnValue(TransformationUtil.getEyeHeight((Player)(Object)this, pose));
     }
 
-    @Inject(
-            method = "getDimensions",
-            at = @At("HEAD"),
-            cancellable = true
-    )
+    @Inject(method = "getDimensions", at = @At("HEAD"), cancellable = true)
     private void onGetDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
-        LivingEntity self = (LivingEntity)(Object)this;
-        self.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            if (trans.isTransformed() && trans.getEntity() != null) {
-                cir.setReturnValue(trans.getEntity().getDimensions(pose));
-            }
-        });
+        cir.setReturnValue(TransformationUtil.getDimensions((Player)(Object)this, pose));
     }
+
 }

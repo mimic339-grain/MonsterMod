@@ -288,39 +288,6 @@ public class MonsterTransformUtil {
 
         logAlways("resetDeadIdentityHP complete for player=" + uuid);
     }
-
-
-    // =====================================
-    // 変身時に目線と当たり判定を更新 // 変身解除時に目線と当たり判定を戻す
-    // =====================================
-    /**
-     * 変身時に目線・当たり判定を更新、解除時には元に戻す
-     */
-// ================================
-// プレイヤー寸法・目線更新
-// ================================
-    public static void updateViewAndHitbox(Player player, boolean transformed) {
-        if (player == null) return;
-
-        PlayerTransformation trans = player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
-
-        if (!player.level().isClientSide) {
-            // サーバー側は refreshDimensions を呼ぶだけ
-            player.refreshDimensions();
-            return;
-        }
-
-        if (transformed && trans != null && trans.getEntity() != null) {
-            // 変身中：変身先の寸法・目線を反映
-            player.refreshDimensions();
-            logAlways("[updateViewAndHitbox] applied transformed dimensions for " + player.getUUID());
-        } else {
-            // 解除時：元のプレイヤー寸法に戻す
-            player.refreshDimensions();
-            logAlways("[updateViewAndHitbox] restored vanilla dimensions for " + player.getUUID());
-        }
-    }
-
     // ================================
     // ダメージ処理
     // ================================

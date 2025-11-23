@@ -15,8 +15,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Objects;
-
 /**
  * PlayerTransformation 完全版
  * - HP 個別管理 (playerHP / identityHP)
@@ -91,10 +89,6 @@ public class PlayerTransformation {
             transformedEntity = ensureEntity(level);
             identity = ensureIdentity(level, transformedEntity, player);
         }
-
-        // クライアント側もサーバ側も必ず目線・寸法更新
-        MonsterTransformUtil.updateViewAndHitbox(player, true);
-        markDimensionDirty();
     }
 
     // ================================//
@@ -127,10 +121,6 @@ public class PlayerTransformation {
 
         // NBT 保存
         MonsterTransformUtil.saveHPToNBT(player, new CompoundTag());
-
-        // クライアント・サーバ共に目線・寸法更新
-        MonsterTransformUtil.updateViewAndHitbox(player, false);
-        markDimensionDirty();
 
         // 全クライアント同期
         syncToAllClients(player);
@@ -203,36 +193,60 @@ public class PlayerTransformation {
     public void deserializeNBT(CompoundTag tag) {
         boolean shouldTransform = tag.getBoolean("isTransformed");
         String idStr = tag.getString("mobId");
-        Player player = Minecraft.getInstance().player;
-        Level level = Minecraft.getInstance().level;
+
+        Player player;
+        Level level;
+
+        if (Minecraft.getInstance() != null) {
+            player = Minecraft.getInstance().player;
+            level = Minecraft.getInstance().level;
+        } else {
+            return; // クライアント・サーバどちらでもnullなら処理中断
+        }
+
         if (player == null || level == null) return;
 
         if (!shouldTransform) {
+            // ================================
+            // 変身解除
+            // ================================
             isTransformed = false;
             transformedMobId = null;
             transformedEntity = null;
             identity = null;
-            markDimensionDirty();
-            MonsterTransformUtil.updateViewAndHitbox(player, false);
-            return;
+
+            // 属性リセット
+            MonsterTransformUtil.resetAttributesToPlayer(player);
+
+            // HP同期
+            double prevHP = MonsterTransformUtil.getPlayerHP(player);
+            double maxHP = player.getAttributeValue(Attributes.MAX_HEALTH);
+            player.setHealth((float) Math.min(prevHP, maxHP));
         }
 
+        // ================================
+        // 変身復帰
+        // ================================
         isTransformed = true;
         transformedMobId = idStr.isEmpty() ? null : new ResourceLocation(idStr);
         transformedEntity = ensureEntity(level);
         identity = ensureIdentity(level, transformedEntity, player);
 
-        float maxHP = transformedEntity != null
-                ? (float) transformedEntity.getAttributeValue(Attributes.MAX_HEALTH)
-                : (float) player.getAttributeValue(Attributes.MAX_HEALTH);
-
-        float applyHP = tag.contains("identityHP") ? tag.getFloat("identityHP") : maxHP;
-        if (player.getAttribute(Attributes.MAX_HEALTH) != null) {
-            Objects.requireNonNull(player.getAttribute(Attributes.MAX_HEALTH)).setBaseValue(maxHP);
-            player.setHealth(Math.min(applyHP, maxHP));
+        if (transformedEntity != null) {
+            // 属性を変身先に合わせてコピー
+            MonsterTransformUtil.copyAttributesToDEV(player, transformedEntity);
         }
 
-        markDimensionDirty();
-        MonsterTransformUtil.updateViewAndHitbox(player, isTransformed);
+        // HP同期（Identity優先）
+        double applyHP = tag.contains("identityHP") ? tag.getDouble("identityHP") : MonsterTransformUtil.getPlayerHP(player);
+        double maxHP = player.getAttributeValue(Attributes.MAX_HEALTH);
+        player.setHealth((float) Math.min(applyHP, maxHP));
+
+        // プレイヤーHPマップにも反映
+        MonsterTransformUtil.setPlayerHP(player, player.getHealth());
+
+        if (identity != null && tag.contains("identityHP")) {
+            MonsterTransformUtil.setIdentityHP(player, identity.getId(), tag.getDouble("identityHP"));
+        }
     }
 }

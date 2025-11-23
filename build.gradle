@@ -22,8 +22,11 @@ minecraft {
             // ★ここを削除しました: property 'mixin.env.disableRefMap', 'true'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            //Geckolibのrendererのデバッグ用に追加
-            jvmArgs '-Dgeckolib.debug_renderers=true'
+            jvmArgs(
+                    '-Xmx4G',          // 最大メモリ 4GB
+                    '-Xms2G',          // 初期メモリ 2GB
+                    '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
+            )
             mods {
                 monstermod {
                     source sourceSets.main
