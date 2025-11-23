@@ -8,7 +8,8 @@
     "PlayerMixin",
     "player.PlayerMixin",
     "player.PlayerRendererMixin",
-    "player.ClientPlayerEntityTickMixin"
+    "player.ClientPlayerEntityTickMixin",
+    "accessor.EntityAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

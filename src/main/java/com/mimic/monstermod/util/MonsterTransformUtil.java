@@ -5,7 +5,6 @@ import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.identity.IdentityType;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
@@ -267,29 +266,6 @@ public class MonsterTransformUtil {
         } else {
             // 万が一 Identity が null の場合は最大HPにリセット
             target.setHealth(target.getMaxHealth());
-        }
-    }
-
-    // =====================================
-    // 変身時に目線と当たり判定を更新 // 変身解除時に目線と当たり判定を戻す
-    // =====================================
-    public static void updateViewAndHitbox(Player player) {
-        if (!(player instanceof net.minecraft.client.player.LocalPlayer local)) return;
-        PlayerTransformation trans = player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
-        if (trans != null && trans.isTransformed() && trans.getEntity() != null) {
-            player.refreshDimensions();
-            try {
-                java.lang.reflect.Field f = LocalPlayer.class.getDeclaredField("eyeHeight");
-                f.setAccessible(true);
-                f.setFloat(local, trans.getEntity().getEyeHeight(player.getPose()));
-            } catch (Exception ignored) {}
-        } else {
-            player.refreshDimensions();
-            try {
-                java.lang.reflect.Field f = LocalPlayer.class.getDeclaredField("eyeHeight");
-                f.setAccessible(true);
-                f.setFloat(local, player.getStandingEyeHeight(player.getPose(), player.getDimensions(player.getPose())));
-            } catch (Exception ignored) {}
         }
     }
     // ================================

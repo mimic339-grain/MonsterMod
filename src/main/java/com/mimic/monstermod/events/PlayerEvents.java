@@ -49,6 +49,7 @@ public class PlayerEvents {
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             CapabilityRegistry.syncToClient(serverPlayer);
+
         }
     }
 

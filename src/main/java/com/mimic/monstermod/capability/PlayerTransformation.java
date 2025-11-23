@@ -7,7 +7,6 @@ import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import com.mimic.monstermod.util.MonsterTransformUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -28,7 +27,6 @@ public class PlayerTransformation {
     @Nullable private ResourceLocation transformedMobId = null;
     @Nullable private BaseMonsterEntity transformedEntity = null;
     @Nullable private BaseMonsterIdentity identity = null;
-    private boolean needsDimensionRefresh = false;
 
     // ===== Getters / Flags =====
     public boolean isTransformed() { return isTransformed; }
@@ -37,9 +35,6 @@ public class PlayerTransformation {
     public void setTransformedMobId(@Nullable ResourceLocation id) { transformedMobId = id; }
     public BaseMonsterEntity getEntity() { return transformedEntity; }
     public @Nullable BaseMonsterIdentity getIdentity() { return identity; }
-    public void markDimensionDirty() { needsDimensionRefresh = true; }
-    public boolean consumeDimensionRefresh() { boolean b = needsDimensionRefresh; needsDimensionRefresh = false; return b; }
-
     // ==============================
     // 変身開始
     // ==============================
@@ -58,7 +53,7 @@ public class PlayerTransformation {
         }
 
         if (!level.isClientSide) {
-            // Entity 生成
+            // dummyEntity 生成
             var type = ModEntitieType.getEntityType(mobId);
             if (type != null) {transformedEntity = (BaseMonsterEntity) type.create(level);}
 
@@ -79,7 +74,7 @@ public class PlayerTransformation {
 
             isTransformed = true;
             transformedMobId = mobId;
-
+            player.refreshDimensions();
             MonsterTransformUtil.saveAllToNBT(player);
             syncToAllClients(player);
         } else {
@@ -87,41 +82,38 @@ public class PlayerTransformation {
             transformedEntity = ensureEntity(level);
             identity = ensureIdentity(level, transformedEntity, player);
         }
-        MonsterTransformUtil.updateViewAndHitbox(player);
-        markDimensionDirty();
     }
 
-    // ==============================
-    // 変身解除
-    // ==============================
     public void stopTransformation(Player player) {
         if (!isTransformed || player == null) return;
 
+        // 1. HP 保存
         if (identity != null) {
             double currentHP = player.getHealth();
             MonsterTransformUtil.setIdentityHP(player, identity.getId(), Math.max(0.0, currentHP));
             MonsterTransformUtil.saveIdentityHPToNBT(player, identity.getId());
         }
 
-        // Player 属性とHPを復元
+        // 2. 属性とHPを復元
         MonsterTransformUtil.resetAttributesToPlayer(player, player);
         double prevHP = MonsterTransformUtil.getPlayerHP(player);
-        player.setHealth((float) Math.min(prevHP, player.getAttributeValue(Attributes.MAX_HEALTH)));
+        player.setHealth((float)Math.min(prevHP, player.getAttributeValue(Attributes.MAX_HEALTH)));
 
-        // Entity破棄
-        if (transformedEntity != null && !player.level().isClientSide) {transformedEntity.discard();}
-
+        // 3. Hitbox更新前に Capability を完全リセット
+        isTransformed = false;
         transformedEntity = null;
         identity = null;
         transformedMobId = null;
-        isTransformed = false;
 
+        // 4. サーバー側もクライアント側も正しい Hitbox に更新
+        player.refreshDimensions();
+
+        // 5. NBT 保存・クライアント同期
         MonsterTransformUtil.saveAllToNBT(player);
         syncToAllClients(player);
-
-        MonsterTransformUtil.updateViewAndHitbox(player);
-        markDimensionDirty();
     }
+
+
 
     // ==============================
     // Identity / Entity生成
@@ -184,43 +176,38 @@ public class PlayerTransformation {
         return tag;
     }
 
-    public void deserializeNBT(CompoundTag tag) {
+    public void deserializeNBT(CompoundTag tag, Player player) {
+        if (player == null || tag == null) return;
+
         boolean newState = tag.getBoolean("isTransformed");
         String idStr = tag.getString("mobId");
-        float storedHP = tag.contains("identityHP") ? tag.getFloat("identityHP") : -1f;
-        Player player = Minecraft.getInstance().player;
-        Level level = Minecraft.getInstance().level;
-        if (player == null || level == null) return;
+        Level level = player.level();
 
         if (!newState) {
+            // 変身解除
             isTransformed = false;
             transformedMobId = null;
             transformedEntity = null;
             identity = null;
 
-            if (tag.contains("playerHP")) {
-                player.setHealth(tag.getFloat("playerHP"));
-                if (player.getAttribute(Attributes.MAX_HEALTH) != null)
-                    player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0);
+            // サーバー側のHitbox更新
+            if (!level.isClientSide) {
+                player.refreshDimensions();
             }
-
-            markDimensionDirty();
             return;
         }
 
+        // 変身状態
         isTransformed = true;
         transformedMobId = idStr.isEmpty() ? null : new ResourceLocation(idStr);
+
+        // dummyEntity / Identity を用意
         transformedEntity = ensureEntity(level);
         identity = ensureIdentity(level, transformedEntity, player);
 
-        float maxHP = transformedEntity != null ? (float) transformedEntity.getAttributeValue(Attributes.MAX_HEALTH) : 20f;
-        float hpToApply = storedHP > 0 ? storedHP : maxHP;
-
-        if (player.getAttribute(Attributes.MAX_HEALTH) != null) {
-            player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(maxHP);
-            player.setHealth(Math.min(hpToApply, maxHP));
+        // サーバー側でもHitbox更新
+        if (!level.isClientSide) {
+            player.refreshDimensions();
         }
-
-        markDimensionDirty();
     }
 }

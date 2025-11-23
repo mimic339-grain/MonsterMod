@@ -1,7 +1,6 @@
 package com.mimic.monstermod.network;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.network.client.C2SMonsterStatePacket;
 import com.mimic.monstermod.network.client.C2SPlayerInputPacket;
 import com.mimic.monstermod.network.client.PlayerTransformC2SPacket;
 import com.mimic.monstermod.network.server.*;
@@ -43,7 +42,6 @@ public class ModMessages {
 
         // ここにパケットを追加するだけでOK
 
-        registerMessage(C2SMonsterStatePacket.class, C2SMonsterStatePacket::encode, C2SMonsterStatePacket::decode, C2SMonsterStatePacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(PlayerTransformC2SPacket.class, PlayerTransformC2SPacket::toBytes, PlayerTransformC2SPacket::new, PlayerTransformC2SPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SPlayerInputPacket.class, C2SPlayerInputPacket::encode, C2SPlayerInputPacket::decode, C2SPlayerInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);

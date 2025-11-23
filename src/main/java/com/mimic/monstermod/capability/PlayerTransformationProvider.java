@@ -36,9 +36,11 @@ public class PlayerTransformationProvider implements ICapabilityProvider {
     }
 
     public void deserializeNBT(CompoundTag tag) {
-        transformation.deserializeNBT(tag);
+        Player player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null) {
+            transformation.deserializeNBT(tag, player);
+        }
     }
-
     // Getter
     public PlayerTransformation get() {
         return transformation;

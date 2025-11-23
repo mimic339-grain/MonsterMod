@@ -14,13 +14,13 @@ import java.util.function.Supplier;
 
 /**
  * サーバー → クライアント
- * Playerの変身状態（Identity / HP）同期用（属性は *サーバーだけ* が authoritative）
+ * Playerの変身状態（Identity / HP）同期用（属性はサーバー authoritative）
  *
- * クライアント側では：
+ * クライアントでは：
  *  - 変身状態の反映
- *  - playerHP / identityHP の同期
- *  - DummyEntity の生成（描画用）だけ行う
- * 属性のコピーや health の変更は行わない。サーバーが全部管理する。
+ *  - playerHP / identityHP の同期（Mapに保存するだけ）
+ *  - DummyEntity の生成（描画用）
+ *  - 当たり判定・目線も refreshDimensions() で更新
  */
 public class S2CTransformSyncPacket {
 
@@ -52,11 +52,12 @@ public class S2CTransformSyncPacket {
 
             player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
+                        boolean wasTransformed = transformation.isTransformed();
 
-                        // 変身状態（isTransformed / mobId）の反映
-                        transformation.deserializeNBT(nbt);
+                        // Player を渡して変身状態を反映
+                        transformation.deserializeNBT(nbt, player);
 
-                        // === HP同期（Mapに入れるだけ） ===
+                        // HP を Map に同期（クライアントは表示用）
                         if (nbt.contains("playerHP")) {
                             MonsterTransformUtil.setPlayerHP(player, nbt.getDouble("playerHP"));
                         }
@@ -65,30 +66,32 @@ public class S2CTransformSyncPacket {
                         if (identity != null && nbt.contains("identityHP")) {
                             MonsterTransformUtil.setIdentityHP(player, identity.getId(), nbt.getDouble("identityHP"));
                         }
+
+                        // 変身状態が変わった場合は当たり判定・目線を更新
+                        boolean nowTransformed = transformation.isTransformed();
+                        if (wasTransformed != nowTransformed) {
+                            player.refreshDimensions();
+                        }
                     });
         });
         ctx.get().setPacketHandled(true);
     }
 
-    /**
-     * サーバー → クライアントへ送る NBT を作成
-     */
+    /** サーバー → クライアントに送る NBT を作成 */
     public static CompoundTag createNBT(Player player) {
         CompoundTag tag = new CompoundTag();
 
         player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
-                    // isTransformed / mobId の書き込み
+                    // 変身状態の書き込み
                     tag.merge(transformation.serializeNBT());
 
                     // HP同期
-                    double playerHP = MonsterTransformUtil.getPlayerHP(player);
-                    tag.putDouble("playerHP", playerHP);
+                    tag.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
 
                     BaseMonsterIdentity identity = transformation.getIdentity();
                     if (identity != null) {
-                        double identityHP = MonsterTransformUtil.getIdentityHP(player, identity.getId());
-                        tag.putDouble("identityHP", identityHP);
+                        tag.putDouble("identityHP", MonsterTransformUtil.getIdentityHP(player, identity.getId()));
                     }
                 });
 
