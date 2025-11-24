@@ -102,8 +102,8 @@ public class MimicEntity extends BaseMonsterEntity {
         return BaseMonsterEntity.createDefaultAttributes(
                 200.0D,
                 0.25D,
-                4.0D,
-                0.2D,
+                100.0D,
+                1.2D,
                 2.0D
         );
     }

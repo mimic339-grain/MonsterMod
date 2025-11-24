@@ -23,8 +23,12 @@ public class PlayerRendererMixin {
                                 int packedLight,
                                 CallbackInfo ci) {
 
-        // PlayerTransformation から Identity を取得
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+            // ★ ClientPlayer が入場したときに onLoad を呼んで identity を生成
+            if (player.level().isClientSide) {
+                transformation.onLoad(player);
+            }
+
             BaseMonsterIdentity identity = transformation.getIdentity();
 
             if (identity != null) {
