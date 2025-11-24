@@ -33,7 +33,6 @@ public class MimicEntity extends BaseMonsterEntity {
     public float getEyeHeight(Pose pose) {
         return 0.52f; // 低い目線の Mimic
     }
-
     @Override
     public EntityDimensions getDimensions(Pose pose) {
         return EntityDimensions.fixed(4.6f, 4.7f); // Mimic のサイズ
@@ -100,7 +99,7 @@ public class MimicEntity extends BaseMonsterEntity {
 
     public static AttributeSupplier.Builder createAttributes() {
         return BaseMonsterEntity.createDefaultAttributes(
-                200.0D,
+                100.0D,
                 0.25D,
                 100.0D,
                 1.2D,

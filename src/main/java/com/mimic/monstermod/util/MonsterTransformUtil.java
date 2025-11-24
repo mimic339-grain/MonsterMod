@@ -90,7 +90,7 @@ public class MonsterTransformUtil {
     public static void resetAttributesToPlayer(LivingEntity dev, Player player) {
         if (dev == null) return;
 
-        setAttribute(dev, Attributes.MAX_HEALTH, player.getMaxHealth());
+        setAttribute(dev, Attributes.MAX_HEALTH, 20);
         setAttribute(dev, Attributes.ATTACK_DAMAGE, 2.0);
         setAttribute(dev, Attributes.MOVEMENT_SPEED, 0.1);
         setAttribute(dev, Attributes.ARMOR, 0.0);

@@ -111,6 +111,7 @@ public class PlayerHPEvents {
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
         // HP が 0 の Identity を最大値に復活
+        MonsterTransformUtil.resetPlayerHP(serverPlayer);
         MonsterTransformUtil.resetIdentityHPOnRespawn(serverPlayer);
         // クライアント同期
         CapabilityRegistry.syncToClient(serverPlayer);

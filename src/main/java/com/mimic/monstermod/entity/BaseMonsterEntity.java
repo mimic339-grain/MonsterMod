@@ -40,7 +40,10 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     public BaseMonsterEntity(EntityType<? extends Mob> type, Level level) {
         super(type, level);
     }
-
+    /** 自動段差上昇の高さを取得　*/
+    public float getStepHeightValue() {
+        return 1.0f; // 常に1ブロック分の段差
+    }
     /** プレイヤー変身時に呼ばれる目線 */
     @Override
     public float getEyeHeight(Pose pose) {
@@ -130,7 +133,9 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+
         tag.putString("AnimationName", getCurrentAnimation());
+
         IMonsterData data = getMonsterData();
         if (data != null) {
             tag.putString("Skill", data.getSkill());
@@ -141,7 +146,11 @@ public abstract class BaseMonsterEntity extends BaseEntity implements GeoEntity 
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("AnimationName")) setCurrentAnimation(tag.getString("AnimationName"));
+
+        if (tag.contains("AnimationName")) {
+            setCurrentAnimation(tag.getString("AnimationName"));
+        }
+
         IMonsterData data = getMonsterData();
         if (data != null) {
             if (tag.contains("Skill")) data.setSkill(tag.getString("Skill"));

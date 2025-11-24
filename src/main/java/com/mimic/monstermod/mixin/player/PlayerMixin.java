@@ -8,6 +8,7 @@ import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -73,4 +74,19 @@ public abstract class PlayerMixin {
             }
         });
     }
+
+    @Inject(method = "travel", at = @At("HEAD"))
+    private void onTravel(Vec3 movementInput, CallbackInfo ci) {
+        Player player = (Player) (Object) this;
+
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transform -> {
+            BaseMonsterEntity transformed = transform.getEntity();
+            if (transform.isTransformed() && transformed != null) {
+                ((EntityAccessor) player).setMaxUpStep(transformed.getStepHeightValue());
+            } else {
+                ((EntityAccessor) player).setMaxUpStep(0.6f);
+            }
+        });
+    }
 }
+

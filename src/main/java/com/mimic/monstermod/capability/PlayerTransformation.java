@@ -1,12 +1,10 @@
-// 完全版 PlayerTransformation（修正版）
-// ※このファイルはあなたのコードを元に、エラーなく動作する形に統合した完全版です
-// ※deserializeNBT(tag) エラーも修正済み
 package com.mimic.monstermod.capability;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.mixin.accessor.EntityAccessor;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import com.mimic.monstermod.util.MonsterTransformUtil;
@@ -54,6 +52,8 @@ public class PlayerTransformation {
 
             if (transformedEntity != null) {
                 MonsterTransformUtil.copyAttributesToDEV(player, transformedEntity);
+                //自動段差上昇 変更
+                ((EntityAccessor) player).setMaxUpStep(transformedEntity.getStepHeightValue());
             }
 
             if (identity != null) {
@@ -88,6 +88,8 @@ public class PlayerTransformation {
         MonsterTransformUtil.resetAttributesToPlayer(player, player);
         double prevHP = MonsterTransformUtil.getPlayerHP(player);
         player.setHealth((float) Math.min(prevHP, player.getAttributeValue(Attributes.MAX_HEALTH)));
+        //自動段差上昇　デフォルト
+        ((EntityAccessor) player).setMaxUpStep(0.6f);
 
         isTransformed = false;
         transformedEntity = null;
