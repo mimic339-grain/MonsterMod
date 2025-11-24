@@ -11,7 +11,6 @@ public class MimicRenderer extends GeoEntityRenderer<MimicEntity> {
 
     public MimicRenderer(EntityRendererProvider.Context context) {
         super(context, new MimicModel());
-        this.shadowRadius = 0.4f;
     }
 
     @Override

@@ -9,6 +9,7 @@
     "player.PlayerMixin",
     "player.PlayerRendererMixin",
     "player.ClientPlayerEntityTickMixin",
+    "player.EntityRenderDispatcherMixin",
     "accessor.EntityAccessor"
   ],
   "injectors": {
