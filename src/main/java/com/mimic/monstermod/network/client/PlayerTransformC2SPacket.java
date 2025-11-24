@@ -1,8 +1,8 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,9 +11,11 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * クライアント → サーバー 変身リクエストパケット。
- * - クライアントが mobId を指定して送信。
- * - サーバー側で PlayerTransformation を更新し、全クライアントへ同期。
+ * クライアント → サーバー 変身リクエストパケット
+ * - クライアントが mobId を指定して送信
+ * - サーバー側で PlayerTransformation を更新し、全クライアントへ同期
+ *
+ * ※ setter は使わず start/stopTransformation のみで状態を変更
  */
 public class PlayerTransformC2SPacket {
 
@@ -50,8 +52,8 @@ public class PlayerTransformC2SPacket {
             ServerPlayer player = ctx.get().getSender();
             if (player == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
-                    .ifPresent(cap -> {
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                    .ifPresent(transformation -> {
                         if (requestTransform) {
                             // 変身リクエスト
                             if (mobId == null) {
@@ -64,32 +66,29 @@ public class PlayerTransformC2SPacket {
                                 return;
                             }
 
-                            if (cap.isTransformed()) {
+                            if (transformation.isTransformed()) {
                                 MonsterMod.getLogger().debug("[C2SPacket] {} は既に変身中です", player.getName().getString());
                                 return;
                             }
 
-                            // 変身開始
-                            cap.setTransformed(true);
-                            cap.setTransformedMobId(mobId);
-                            cap.startTransformation(player, mobId);
+                            // ★ startTransformation のみで状態変更
+                            transformation.startTransformation(player, mobId);
                             MonsterMod.getLogger().info("[C2SPacket] {} が変身: {}", player.getName().getString(), mobId);
 
                         } else {
                             // 変身解除
-                            if (!cap.isTransformed()) {
+                            if (!transformation.isTransformed()) {
                                 MonsterMod.getLogger().debug("[C2SPacket] {} は変身していません", player.getName().getString());
                                 return;
                             }
 
-                            cap.setTransformed(false);
-                            cap.setTransformedMobId(null);
-                            cap.stopTransformation(player);
+                            // ★ stopTransformation のみで状態変更
+                            transformation.stopTransformation(player);
                             MonsterMod.getLogger().info("[C2SPacket] {} が変身解除", player.getName().getString());
                         }
 
                         // 状態同期
-                        cap.syncToAllClients(player);
+                        transformation.syncToAllClients(player);
                     });
         });
         ctx.get().setPacketHandled(true);

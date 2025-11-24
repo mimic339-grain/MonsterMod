@@ -1,18 +1,16 @@
 package com.mimic.monstermod.gui;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
-import com.mimic.monstermod.impl.ClientKeyHandler;
 import com.mimic.monstermod.util.MonsterKeyBindings;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.variable.entity.IEntityData;
+import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
+import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.entity.player.Player;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
-import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
 import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 
@@ -31,7 +29,7 @@ public class GuiSkills {
         Player player = mc.player;
         if (player == null) return;
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(trans -> {
                     if (!trans.isTransformed()) return;
 

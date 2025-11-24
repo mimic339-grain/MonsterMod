@@ -1,9 +1,12 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.mixin.accessor.EntityAccessor;
-import net.minecraft.world.entity.*;
+import com.mimic.monstermod.variable.CapabilityRegistry;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +27,7 @@ public abstract class PlayerMixin {
     private void onGetDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
         Player self = (Player) (Object) this;
 
-        self.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+        self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
             BaseMonsterEntity transformed = trans.getEntity();
 
             if (trans.isTransformed() && transformed != null) {
@@ -43,7 +46,7 @@ public abstract class PlayerMixin {
 
         if (!self.level().isClientSide()) return;
 
-        self.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+        self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
             if (trans.isTransformed() && self.isOnFire()) { // ← 変身中のみ
                 ((EntityAccessor) self).callSetSharedFlag(0, false);
             }
@@ -61,7 +64,7 @@ public abstract class PlayerMixin {
     private void onGetStandingEyeHeight(Pose pose, EntityDimensions dims, CallbackInfoReturnable<Float> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
 
-        self.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+        self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
             BaseMonsterEntity transformed = trans.getEntity();
             if (trans.isTransformed() && transformed != null) {
                 cir.setReturnValue(transformed.getEyeHeight(pose));

@@ -1,7 +1,7 @@
 package com.mimic.monstermod.network.client;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -56,7 +56,7 @@ public class C2SPlayerInputPacket {
             System.out.println("[C2SPlayerInputPacket] Packet received from player: " + player.getName().getString() +
                     " | useKey=" + useKey + " menuKey=" + menuKey + " dodgeKey=" + dodgeKey + " skillIndex=" + skillIndex);
 
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                     .ifPresent(trans -> {
                         BaseMonsterIdentity identity = trans.getIdentity(); // 変数名 trans に合わせる
                         if (identity == null) {

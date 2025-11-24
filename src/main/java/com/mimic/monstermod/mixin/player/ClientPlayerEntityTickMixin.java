@@ -1,6 +1,6 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,7 +15,7 @@ public class ClientPlayerEntityTickMixin {
     private void tickClient(CallbackInfo ci) {
         Player player = (Player)(Object)this;
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(trans -> {
                     if(trans.isTransformed()) {
                         var identity = trans.getIdentity();

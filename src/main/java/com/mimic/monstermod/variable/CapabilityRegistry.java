@@ -1,10 +1,11 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.capability.PlayerTransformation;
 import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
 import com.mimic.monstermod.network.server.S2CMonsterCapSyncPacket;
+import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
 import com.mimic.monstermod.variable.entity.IMonsterData;
 import com.mimic.monstermod.variable.entity.IPlayerData;
 import com.mimic.monstermod.variable.entity.MonsterData;
@@ -18,11 +19,10 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
+import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.common.util.LazyOptional;
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class CapabilityRegistry {
@@ -32,7 +32,8 @@ public class CapabilityRegistry {
             CapabilityManager.get(new CapabilityToken<>() {});
     public static final Capability<IMonsterData> MONSTER_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
-    public static final Capability<PlayerTransformationProvider> PLAYER_TRANSFORMATION_CAPABILITY =
+    // --- 修正: Capability の型は Provider ではなくデータ本体 (PlayerTransformation) ---
+    public static final Capability<PlayerTransformation> PLAYER_TRANSFORMATION =
             CapabilityManager.get(new CapabilityToken<>() {});
 
     // ====== GETTERS ======
@@ -52,8 +53,9 @@ public class CapabilityRegistry {
         return entity.getCapability(MONSTER_CAPABILITY);
     }
 
-    public static LazyOptional<PlayerTransformationProvider> getPlayerTransformation(Player player) {
-        return player.getCapability(PLAYER_TRANSFORMATION_CAPABILITY);
+    // 修正: PlayerTransformation を直接返す
+    public static LazyOptional<PlayerTransformation> getPlayerTransformation(Player player) {
+        return player.getCapability(PLAYER_TRANSFORMATION);
     }
 
     // ====== REGISTER ======
@@ -61,7 +63,8 @@ public class CapabilityRegistry {
     public static void registerCaps(RegisterCapabilitiesEvent event) {
         event.register(IPlayerData.class);
         event.register(IMonsterData.class);
-        event.register(PlayerTransformationProvider.class);
+        // 修正: PlayerTransformation.class を登録（Provider ではない）
+        event.register(PlayerTransformation.class);
     }
 
     // ====== ATTACH PROVIDERS ======
@@ -71,6 +74,7 @@ public class CapabilityRegistry {
 
         if (entity instanceof Player player) {
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
+            // Provider は attach する（付与オブジェクト）。Capability の型は上で PlayerTransformation にしてある。
             event.addCapability(
                     new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
                     new PlayerTransformationProvider()
@@ -79,6 +83,7 @@ public class CapabilityRegistry {
             event.addCapability(MonsterCapabilityProvider.ID, new MonsterCapabilityProvider(living));
         }
     }
+
     public static void copyCaps(Player oldPlayer, Player newPlayer) {
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
@@ -92,10 +97,12 @@ public class CapabilityRegistry {
                 )
         );
 
-        oldPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(PLAYER_TRANSFORMATION_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                )
+        // 修正: PlayerTransformation のデータ本体をコピーする
+        oldPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(oldCap ->
+                newPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(newCap -> {
+                    newCap.deserializeNBT(oldCap.serializeNBT());
+                    newCap.onLoad(newPlayer);
+                })
         );
     }
 
@@ -108,9 +115,9 @@ public class CapabilityRegistry {
         ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()), serverPlayer);
 
         // PlayerTransformation 同期
-        getPlayerTransformation(player).ifPresent(transCap -> {
-            // ここで syncToClient を直接呼び出して同期
-            transCap.syncToClient(player);  // PlayerTransformationProvider の syncToClient を直接使用
+        getPlayerTransformation(player).ifPresent(trans -> {
+            // PlayerTransformation 本体に同期呼び出しを任せる
+            trans.syncToClient(player);
         });
     }
 }

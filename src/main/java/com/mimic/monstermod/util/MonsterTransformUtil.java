@@ -1,10 +1,10 @@
 package com.mimic.monstermod.util;
 
 import com.mimic.monstermod.capability.PlayerTransformation;
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.identity.IdentityType;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
@@ -52,7 +52,7 @@ public class MonsterTransformUtil {
         map.put(identityId, hp);
         IDENTITY_HP_MAP.put(player.getUUID(), map);
 
-        PlayerTransformation transformation = player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
+        PlayerTransformation transformation = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
         if (transformation != null && transformation.getEntity() != null &&
                 transformation.getIdentity() != null &&
                 transformation.getIdentity().getId().equals(identityId)) {
@@ -61,7 +61,7 @@ public class MonsterTransformUtil {
     }
 
     public static double getIdentityMaxHP(Player player) {
-        PlayerTransformation transformation = player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
+        PlayerTransformation transformation = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
         if (transformation != null && transformation.getEntity() != null) {
             BaseMonsterEntity entity = transformation.getEntity();
             if (entity.getAttribute(Attributes.MAX_HEALTH) != null) {
@@ -183,7 +183,7 @@ public class MonsterTransformUtil {
 
 
     // ================================
-    // HP リセット（死亡時・コマンド）
+    // HP リセット（コマンド用）
     // ================================
     public static void resetPlayerHP(Player player) {
         double maxHP = player.getMaxHealth();
@@ -211,12 +211,49 @@ public class MonsterTransformUtil {
         IDENTITY_HP_MAP.put(player.getUUID(), updatedMap);
     }
 
+    // ================================
+    // identityHP リセット（リスポーン用）
+    // ================================
+    //todo　リスポーンのイベントにこのutilを呼んで変身→死亡（identityHP0）→リスポーン→identityhp0のみmaxもしくはリセット→変身（identityHPが0で変身しない）　
+    public static void resetIdentityHPOnRespawn(Player player) {
+        Map<String, Double> identityMap = IDENTITY_HP_MAP.getOrDefault(player.getUUID(), new HashMap<>());
+
+        // IdentityType の全 ID をループ
+        for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
+            String idStr = id.toString();
+            double currentHP = identityMap.getOrDefault(idStr, 0.0);
+
+            // HP が 0 の場合のみ最大値に回復
+            if (currentHP <= 0) {
+                BaseMonsterIdentity identity = IdentityType.createIdentity(id, null);
+                if (identity != null) {
+                    BaseMonsterEntity entity = identity.getEntity();
+                    if (entity != null && entity.getAttribute(Attributes.MAX_HEALTH) != null) {
+                        double maxHP = entity.getAttributeValue(Attributes.MAX_HEALTH);
+                        identityMap.put(idStr, maxHP);
+
+                        // 変身中の Entity にも反映
+                        PlayerTransformation transformation = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
+                        if (transformation != null && transformation.isTransformed() && transformation.getIdentity() != null &&
+                                transformation.getIdentity().getId().equals(idStr) && transformation.getEntity() != null) {
+                            transformation.getEntity().setHealth((float) maxHP);
+                        }
+                    }
+                }
+            }
+        }
+
+        // マップを更新
+        IDENTITY_HP_MAP.put(player.getUUID(), identityMap);
+
+        MonsterTransformUtil.saveAllToNBT(player);
+    }
     // =====================================
     // Attribute NBT 保存 / 復元
     // =====================================
     public static void saveAttributesToNBT(Player player, CompoundTag tag) {
         PlayerTransformation transformation =
-                player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
+                player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
 
         // 変身中 → Identity 属性を保存
         if (transformation != null && transformation.isTransformed() && transformation.getEntity() != null) {
@@ -243,7 +280,7 @@ public class MonsterTransformUtil {
         if (!tag.contains("attr_max_health")) return;
 
         PlayerTransformation transformation =
-                player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).orElse(null);
+                player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
 
         LivingEntity target = player;
 

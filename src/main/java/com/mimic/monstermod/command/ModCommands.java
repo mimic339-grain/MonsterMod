@@ -1,7 +1,7 @@
 package com.mimic.monstermod.command;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.CommandSourceStack;
@@ -45,10 +45,9 @@ public class ModCommands {
     }
 
     private static int transformPlayer(CommandSourceStack source, ServerPlayer targetPlayer, boolean transform, ResourceLocation identityId) {
-        targetPlayer.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+        targetPlayer.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     if (transform) {
-                        // 変身
                         if (identityId == null) {
                             source.sendFailure(Component.literal("変身するにはIdentity IDを指定してください。"));
                             return;
@@ -58,9 +57,6 @@ public class ModCommands {
                             return;
                         }
 
-                        transformation.setTransformedMobId(identityId);
-                        transformation.setTransformed(true);
-
                         // 変身開始
                         transformation.startTransformation(targetPlayer, identityId);
 
@@ -69,9 +65,6 @@ public class ModCommands {
 
                     } else {
                         // 変身解除
-                        transformation.setTransformed(false);
-                        transformation.setTransformedMobId(null);
-
                         transformation.stopTransformation(targetPlayer);
 
                         source.sendSuccess(() -> Component.literal(

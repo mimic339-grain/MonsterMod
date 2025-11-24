@@ -1,8 +1,8 @@
 package com.mimic.monstermod.network.server;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.util.MonsterTransformUtil;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -50,12 +50,12 @@ public class S2CTransformSyncPacket {
             Player player = mc.level.getPlayerByUUID(playerId);
             if (player == null) return;
 
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                     .ifPresent(transformation -> {
                         boolean wasTransformed = transformation.isTransformed();
 
                         // Player を渡して変身状態を反映
-                        transformation.deserializeNBT(nbt, player);
+                        transformation.deserializeNBT(nbt);
 
                         // HP を Map に同期（クライアントは表示用）
                         if (nbt.contains("playerHP")) {
@@ -81,7 +81,7 @@ public class S2CTransformSyncPacket {
     public static CompoundTag createNBT(Player player) {
         CompoundTag tag = new CompoundTag();
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     // 変身状態の書き込み
                     tag.merge(transformation.serializeNBT());

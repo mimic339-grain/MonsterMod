@@ -1,7 +1,7 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -24,7 +24,7 @@ public class PlayerRendererMixin {
                                 CallbackInfo ci) {
 
         // PlayerTransformation から Identity を取得
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
             BaseMonsterIdentity identity = transformation.getIdentity();
 
             if (identity != null) {

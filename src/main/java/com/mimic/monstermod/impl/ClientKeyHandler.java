@@ -1,11 +1,10 @@
 package com.mimic.monstermod.impl;
 
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.client.C2SPlayerInputPacket;
 import com.mimic.monstermod.util.MonsterKeyBindings;
-
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -40,7 +39,7 @@ public class ClientKeyHandler {
         LocalPlayer player = mc.player;
         if (player == null) return;
 
-        player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION)
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(trans -> {
 
                     // 変身していないなら何もしない
