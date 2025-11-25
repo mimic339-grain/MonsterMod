@@ -1,13 +1,17 @@
 package com.mimic.monstermod.identity.impl;
 
+import com.mimic.monstermod.client.preview.AoeMarkerUtil;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMimicDodgePacket;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
@@ -32,6 +36,25 @@ public class MimicIdentity extends BaseMonsterIdentity {
             case 0 -> {
                 System.out.println("[MimicIdentity] handleAbility skillIndex=0, skill=switch");
                 mimic.getMonsterData().setSkill("switch");
+
+                // ★ AoEマーカー追加（半径5、持続時間2000ms）
+                if (Minecraft.getInstance().level != null && Minecraft.getInstance().player != null) {
+                    // プレイヤーのブロック座標を取得
+                    BlockPos playerBlockPos = Minecraft.getInstance().player.blockPosition();
+
+                    // 地面のY座標を取得
+                    int groundY = Minecraft.getInstance().level.getHeight(Heightmap.Types.WORLD_SURFACE, playerBlockPos.getX(), playerBlockPos.getZ());
+
+                    // Vec3の中心（ブロックの中心に置く）
+                    Vec3 center = new Vec3(
+                            playerBlockPos.getX() + 0.5,
+                            groundY+ 0.3,
+                            playerBlockPos.getZ() + 0.5
+                    );
+
+                    AoeMarkerUtil.addCircle2D(center, 5, 1000);
+                    System.out.println("[AoE] マーカー追加 at " + center);
+                }
             }
             case 1 -> {
                 System.out.println("[MimicIdentity] handleAbility skillIndex=1, skill=bite");
