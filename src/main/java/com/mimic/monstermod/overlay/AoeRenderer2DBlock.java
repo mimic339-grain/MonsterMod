@@ -1,6 +1,7 @@
-package com.mimic.monstermod.client.preview;
+package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.client.preview.AoeMarkerManager.AoeMarker;
+import com.mimic.monstermod.Math.AttackPreview2DBlockMath;
+import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -11,13 +12,14 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.util.List;
+import java.util.Set;
 
 /**
- * AttackPreview2DMath対応 2D AoE描画
+ * AttackPreview2DBlockMath対応 Block2D AoE描画
  * - 面は赤半透明（alpha 0.5）
  * - 枠は赤でライン描画（alpha 1.0）
  */
-public class AoeRenderer2D {
+public class AoeRenderer2DBlock {
 
     private static final Minecraft mc = Minecraft.getInstance();
     private static final ResourceLocation RED_TEXTURE =
@@ -25,7 +27,7 @@ public class AoeRenderer2D {
     private static final float SURFACE_ALPHA = 0.5f;
     private static final float EDGE_ALPHA = 1f;
 
-    /** マーカーリスト描画 */
+    /** Block2Dマーカーリスト描画 */
     public static void renderAoeMarkers(PoseStack poseStack, List<AoeMarker> markers) {
         if (markers.isEmpty()) return;
 
@@ -33,23 +35,42 @@ public class AoeRenderer2D {
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
 
         for (AoeMarker marker : markers) {
-            List<Vec3[]> shapePoints = marker.get2DShapePoints();
-            if (shapePoints == null) continue;
+            AttackPreview2DBlockMath.Area2DBlock area = marker.getBlock2DArea();
+            if (area == null) continue;
 
             poseStack.pushPose();
-            poseStack.translate(-camPos.x, -camPos.y, -camPos.z); // カメラ位置補正
+            poseStack.translate(-camPos.x, -camPos.y, -camPos.z); // カメラ補正
 
-            // ===== Surface描画 =====
+            // ===== Surface描画（ブロック面） =====
             VertexConsumer surfaceConsumer = bufferSource.getBuffer(RenderType.entityTranslucent(RED_TEXTURE));
-            for (Vec3[] quad : shapePoints) {
+            for (Vec3 block : area.blocks) {
+                // ブロックを1x1の四角形として描画
+                Vec3[] quad = new Vec3[]{
+                        new Vec3(block.x - 0.5, block.y, block.z - 0.5),
+                        new Vec3(block.x - 0.5, block.y, block.z + 0.5),
+                        new Vec3(block.x + 0.5, block.y, block.z + 0.5),
+                        new Vec3(block.x + 0.5, block.y, block.z - 0.5)
+                };
                 drawQuad(poseStack, surfaceConsumer, quad, SURFACE_ALPHA);
             }
 
-            // ===== Edge描画 =====
+            // ===== Edge描画（枠線） =====
             VertexConsumer edgeConsumer = bufferSource.getBuffer(RenderType.lines());
-            for (Vec3[] line : shapePoints) {
-                if (line.length < 2) continue;
-                drawLine(poseStack, edgeConsumer, line[0], line[1], 1f, 0f, 0f, EDGE_ALPHA);
+            Set<String> outline = area.outline;
+            for (String key : outline) {
+                String[] split = key.split(":");
+                int x = Integer.parseInt(split[0]);
+                int z = Integer.parseInt(split[1]);
+                double y = marker.center.y; // Yはマーカーの高さ
+                Vec3 p0 = new Vec3(x - 0.5, y, z - 0.5);
+                Vec3 p1 = new Vec3(x - 0.5, y, z + 0.5);
+                Vec3 p2 = new Vec3(x + 0.5, y, z + 0.5);
+                Vec3 p3 = new Vec3(x + 0.5, y, z - 0.5);
+
+                drawLine(poseStack, edgeConsumer, p0, p1, 1f, 0f, 0f, EDGE_ALPHA);
+                drawLine(poseStack, edgeConsumer, p1, p2, 1f, 0f, 0f, EDGE_ALPHA);
+                drawLine(poseStack, edgeConsumer, p2, p3, 1f, 0f, 0f, EDGE_ALPHA);
+                drawLine(poseStack, edgeConsumer, p3, p0, 1f, 0f, 0f, EDGE_ALPHA);
             }
 
             poseStack.popPose();
@@ -58,7 +79,7 @@ public class AoeRenderer2D {
         bufferSource.endBatch();
     }
 
-    /** 四角形描画（面） */
+    /** 四角形描画（面用） */
     private static void drawQuad(PoseStack poseStack, VertexConsumer consumer, Vec3[] quad, float alpha) {
         if (quad.length < 3) return;
         Matrix4f mat = poseStack.last().pose();

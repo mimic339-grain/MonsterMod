@@ -1,7 +1,7 @@
-package com.mimic.monstermod.client.preview;
+package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.client.preview.AoeMarkerManager.AoeMarker;
-import com.mimic.monstermod.client.preview.AoeMarkerManager.Shape;
+import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
+import com.mimic.monstermod.overlay.AoeMarkerManager.Shape;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;

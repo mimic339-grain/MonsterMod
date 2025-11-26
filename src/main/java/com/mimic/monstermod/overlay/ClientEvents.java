@@ -1,10 +1,6 @@
-package com.mimic.monstermod.client;
+package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.client.preview.AoeMarkerManager;
-import com.mimic.monstermod.client.preview.AoeMarkerManager.AoeMarker;
-import com.mimic.monstermod.client.preview.AoeRenderer2D;
-import com.mimic.monstermod.client.preview.AoeRenderer2DBlock;
-import com.mimic.monstermod.client.preview.AoeRenderer3D;
+import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.event.TickEvent;

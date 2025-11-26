@@ -1,4 +1,4 @@
-package com.mimic.monstermod.client.preview;
+package com.mimic.monstermod.overlay;
 
 import com.mimic.monstermod.Math.AttackPreview2DBlockMath;
 import com.mimic.monstermod.Math.AttackPreview2DMath;
@@ -12,6 +12,7 @@ import java.util.List;
 
 public class AoeMarkerManager {
 
+    // -------------------- マーカー形状 --------------------
     public enum Shape {
         // 3D
         BOX, SPHERE, CYLINDER, CAPSULE, FAN3D, CROSS3D, TRIANGLE_PRISM,
@@ -22,7 +23,9 @@ public class AoeMarkerManager {
     }
 
     private static final List<AoeMarker> MARKERS = new ArrayList<>();
+    private static final int DEFAULT_SEGMENTS = 24;
 
+    // -------------------- マーカー管理 --------------------
     public static void addMarker(AoeMarker marker) { MARKERS.add(marker); }
     public static List<AoeMarker> getMarkers() { return MARKERS; }
     public static void updateMarkers() {
@@ -30,12 +33,14 @@ public class AoeMarkerManager {
         MARKERS.removeIf(m -> m.endTime < now);
     }
 
+    // -------------------- マーカー本体 --------------------
     public static class AoeMarker {
 
         public final Vec3 center;
         public final Shape shape;
         public final Level level;
         public final int segments;
+
         public final double radius, xRadius, yRadius, zRadius, height, base, angleDeg;
         public final Direction direction;
 
@@ -48,6 +53,7 @@ public class AoeMarkerManager {
                          Direction direction,
                          Level level, int segments,
                          long durationMs) {
+
             this.center = center;
             this.shape = shape;
             this.radius = radius;
@@ -69,36 +75,53 @@ public class AoeMarkerManager {
             long elapsed = durationMs - Math.max(0, endTime - now);
             return Math.max(0f, Math.min(1f, elapsed / (float) durationMs));
         }
-        /** 寿命切れマーカー削除 */
-        public static void updateMarkers() {
-            long now = System.currentTimeMillis();
-            MARKERS.removeIf(m -> m.endTime < now);
-        }
-        // 3D用
+
+        // -------------------- 3D描画用 --------------------
         public AttackPreview3DMath.ShapeData get3DShapeData() {
-            return switch(shape){
-                case BOX -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.BOX, center,
-                        xRadius*2, yRadius*2, zRadius*2,0,0,0,0,0,0);
-                case SPHERE -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.SPHERE, center,
-                        0,0,0,radius,0,24,12,0,0);
-                case CYLINDER -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.CYLINDER, center,
-                        0,0,0,radius,height,24,1,0,0);
-                case CAPSULE -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.CAPSULE, center,
-                        0,0,0,radius,height,24,1,8,0);
-                case FAN3D -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.FAN3D, center,
-                        0,0,0,radius,height,24,0,0,angleDeg);
-                case CROSS3D -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.CROSS3D, center,
-                        xRadius*2, yRadius*2, zRadius*2,0,0,0,0,0,0);
-                case TRIANGLE_PRISM -> AttackPreview3DMath.getShapeData(AttackPreview3DMath.ShapeType.TRIANGLE_PRISM, center,
-                        base, height, zRadius, 0,0,0,0,0,0);
+            // ShapeDataを生成する際に、座標がnullやワールド外にならないように補正
+            Vec3 safeCenter = new Vec3(
+                    center.x,
+                    Math.max(center.y, 0.1), // Y座標は最低0.1に補正
+                    center.z
+            );
+
+            return switch (shape) {
+                case BOX -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.BOX, safeCenter,
+                        xRadius * 2, yRadius * 2, zRadius * 2, 0, 0, 0, 0, 0, 0
+                );
+                case SPHERE -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.SPHERE, safeCenter,
+                        0, 0, 0, radius, 0, 24, 12, 0, 0
+                );
+                case CYLINDER -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.CYLINDER, safeCenter,
+                        0, 0, 0, radius, height, 24, 1, 0, 0
+                );
+                case CAPSULE -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.CAPSULE, safeCenter,
+                        0, 0, 0, radius, height, 24, 1, 8, 0
+                );
+                case FAN3D -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.FAN3D, safeCenter,
+                        0, 0, 0, radius, height, 24, 0, 0, angleDeg
+                );
+                case CROSS3D -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.CROSS3D, safeCenter,
+                        xRadius * 2, yRadius * 2, zRadius * 2, 0, 0, 0, 0, 0, 0
+                );
+                case TRIANGLE_PRISM -> AttackPreview3DMath.getShapeData(
+                        AttackPreview3DMath.ShapeType.TRIANGLE_PRISM, safeCenter,
+                        base, height, zRadius, 0, 0, 0, 0, 0, 0
+                );
                 default -> null;
             };
         }
 
-        // Block2D用
+        // -------------------- Block2D描画用 --------------------
         public AttackPreview2DBlockMath.Area2DBlock getBlock2DArea() {
-            if(level == null) return null;
-            return switch(shape) {
+            if (level == null) return null;
+            return switch (shape) {
                 case CIRCLE_BLOCK2D -> AttackPreview2DBlockMath.generateAreaWithOutline(level,
                         AttackPreview2DBlockMath.ShapeType.CIRCLEBlock2D, center, radius, xRadius, zRadius, base, direction,
                         center.y - yRadius, center.y + yRadius, segments);
@@ -121,10 +144,10 @@ public class AoeMarkerManager {
             };
         }
 
-        // 2D描画用
+        // -------------------- 2D描画用 --------------------
         public List<Vec3[]> get2DShapePoints() {
-            if(level == null) return null;
-            return switch(shape) {
+            if (level == null) return null;
+            return switch (shape) {
                 case CIRCLE_2D -> AttackPreview2DMath.getShapePoints(level, AttackPreview2DMath.ShapeType.CIRCLE2D,
                         center, radius, base, angleDeg, segments);
                 case FAN_2D -> AttackPreview2DMath.getShapePoints(level, AttackPreview2DMath.ShapeType.FAN2D,

@@ -1,6 +1,6 @@
 package com.mimic.monstermod.identity.impl;
 
-import com.mimic.monstermod.client.preview.AoeMarkerManager;
+import com.mimic.monstermod.overlay.AoeMarkerManager;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;

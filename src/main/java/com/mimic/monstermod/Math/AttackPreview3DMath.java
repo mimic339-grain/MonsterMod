@@ -24,38 +24,39 @@ public final class AttackPreview3DMath {
                                          double w, double h, double d,
                                          double r, double height,
                                          int segs, int heightSegs, int latDiv,
-                                         double angle){
+                                         double angleDeg){
         List<Vec3[]> surfaces = new ArrayList<>();
         List<Vec3[]> edges = new ArrayList<>();
         switch(shape){
-            case BOX:
+            case BOX -> {
                 surfaces.addAll(getSurfaceQuadsBox(center,w,h,d));
                 edges.addAll(getEdgeSegmentsBox(center,w,h,d));
-                break;
-            case SPHERE:
+            }
+            case SPHERE -> {
                 surfaces.addAll(getSurfaceQuadsSphere(center,r,latDiv>0?latDiv:12,segs>0?segs:24));
                 edges.addAll(getEdgeSegmentsSphereLight(center,r,segs>0?segs:8));
-                break;
-            case CYLINDER:
+            }
+            case CYLINDER -> {
                 surfaces.addAll(getSurfaceQuadsCylinder(center,r,height,segs>0?segs:24,heightSegs>0?heightSegs:1));
                 edges.addAll(getEdgeSegmentsCylinderLight(center,r,height,segs>0?segs:8));
-                break;
-            case CAPSULE:
+            }
+            case CAPSULE -> {
                 surfaces.addAll(getSurfaceQuadsCapsule(center,r,height,segs>0?segs:24,latDiv>0?latDiv:8));
                 edges.addAll(getEdgeSegmentsCapsuleLight(center,r,height,segs>0?segs:8));
-                break;
-            case FAN3D:
-                surfaces.addAll(getSurfaceQuadsFan3D(center,r,angle>0?angle:Math.PI/2,height,segs>0?segs:12));
-                edges.addAll(getEdgeSegmentsFan3D(center,r,angle>0?angle:Math.PI/2,height,segs>0?segs:12));
-                break;
-            case CROSS3D:
+            }
+            case FAN3D -> {
+                double angle = Math.toRadians(angleDeg > 0 ? angleDeg : 90); // 修正: ラジアン変換
+                surfaces.addAll(getSurfaceQuadsFan3D(center,r,angle,height,segs>0?segs:12));
+                edges.addAll(getEdgeSegmentsFan3D(center,r,angle,height,segs>0?segs:12));
+            }
+            case CROSS3D -> {
                 surfaces.addAll(getSurfaceQuadsCross3D(center,w,h,d));
                 edges.addAll(getEdgeSegmentsCross3D(center,w,h,d));
-                break;
-            case TRIANGLE_PRISM:
+            }
+            case TRIANGLE_PRISM -> {
                 surfaces.addAll(getSurfaceQuadsTrianglePrism(center,w,h,d));
                 edges.addAll(getEdgeSegmentsTrianglePrism(center,w,h,d));
-                break;
+            }
         }
         return new ShapeData(surfaces,edges);
     }
@@ -128,6 +129,7 @@ public final class AttackPreview3DMath {
     public static List<Vec3[]> getSurfaceQuadsCylinder(Vec3 c,double r,double h,int seg,int hSeg){
         List<Vec3[]> polys=new ArrayList<>();
         double y0=c.y-h/2,y1=c.y+h/2;
+        if(h<=0) h=0.01; // 高さ0対応
         for(int i=0;i<seg;i++){
             double a0=2*Math.PI*i/seg, a1=2*Math.PI*(i+1)/seg;
             for(int j=0;j<hSeg;j++){
@@ -145,7 +147,8 @@ public final class AttackPreview3DMath {
 
     public static List<Vec3[]> getEdgeSegmentsCylinderLight(Vec3 c,double r,double h,int seg){
         List<Vec3[]> e=new ArrayList<>();
-        double y0=c.y-h/2,y1=c.y+h/2;
+        double y0=c.y-h/2, y1=c.y+h/2;
+        if(h<=0) h=0.01;
         for(int i=0;i<seg;i++){
             double a0=2*Math.PI*i/seg, a1=2*Math.PI*(i+1)/seg;
             e.add(new Vec3[]{new Vec3(c.x+r*Math.cos(a0),y0,c.z+r*Math.sin(a0)),
@@ -194,10 +197,10 @@ public final class AttackPreview3DMath {
     }
 
     // ==================== FAN3D ====================
-    public static List<Vec3[]> getSurfaceQuadsFan3D(Vec3 c,double r,double angle,double h,int seg){
+    public static List<Vec3[]> getSurfaceQuadsFan3D(Vec3 c,double r,double angleRad,double h,int seg){
         List<Vec3[]> polys=new ArrayList<>();
         double y0=c.y, y1=c.y+h;
-        double aStart=-angle/2, aStep=angle/seg;
+        double aStart=-angleRad/2, aStep=angleRad/seg;
         for(int i=0;i<seg;i++){
             double a0=aStart+i*aStep, a1=aStart+(i+1)*aStep;
             Vec3 p0=new Vec3(c.x+r*Math.cos(a0),y0,c.z+r*Math.sin(a0));
@@ -209,10 +212,10 @@ public final class AttackPreview3DMath {
         return polys;
     }
 
-    public static List<Vec3[]> getEdgeSegmentsFan3D(Vec3 c,double r,double angle,double h,int seg){
+    public static List<Vec3[]> getEdgeSegmentsFan3D(Vec3 c,double r,double angleRad,double h,int seg){
         List<Vec3[]> e=new ArrayList<>();
         double y0=c.y,y1=c.y+h;
-        double aStart=-angle/2,aStep=angle/seg;
+        double aStart=-angleRad/2,aStep=angleRad/seg;
         for(int i=0;i<=seg;i++){
             double a=aStart+i*aStep;
             Vec3 pb=new Vec3(c.x+r*Math.cos(a),y0,c.z+r*Math.sin(a));
@@ -252,11 +255,10 @@ public final class AttackPreview3DMath {
         double x=c.x, y=c.y, z=c.z;
         Vec3 p0=new Vec3(x-b/2,y,z-d/2),p1=new Vec3(x+b/2,y,z-d/2),p2=new Vec3(x,y+h,z-d/2),
                 p3=new Vec3(x-b/2,y,z+d/2),p4=new Vec3(x+b/2,y,z+d/2),p5=new Vec3(x,y+h,z+d/2);
+        // 底面・上面・側面
         polys.add(new Vec3[]{p0,p1,p4,p3});
-        polys.add(new Vec3[]{p0,p2,p5,p3});
         polys.add(new Vec3[]{p1,p2,p5,p4});
-        polys.add(new Vec3[]{p0,p1,p2});
-        polys.add(new Vec3[]{p3,p4,p5});
+        polys.add(new Vec3[]{p2,p0,p3,p5});
         return polys;
     }
 

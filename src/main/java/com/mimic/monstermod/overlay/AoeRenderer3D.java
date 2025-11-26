@@ -1,6 +1,7 @@
-package com.mimic.monstermod.client.preview;
+// ------------------- AoeRenderer3D_Fixed.java -------------------
+package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.client.preview.AoeMarkerManager.AoeMarker;
+import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
 import com.mimic.monstermod.Math.AttackPreview3DMath;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -14,6 +15,10 @@ import org.joml.Matrix4f;
 
 import java.util.List;
 
+/**
+ * ワールド座標系で統一された3D AOE描画レンダラー
+ * 古いコードと同じ座標系で正確に描画
+ */
 public class AoeRenderer3D {
 
     private static final Minecraft mc = Minecraft.getInstance();
@@ -29,7 +34,6 @@ public class AoeRenderer3D {
         MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
         Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
 
-        // 安全な透明描画設定
         RenderSystem.disableCull();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -40,20 +44,19 @@ public class AoeRenderer3D {
             if (shape == null) continue;
 
             poseStack.pushPose();
-            poseStack.translate(marker.center.x - camPos.x,
-                    marker.center.y - camPos.y,
-                    marker.center.z - camPos.z);
+            // ワールド座標系の頂点をカメラ相対に変換
+            poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
 
             Matrix4f mat = poseStack.last().pose();
 
-            // 面描画（カリングなし・透過）
+            // 面描画
             VertexConsumer face = bufferSource.getBuffer(RenderType.entityTranslucent(RED_TEXTURE));
             for (Vec3[] quad : shape.surfaces) {
                 if (quad == null || quad.length < 3) continue;
                 drawFace(mat, face, quad, SURFACE_ALPHA);
             }
 
-            // エッジ描画（赤線）
+            // エッジ描画
             VertexConsumer edge = bufferSource.getBuffer(RenderType.lines());
             for (Vec3[] e : shape.edges) {
                 if (e == null || e.length < 2) continue;
@@ -64,8 +67,6 @@ public class AoeRenderer3D {
         }
 
         bufferSource.endBatch();
-
-        // 描画後に元に戻す
         RenderSystem.depthMask(true);
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
@@ -83,6 +84,7 @@ public class AoeRenderer3D {
     }
 
     private static void putVertex(VertexConsumer consumer, Matrix4f mat, Vec3 pos, float alpha) {
+        // ワールド座標そのまま使用
         consumer.vertex(mat, (float) pos.x, (float) pos.y, (float) pos.z)
                 .color(1f, 1f, 1f, alpha)
                 .uv(0f, 0f)
