@@ -3,43 +3,17 @@ package com.mimic.monstermod.overlay;
 import com.mimic.monstermod.Math.AttackPreview3DMath;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * AoeRenderer3D
- *
- * 3D攻撃予兆（AoE）マーカーをワールド上に描画するクラス
- * AttackPreview3DMath で計算した ShapeData（頂点・面・エッジ情報）を使って描画
- *
- * - faces: ポリゴン面を描画
- * - edges: エッジ（線）を描画
- * - ライティング: ワールドの明るさに応じて頂点のライト値を計算
- */
 public class AoeRenderer3D {
-
-    /** 攻撃予兆のテクスチャ */
+    // 攻撃予兆用のテクスチャ
     private static final ResourceLocation TEX =
             new ResourceLocation("monstermod", "textures/misc/attackpreview.png");
-
-    // ============================================================================
-    //  MAIN RENDER METHOD
-    // ============================================================================
-    /**
-     * ShapeData を元にワールド上に 3D AoE を描画
-     *
-     * @param poseStack 描画用の座標行列スタック
-     * @param buffers   描画バッファ
-     * @param shape     描画する 3D形状データ（頂点・面・エッジ情報）
-     * @param partialTicks 描画フレーム補間値
-     */
+    //描画のメイン処理
     public static void render(
             PoseStack poseStack,
             MultiBufferSource buffers,
@@ -48,39 +22,46 @@ public class AoeRenderer3D {
     ) {
         if (shape == null) return;
 
-        // ========================
-        //  FACES (面) の描画
-        // ========================
+        // Faces（面）: 両面描画
         if (shape.surfaces != null) {
-            VertexConsumer faceVC = buffers.getBuffer(RenderType.entityTranslucentCull(TEX));
-            poseStack.pushPose();  // 座標行列を保存
+            VertexConsumer faceVC = buffers.getBuffer(RenderType.entityTranslucent(TEX));
+            poseStack.pushPose();  // 現在の座標・回転行列を保存
             for (AttackPreview3DMath.Quad q : shape.surfaces) {
-                drawQuad(poseStack, faceVC, q);
+                drawQuadDoubleSided(poseStack, faceVC, q);  // 両面描画
             }
-            poseStack.popPose();  // 座標行列を復元
+            poseStack.popPose();  // 行列を復元
+        }
+
+        // Edges（枠線）
+        if (shape.edges != null) {
+            drawEdges(poseStack, buffers, shape);
         }
     }
 
-    // ============================================================================
-    //  DRAW QUAD (1つの四角形を描画)
-    // ============================================================================
-    private static void drawQuad(PoseStack stack, VertexConsumer vc, AttackPreview3DMath.Quad quad) {
-        PoseStack.Pose pose = stack.last();  // 現在の座標変換行列
 
-        // normal.y が負の場合は頂点順序を反転して裏面描画を防止
-        int[] order = quad.normal.y < 0 ? new int[]{0,3,2,1} : new int[]{0,1,2,3};
+    // 面を両面描画
+    private static void drawQuadDoubleSided(PoseStack stack, VertexConsumer vc, AttackPreview3DMath.Quad quad) {
+        PoseStack.Pose pose = stack.last();
 
-        for (int i : order) {
-            Vec3 p = quad.pos[i];       // 頂点座標
-            float u = quad.uv[i * 2];   // テクスチャ U
-            float v = quad.uv[i * 2 + 1]; // テクスチャ V
+        // 表面
+        for (int i = 0; i < 4; i++) {
+            Vec3 p = quad.pos[i];
+            float u = quad.uv[i * 2];
+            float v = quad.uv[i * 2 + 1];
             putVertex(vc, pose, p, u, v, quad.rgba, quad.normal);
         }
+
+        // 裏面：頂点順を逆にし、法線を反転 + 0.01fだけ法線方向にオフセット
+        for (int i = 3; i >= 0; i--) {
+            Vec3 p = quad.pos[i].add(quad.normal.scale(0.0001)); // 少し前方にオフセット
+            float u = quad.uv[i * 2];
+            float v = quad.uv[i * 2 + 1];
+            Vec3 flippedNormal = quad.normal.scale(-1); // 法線反転
+            putVertex(vc, pose, p, u, v, quad.rgba, flippedNormal);
+        }
     }
 
-    // ============================================================================
-    //  DRAW SINGLE VERTEX
-    // ============================================================================
+    // 頂点をバッファに書き込む
     private static void putVertex(
             VertexConsumer vc,
             PoseStack.Pose pose,
@@ -89,38 +70,43 @@ public class AoeRenderer3D {
             float[] rgba,
             Vec3 normal
     ) {
-        int light = getPackedLight(pos); // ワールドライティング値取得
-
-        vc.vertex(pose.pose(), (float) pos.x, (float) pos.y, (float) pos.z)
-                .color(rgba[0], rgba[1], rgba[2], rgba[3]) // RGBA
-                .uv(u, v)                                 // テクスチャ
+        vc.vertex(pose.pose(), (float) pos.x, (float) pos.y, (float) pos.z) // 座標
+                .color(rgba[0], rgba[1], rgba[2], rgba[3]) // 面の色（RGBA）
+                .uv(u, v) // テクスチャUV
                 .overlayCoords(OverlayTexture.NO_OVERLAY) // オーバーレイなし
-                .uv2(light)                               // 光源値
+                .uv2(240) // ライティング情報
                 .normal(pose.normal(), (float) normal.x, (float) normal.y, (float) normal.z) // 法線
-                .endVertex();                             // 頂点描画終了
+                .endVertex();
     }
-    // ============================================================================
-    //  LIGHT CALCULATION
-    // ============================================================================
-    /**
-     * 指定位置のワールドライト値を取得
-     *
-     * @param pos ワールド座標
-     * @return packedLight（ライト・スカイライトをパックした値）
-     */
-    private static int getPackedLight(Vec3 pos) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return 240; // デフォルト明るさ
 
-        BlockPos bp = new BlockPos(
-                (int) Math.floor(pos.x),
-                (int) Math.floor(pos.y),
-                (int) Math.floor(pos.z)
-        );
-        // ワールドのブロック光源と太陽光を取得
-        int sky = mc.level.getBrightness(LightLayer.SKY, bp);
-        int block = mc.level.getBrightness(LightLayer.BLOCK, bp);
+    // 枠線描画
+    private static void drawEdges(
+            PoseStack stack,
+            MultiBufferSource buffers,
+            AttackPreview3DMath.ShapeData shape
+    ) {
+        VertexConsumer vc = buffers.getBuffer(RenderType.lines()); // 線描画用
+        PoseStack.Pose pose = stack.last();
 
-        return LightTexture.pack(block, sky); // 1つの整数にパック
+        for (AttackPreview3DMath.Edge e : shape.edges) {
+            Vec3 a = e.a; // エッジの始点
+            Vec3 b = e.b; // エッジの終点
+            int light = 240; // 明るさ取得
+
+            // 枠線の始点を描画
+            vc.vertex(pose.pose(), (float) a.x, (float) a.y, (float) a.z)
+                    .color(1f, 0f, 0f, 0.7f) // 赤色に変更 + 透明度0.7
+                    .uv2(light)
+                    .normal(pose.normal(), 0, 1, 0) // Y方向の法線（線描画用）
+                    .endVertex();
+
+            // 枠線の終点を描画
+            vc.vertex(pose.pose(), (float) b.x, (float) b.y, (float) b.z)
+                    .color(1f, 0f, 0f, 0.7f) // 赤色
+                    .uv2(light)
+                    .normal(pose.normal(), 0, 1, 0)
+                    .endVertex();
+        }
     }
+
 }

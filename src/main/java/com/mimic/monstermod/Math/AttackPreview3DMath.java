@@ -26,20 +26,26 @@ public final class AttackPreview3DMath {
         public float angleDeg;                  // FAN
         public float size;                      // TRIANGLE_PRISM
         public final List<Quad> surfaces = new ArrayList<>();
+        public final List<Edge> edges = new ArrayList<>();
     }
 
     public static class Quad {
         public Vec3[] pos = new Vec3[4];
         public Vec3 normal;
         public float[] uv = new float[8];   // 4頂点 × (u,v)
-        public float[] rgba = new float[]{1f, 0f, 0f, 0.5f};
+        public float[] rgba = new float[]{1f, 0f, 0f, 0.3f};//面と透明度
+    }
+
+    public static class Edge {
+        public Vec3 a, b;
+        public float[] rgba = new float[]{1f, 1f, 1f, 0.6f};
     }
     public enum Shape {
         BOX, SPHERE, CYLINDER, CAPSULE, FAN3D, CROSS3D, TRIANGLE_PRISM
     }
 
     // =====================================================
-    // PUBLIC API
+    //　共通API
     // =====================================================
     public static ShapeData makeBox(Vec3 origin, float yaw, float xr, float yr, float zr) {
         ShapeData d = base(origin, yaw);
@@ -104,7 +110,7 @@ public final class AttackPreview3DMath {
     }
 
     // =====================================================
-    // ROTATION UTIL
+    // 回転util
     // =====================================================
     private static Vec3 rotateY(Vec3 v, float yawDeg) {
         double yaw = Math.toRadians(-yawDeg);
@@ -124,10 +130,10 @@ public final class AttackPreview3DMath {
         return new Vec3(v.x, y, z);
     }
 
-    // =====================================================
     // BOX
     private static void computeBox(ShapeData d) {
         float xr = d.xRadius, yr = d.yRadius, zr = d.zRadius;
+
         Vec3[] pts = {
                 new Vec3(-xr,-yr,-zr), new Vec3(xr,-yr,-zr),
                 new Vec3(xr,yr,-zr), new Vec3(-xr,yr,-zr),
@@ -148,12 +154,21 @@ public final class AttackPreview3DMath {
             Vec3 u = q.pos[1].subtract(q.pos[0]);
             Vec3 v = q.pos[3].subtract(q.pos[0]);
             q.normal = new Vec3(u.y*v.z - u.z*v.y, u.z*v.x - u.x*v.z, u.x*v.y - u.y*v.x);
+
+            q.rgba = new float[]{1f, 0f, 0f, 0.1f};//不透明度を0.1fにする
+
             d.surfaces.add(q);
+
+            for(int i=0;i<4;i++){
+                Edge e = new Edge();
+                e.a = q.pos[i];
+                e.b = q.pos[(i+1)%4];
+                d.edges.add(e);
+            }
         }
     }
 
-    // =====================================================
-    // CYLINDER
+    //円柱　枠線コメントアウト
     private static void computeCylinder(ShapeData d) {
         int detail = 32;
         float r = d.radius, h = d.height;
@@ -181,10 +196,16 @@ public final class AttackPreview3DMath {
             }
 
             d.surfaces.add(q);
+            /*枠線なし
+            for(int j=0;j<4;j++){
+                Edge e = new Edge();
+                e.a = q.pos[j];
+                e.b = q.pos[(j+1)%4];
+                d.edges.add(e);
+            }*/
         }
     }
 
-    // =====================================================
     // CAPSULE
     private static void computeCapsule(ShapeData d) {
         computeCylinder(d); // 中心シリンダー
@@ -227,13 +248,20 @@ public final class AttackPreview3DMath {
                         q.uv[k*2]=(k==0||k==3)?0f:1f;
                         q.uv[k*2+1]=(k<2)?0f:1f;
                     }
+                    d.surfaces.add(q);
+
+                    /*枠線なし
+                    for(int k=0;k<4;k++){
+                        Edge e = new Edge();
+                        e.a=q.pos[k]; e.b=q.pos[(k+1)%4];
+                        d.edges.add(e);
+                    }*/
                 }
             }
         }
     }
 
-    // =====================================================
-    // SPHERE
+    //球体　枠線コメントアウト
     private static void computeSphere(ShapeData d){
         int detail = 16;
         float r = d.radius;
@@ -265,12 +293,19 @@ public final class AttackPreview3DMath {
                 }
 
                 d.surfaces.add(q);
+
+                /*枠線なし
+                for(int k=0;k<4;k++){
+                    Edge e = new Edge();
+                    e.a = q.pos[k];
+                    e.b = q.pos[(k+1)%4];
+                    d.edges.add(e);
+                }*/
             }
         }
     }
 
-    // =====================================================
-    // FAN3D
+    //扇形　枠線コメントアウト
     private static void computeFan3D(ShapeData d){
         int detail = 16;
         float r = d.radius;
@@ -294,18 +329,33 @@ public final class AttackPreview3DMath {
                 q.uv[k*2+1]=(k<2)?0f:1f;
             }
             d.surfaces.add(q);
+
+            /*枠線なし
+            d.edges.add(new Edge(){{
+                a = q.pos[0]; b = q.pos[1];
+            }});
+            d.edges.add(new Edge(){{
+                a = q.pos[1]; b = q.pos[2];
+            }});
+            d.edges.add(new Edge(){{
+                a = q.pos[2]; b = q.pos[0];
+            }});*/
         }
     }
 
-    // =====================================================
-    // CROSS3D
+    //十字形
     private static void computeCross3D(ShapeData d){
         float r = d.radius;
         Vec3[] pts = {new Vec3(-r,0,0), new Vec3(r,0,0), new Vec3(0,-r,0), new Vec3(0,r,0), new Vec3(0,0,-r), new Vec3(0,0,r)};
+        for(int i=0;i<pts.length;i+=2){
+            Edge e = new Edge();
+            e.a=d.origin.add(pts[i]);
+            e.b=d.origin.add(pts[i+1]);
+            d.edges.add(e);
+        }
     }
 
-    // =====================================================
-    // TRIANGLE_PRISM
+    //三角柱　
     private static void computeTrianglePrism(ShapeData d){
         float s=d.size;
         Vec3[] bottom = {
@@ -335,6 +385,27 @@ public final class AttackPreview3DMath {
                 q.uv[k*2+1]=(k<2)?0f:1f;
             }
             d.surfaces.add(q);
+
+            // エッジ生成
+            for(int k=0;k<4;k++){
+                Edge e = new Edge();
+                e.a = q.pos[k];
+                e.b = q.pos[(k+1)%4];
+                d.edges.add(e);
+            }
+        }
+
+        // 底面と上面の三角形もエッジとして追加
+        for(int i=0;i<3;i++){
+            Edge e1 = new Edge();
+            e1.a = d.origin.add(bottom[i]);
+            e1.b = d.origin.add(bottom[(i+1)%3]);
+            d.edges.add(e1);
+
+            Edge e2 = new Edge();
+            e2.a = d.origin.add(bottom[i].add(topOffset));
+            e2.b = d.origin.add(bottom[(i+1)%3].add(topOffset));
+            d.edges.add(e2);
         }
     }
 }
