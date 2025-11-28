@@ -1,107 +1,126 @@
-// ------------------- AoeRenderer3D_Fixed.java -------------------
 package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
 import com.mimic.monstermod.Math.AttackPreview3DMath;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
-
-import java.util.List;
 
 /**
- * ワールド座標系で統一された3D AOE描画レンダラー
- * 古いコードと同じ座標系で正確に描画
+ * AoeRenderer3D
+ *
+ * 3D攻撃予兆（AoE）マーカーをワールド上に描画するクラス
+ * AttackPreview3DMath で計算した ShapeData（頂点・面・エッジ情報）を使って描画
+ *
+ * - faces: ポリゴン面を描画
+ * - edges: エッジ（線）を描画
+ * - ライティング: ワールドの明るさに応じて頂点のライト値を計算
  */
 public class AoeRenderer3D {
 
-    private static final Minecraft mc = Minecraft.getInstance();
-    private static final ResourceLocation RED_TEXTURE =
+    /** 攻撃予兆のテクスチャ */
+    private static final ResourceLocation TEX =
             new ResourceLocation("monstermod", "textures/misc/attackpreview.png");
 
-    private static final float SURFACE_ALPHA = 0.3f;
-    private static final float EDGE_ALPHA = 1f;
+    // ============================================================================
+    //  MAIN RENDER METHOD
+    // ============================================================================
+    /**
+     * ShapeData を元にワールド上に 3D AoE を描画
+     *
+     * @param poseStack 描画用の座標行列スタック
+     * @param buffers   描画バッファ
+     * @param shape     描画する 3D形状データ（頂点・面・エッジ情報）
+     * @param partialTicks 描画フレーム補間値
+     */
+    public static void render(
+            PoseStack poseStack,
+            MultiBufferSource buffers,
+            AttackPreview3DMath.ShapeData shape,
+            float partialTicks
+    ) {
+        if (shape == null) return;
 
-    public static void renderAoeMarkers(PoseStack poseStack, List<AoeMarker> markers) {
-        if (markers.isEmpty()) return;
-
-        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
-        Vec3 camPos = mc.gameRenderer.getMainCamera().getPosition();
-
-        RenderSystem.disableCull();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.depthMask(false);
-
-        for (AoeMarker marker : markers) {
-            AttackPreview3DMath.ShapeData shape = marker.get3DShapeData();
-            if (shape == null) continue;
-
-            poseStack.pushPose();
-            // ワールド座標系の頂点をカメラ相対に変換
-            poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
-
-            Matrix4f mat = poseStack.last().pose();
-
-            // 面描画
-            VertexConsumer face = bufferSource.getBuffer(RenderType.entityTranslucent(RED_TEXTURE));
-            for (Vec3[] quad : shape.surfaces) {
-                if (quad == null || quad.length < 3) continue;
-                drawFace(mat, face, quad, SURFACE_ALPHA);
+        // ========================
+        //  FACES (面) の描画
+        // ========================
+        if (shape.surfaces != null) {
+            VertexConsumer faceVC = buffers.getBuffer(RenderType.entityTranslucentCull(TEX));
+            poseStack.pushPose();  // 座標行列を保存
+            for (AttackPreview3DMath.Quad q : shape.surfaces) {
+                drawQuad(poseStack, faceVC, q);
             }
-
-            // エッジ描画
-            VertexConsumer edge = bufferSource.getBuffer(RenderType.lines());
-            for (Vec3[] e : shape.edges) {
-                if (e == null || e.length < 2) continue;
-                drawEdge(mat, edge, e[0], e[1], EDGE_ALPHA);
-            }
-
-            poseStack.popPose();
-        }
-
-        bufferSource.endBatch();
-        RenderSystem.depthMask(true);
-        RenderSystem.enableCull();
-        RenderSystem.disableBlend();
-    }
-
-    private static void drawFace(Matrix4f mat, VertexConsumer consumer, Vec3[] quad, float alpha) {
-        Vec3 a = quad[0];
-        for (int i = 1; i < quad.length - 1; i++) {
-            Vec3 b = quad[i];
-            Vec3 c = quad[i + 1];
-            putVertex(consumer, mat, a, alpha);
-            putVertex(consumer, mat, b, alpha);
-            putVertex(consumer, mat, c, alpha);
+            poseStack.popPose();  // 座標行列を復元
         }
     }
 
-    private static void putVertex(VertexConsumer consumer, Matrix4f mat, Vec3 pos, float alpha) {
-        // ワールド座標そのまま使用
-        consumer.vertex(mat, (float) pos.x, (float) pos.y, (float) pos.z)
-                .color(1f, 1f, 1f, alpha)
-                .uv(0f, 0f)
-                .overlayCoords(0)
-                .uv2(0xF000F0)
-                .normal(0f, 1f, 0f)
-                .endVertex();
+    // ============================================================================
+    //  DRAW QUAD (1つの四角形を描画)
+    // ============================================================================
+    private static void drawQuad(PoseStack stack, VertexConsumer vc, AttackPreview3DMath.Quad quad) {
+        PoseStack.Pose pose = stack.last();  // 現在の座標変換行列
+
+        // normal.y が負の場合は頂点順序を反転して裏面描画を防止
+        int[] order = quad.normal.y < 0 ? new int[]{0,3,2,1} : new int[]{0,1,2,3};
+
+        for (int i : order) {
+            Vec3 p = quad.pos[i];       // 頂点座標
+            float u = quad.uv[i * 2];   // テクスチャ U
+            float v = quad.uv[i * 2 + 1]; // テクスチャ V
+            putVertex(vc, pose, p, u, v, quad.rgba, quad.normal);
+        }
     }
 
-    private static void drawEdge(Matrix4f mat, VertexConsumer consumer, Vec3 start, Vec3 end, float alpha) {
-        consumer.vertex(mat, (float) start.x, (float) start.y, (float) start.z)
-                .color(1f, 0f, 0f, alpha)
-                .normal(0f, 1f, 0f)
-                .endVertex();
-        consumer.vertex(mat, (float) end.x, (float) end.y, (float) end.z)
-                .color(1f, 0f, 0f, alpha)
-                .normal(0f, 1f, 0f)
-                .endVertex();
+    // ============================================================================
+    //  DRAW SINGLE VERTEX
+    // ============================================================================
+    private static void putVertex(
+            VertexConsumer vc,
+            PoseStack.Pose pose,
+            Vec3 pos,
+            float u, float v,
+            float[] rgba,
+            Vec3 normal
+    ) {
+        int light = getPackedLight(pos); // ワールドライティング値取得
+
+        vc.vertex(pose.pose(), (float) pos.x, (float) pos.y, (float) pos.z)
+                .color(rgba[0], rgba[1], rgba[2], rgba[3]) // RGBA
+                .uv(u, v)                                 // テクスチャ
+                .overlayCoords(OverlayTexture.NO_OVERLAY) // オーバーレイなし
+                .uv2(light)                               // 光源値
+                .normal(pose.normal(), (float) normal.x, (float) normal.y, (float) normal.z) // 法線
+                .endVertex();                             // 頂点描画終了
+    }
+    // ============================================================================
+    //  LIGHT CALCULATION
+    // ============================================================================
+    /**
+     * 指定位置のワールドライト値を取得
+     *
+     * @param pos ワールド座標
+     * @return packedLight（ライト・スカイライトをパックした値）
+     */
+    private static int getPackedLight(Vec3 pos) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return 240; // デフォルト明るさ
+
+        BlockPos bp = new BlockPos(
+                (int) Math.floor(pos.x),
+                (int) Math.floor(pos.y),
+                (int) Math.floor(pos.z)
+        );
+        // ワールドのブロック光源と太陽光を取得
+        int sky = mc.level.getBrightness(LightLayer.SKY, bp);
+        int block = mc.level.getBrightness(LightLayer.BLOCK, bp);
+
+        return LightTexture.pack(block, sky); // 1つの整数にパック
     }
 }

@@ -1,19 +1,17 @@
 package com.mimic.monstermod.identity.impl;
 
-import com.mimic.monstermod.overlay.AoeMarkerManager;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMimicDodgePacket;
+import com.mimic.monstermod.overlay.AoeMarkerManager;
 import com.mimic.monstermod.util.SkillLeadUtil;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
@@ -27,7 +25,6 @@ public class MimicIdentity extends BaseMonsterIdentity {
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
         super(entity, SKILL_COUNT);
     }
-
     @Override
     public void handleAbility(Player player, int skillIndex) {
         if (skillIndex < 0 || skillIndex >= abilityCooldowns.length) return;
@@ -36,77 +33,67 @@ public class MimicIdentity extends BaseMonsterIdentity {
         BaseMonsterEntity entity = getEntity();
         if (!(entity instanceof MimicEntity mimic)) return;
 
-        switch (skillIndex) {
-            case 0 -> {
-                System.out.println("[MimicIdentity] handleAbility skillIndex=0, skill=switch");
-                mimic.getMonsterData().setSkill("switch");
+        // サーバ側での攻撃判定処理
+        if (!player.level().isClientSide()) {
+            Vec3 center = player.position().add(0, 0.1, 0); // プレイヤー中心
+            SkillLeadUtil.SkillConfig config = new SkillLeadUtil.SkillConfig();
 
-                Minecraft mc = Minecraft.getInstance();
-                if (mc.level != null && mc.player != null) {
-                    BlockPos playerBlockPos = mc.player.blockPosition();
-                    Level level = mc.level;
-
-                    Vec3 center = new Vec3(
-                            playerBlockPos.getX() + 0.5,
-                            playerBlockPos.getY() + 0.1,
-                            playerBlockPos.getZ() + 0.5
-                    );
-
-                    // SkillConfig 設定（BOX）
-                    SkillLeadUtil.SkillConfig config = new SkillLeadUtil.SkillConfig();
+            switch (skillIndex) {
+                case 0 -> { // switch
+                    mimic.getMonsterData().setSkill("switch");
                     config.shape = AoeMarkerManager.Shape.BOX;
                     config.xRadius = 3;
                     config.yRadius = 3;
                     config.zRadius = 3;
                     config.minYDiff = -3;
                     config.maxYDiff = 3;
-                    config.isDamage = true; // 攻撃判定を有効化
-
-                    // 2D段差制御付き AoE 表示＆攻撃判定
-                    List<double[]> area = SkillLeadUtil.generateArea(config, center); // 精密座標生成
-                    SkillLeadUtil.add2DAoePreview(config, center, 2000L, level);
-
-                    // 攻撃判定の適用（プレイヤー周囲のモブを対象に）
-                    List<LivingEntity> targets = level.getEntitiesOfClass(LivingEntity.class, mc.player.getBoundingBox().inflate(5));
-                    SkillLeadUtil.applySkillEffect(mc.player, targets, area, config);
-
-                    System.out.println("[AoE] BOX攻撃判定 & マーカー追加 at " + center);
+                    config.isDamage = true;
                 }
-            }
-            case 1 -> {
-                System.out.println("[MimicIdentity] handleAbility skillIndex=1, skill=bite");
-                mimic.getMonsterData().setSkill("bite");
-
-                Minecraft mc = Minecraft.getInstance();
-                if (mc.level != null && mc.player != null) {
-                    BlockPos playerBlockPos = mc.player.blockPosition();
-                    Level level = mc.level;
-
-                    Vec3 center = new Vec3(
-                            playerBlockPos.getX() + 0.5,
-                            playerBlockPos.getY() + 0.1,
-                            playerBlockPos.getZ() + 0.5
-                    );
-
-                    // SkillConfig 設定（SPHERE）
-                    SkillLeadUtil.SkillConfig config = new SkillLeadUtil.SkillConfig();
+                case 1 -> { // bite
+                    mimic.getMonsterData().setSkill("bite");
                     config.shape = AoeMarkerManager.Shape.SPHERE;
                     config.radius = 3;
-                    config.isDamage = true; // 攻撃判定を有効化
-
-                    // 精密座標生成
-                    List<double[]> area = SkillLeadUtil.generateArea(config, center);
-                    SkillLeadUtil.add2DAoePreview(config, center, 2000L, level);
-
-                    // 攻撃判定の適用（周囲のモブを対象）
-                    List<LivingEntity> targets = level.getEntitiesOfClass(LivingEntity.class, mc.player.getBoundingBox().inflate(5));
-                    SkillLeadUtil.applySkillEffect(mc.player, targets, area, config);
-
-                    System.out.println("[AoE] SPHERE攻撃判定 & マーカー追加 at " + center);
+                    config.isDamage = true;
                 }
             }
+
+            // 精密座標生成
+            List<double[]> area = SkillLeadUtil.generateArea(config, center);
+            // 攻撃判定適用（周囲5ブロック）
+            List<LivingEntity> targets = player.level().getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(5));
+            SkillLeadUtil.applySkillEffect(player, targets, area, config);
         }
+
+        // クライアント側での描画処理
+        if (player.level().isClientSide()) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null || mc.player == null) return;
+
+            Vec3 center = mc.player.position().add(0, 0.1, 0); // プレイヤー中心
+            SkillLeadUtil.SkillConfig config = new SkillLeadUtil.SkillConfig();
+
+            switch (skillIndex) {
+                case 0 -> { // switch
+                    config.shape = AoeMarkerManager.Shape.BOX;
+                    config.xRadius = 3;
+                    config.yRadius = 3;
+                    config.zRadius = 3;
+                    config.minYDiff = -3;
+                    config.maxYDiff = 3;
+                }
+                case 1 -> { // bite
+                    config.shape = AoeMarkerManager.Shape.SPHERE;
+                    config.radius = 3;
+                }
+            }
+
+            SkillLeadUtil.add2DAoePreview(config, center, 2000L, mc.level);
+        }
+
+        // クールダウンリセット
         abilityCooldowns[skillIndex] = 0;
+
+        System.out.println("[MimicIdentity] handleAbility executed skillIndex=" + skillIndex);
     }
 
     @Override

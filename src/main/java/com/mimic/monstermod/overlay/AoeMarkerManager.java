@@ -86,34 +86,13 @@ public class AoeMarkerManager {
             );
 
             return switch (shape) {
-                case BOX -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.BOX, safeCenter,
-                        xRadius * 2, yRadius * 2, zRadius * 2, 0, 0, 0, 0, 0, 0
-                );
-                case SPHERE -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.SPHERE, safeCenter,
-                        0, 0, 0, radius, 0, 24, 12, 0, 0
-                );
-                case CYLINDER -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.CYLINDER, safeCenter,
-                        0, 0, 0, radius, height, 24, 1, 0, 0
-                );
-                case CAPSULE -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.CAPSULE, safeCenter,
-                        0, 0, 0, radius, height, 24, 1, 8, 0
-                );
-                case FAN3D -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.FAN3D, safeCenter,
-                        0, 0, 0, radius, height, 24, 0, 0, angleDeg
-                );
-                case CROSS3D -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.CROSS3D, safeCenter,
-                        xRadius * 2, yRadius * 2, zRadius * 2, 0, 0, 0, 0, 0, 0
-                );
-                case TRIANGLE_PRISM -> AttackPreview3DMath.getShapeData(
-                        AttackPreview3DMath.ShapeType.TRIANGLE_PRISM, safeCenter,
-                        base, height, zRadius, 0, 0, 0, 0, 0, 0
-                );
+                case BOX -> AttackPreview3DMath.makeBox(safeCenter, 0f, (float)xRadius, (float)yRadius, (float)zRadius);
+                case SPHERE -> AttackPreview3DMath.makeSphere(safeCenter, 0f, (float)radius);
+                case CYLINDER -> AttackPreview3DMath.makeCylinder(safeCenter, 0f, (float)radius, (float)height);
+                case CAPSULE -> AttackPreview3DMath.makeCapsule(safeCenter, 0f, (float)radius, (float)height);
+                case FAN3D -> AttackPreview3DMath.makeFan3D(safeCenter, 0f, (float)radius, (float)angleDeg);
+                case CROSS3D -> AttackPreview3DMath.makeCross3D(safeCenter, 0f, (float)radius);
+                case TRIANGLE_PRISM -> AttackPreview3DMath.makeTrianglePrism(safeCenter, 0f, (float)base);
                 default -> null;
             };
         }
