@@ -139,8 +139,8 @@ public class BaseMonsterIdentity {
     public void handleDodge(Player player) {
         if (entity == null) return;
         // デフォルトは横に小さく移動する簡易回避
-        double dx = Math.sin(Math.toRadians(player.getYRot())) * 1.0;
-        double dz = -Math.cos(Math.toRadians(player.getYRot())) * 1.0;
+        double dx = Math.sin(Math.toRadians(player.getYRot()));
+        double dz = -Math.cos(Math.toRadians(player.getYRot()));
         entity.setDeltaMovement(entity.getDeltaMovement().add(dx, 0, dz));
     }
 

@@ -1,6 +1,6 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformation;
+import com.mimic.monstermod.capability.MonsterTransformation;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -20,7 +20,7 @@ public class EntityRenderDispatcherMixin {
     private static void cancelPlayerShadow(PoseStack p_114458_, MultiBufferSource p_114459_, Entity p_114460_, float p_114461_, float p_114462_, LevelReader p_114463_, float p_114464_, CallbackInfo ci) {
         if (p_114460_ instanceof Player player) {
             boolean transformed = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                    .map(PlayerTransformation::isTransformed)
+                    .map(MonsterTransformation::isTransformed)
                     .orElse(false);
             if (transformed) {
                 ci.cancel(); // 影描画をスキップ

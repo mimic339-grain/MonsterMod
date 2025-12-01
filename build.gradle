@@ -5,25 +5,38 @@ plugins {
     id 'eclipse'
 }
 
-println "forge_version_range = ${forge_version_range}"
-
-group = mod_group_id
-version = mod_version
-archivesBaseName = mod_id
+// ==========================
+// Mod 情報
+// ==========================
+group = 'com.mimic.monstermod'
+version = '1.0.0'
+archivesBaseName = 'monstermod'
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
+// ==========================
+// Minecraft / Forge 設定
+// ==========================
 minecraft {
+    // Mappings
     mappings channel: 'official', version: '1.20.1'
-
+    // Forge runs
     runs {
         client {
             workingDirectory project.file('run')
-            // ★ここを削除しました: property 'mixin.env.disableRefMap', 'true'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            //Geckolibのrendererのデバッグ用に追加
+            // GeckoLib の renderer デバッグ
             jvmArgs '-Dgeckolib.debug_renderers=true'
+
+            mods {
+                monstermod {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('run')
             mods {
                 monstermod {
                     source sourceSets.main
@@ -33,26 +46,42 @@ minecraft {
     }
 }
 
+// ==========================
+// Mixin 設定
+// ==========================
 mixin {
     add sourceSets.main, "monstermod.refmap.json"
     config "monstermod.mixins.json"
 }
 
+// ==========================
+// リポジトリ
+// ==========================
 repositories {
     mavenCentral()
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     maven { url = 'https://maven.minecraftforge.net/' }
     maven { url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
     maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+
+    // KosmX Player Animator
+    maven { url = 'https://maven.kosmx.dev/' }
 }
 
+// ==========================
+// 依存関係
+// ==========================
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    minecraft "net.minecraftforge:forge:1.20.1-47.4.10"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.4.9')
     compileOnly 'org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT'
+    implementation fg.deobf("dev.kosmx.player-anim:player-animation-lib-forge:1.0.2-rc1+1.20")
 }
 
+// ==========================
+// Jar 設定
+// ==========================
 jar {
     manifest {
         attributes([
@@ -61,45 +90,45 @@ jar {
     }
 }
 
+// ==========================
+// Resources 設定
+// ==========================
 sourceSets.main.resources {
     srcDir 'src/generated/resources'
     exclude '**/*.cache'
 }
+
 tasks.processResources {
-    // このタスクの入力プロパティとしてバージョンを含めることで、
-    // バージョンが変更されたときにタスクが再実行されることを保証します。
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
     inputs.property "version", project.version
-    inputs.property "mcversion", minecraft_version // minecraft_versionも追加
+    inputs.property "mcversion", '1.20.1'
 
-    // sourceSets.main.resources.srcDirs からリソースを取得
     from(sourceSets.main.resources.srcDirs) {
-        // META-INF/mods.toml ファイルのみをフィルタリング対象とします
         include 'META-INF/mods.toml'
 
         expand(
-                properties + [
-                        'mod_id': mod_id,
-                        'mod_name': mod_name,
-                        'mod_license': mod_license,
-                        'mod_version': mod_version,
-                        'mod_group_id': mod_group_id,
-                        'mod_authors': mod_authors,
-                        'mod_description': mod_description,
-                        'minecraft_version': minecraft_version,
-                        'forge_version': forge_version,
-                        'forge_version_range': forge_version_range,
-                        'minecraft_version_range': minecraft_version_range
-                ]
+                mod_id: 'monstermod',
+                mod_name: 'Monster Mod',
+                mod_license: 'All Rights Reserved',
+                mod_version: project.version,
+                mod_group_id: 'com.mimic.monstermod',
+                mod_authors: 'mimic',
+                mod_description: 'A mod that uses Mixin with GeckoLib and Forge 1.20.1.',
+                minecraft_version: '1.20.1',
+                forge_version: '47.4.10',
+                forge_version_range: '47.4.10',
+                minecraft_version_range: '1.20.1'
         )
     }
+
     from(sourceSets.main.resources.srcDirs) {
-        exclude 'META-INF/mods.toml' // mods.tomlは上記で既に処理されているため、ここでは除外
+        exclude 'META-INF/mods.toml'
     }
 }
 
-// tasks.withType(JavaCompile) はこのままでOK
+// ==========================
+// Java コンパイル設定
+// ==========================
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }

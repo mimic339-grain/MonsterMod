@@ -11,6 +11,7 @@
     "player.ClientPlayerEntityTickMixin",
     "player.EntityRenderDispatcherMixin",
     "player.ForgeGuiMixin",
+    "player.HeldItemLayerHunterMixin",
     "accessor.EntityAccessor"
   ],
   "injectors": {

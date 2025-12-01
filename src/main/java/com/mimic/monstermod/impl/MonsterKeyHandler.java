@@ -2,8 +2,7 @@ package com.mimic.monstermod.impl;
 
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.client.C2SPlayerInputPacket;
-import com.mimic.monstermod.util.MonsterKeyBindings;
+import com.mimic.monstermod.network.client.C2SMonsterInputPacket;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -14,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber(value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
-public class ClientKeyHandler {
+public class MonsterKeyHandler {
 
     // ======================================
     // キーバインディング登録
@@ -25,7 +24,7 @@ public class ClientKeyHandler {
             event.register(key);
 
         event.register(MonsterKeyBindings.MENU_KEY);
-        event.register(MonsterKeyBindings.DODGE_KEY); // ← 回避キーも登録
+        event.register(MonsterKeyBindings.DODGE_KEY);
     }
 
     // ======================================
@@ -59,7 +58,7 @@ public class ClientKeyHandler {
 
                             // サーバーへ送信
                             ModMessages.INSTANCE.sendToServer(
-                                    new C2SPlayerInputPacket(true, false, dodgePressed, i)
+                                    new C2SMonsterInputPacket(true, false, dodgePressed, i)
                             );
                         }
                     }
@@ -70,7 +69,7 @@ public class ClientKeyHandler {
                         identity.handleClientInput(player, false, true, -1);
 
                         ModMessages.INSTANCE.sendToServer(
-                                new C2SPlayerInputPacket(false, true, dodgePressed, -1)
+                                new C2SMonsterInputPacket(false, true, dodgePressed, -1)
                         );
                     }
 
@@ -78,7 +77,7 @@ public class ClientKeyHandler {
                     if (dodgePressed) {
                         identity.handleDodge(player);
                         ModMessages.INSTANCE.sendToServer(
-                                new C2SPlayerInputPacket(false, false, true, -1)
+                                new C2SMonsterInputPacket(false, false, true, -1)
                         );
                     }
                 });

@@ -1,8 +1,10 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.capability.PlayerTransformation;
-import com.mimic.monstermod.capability.PlayerTransformationProvider;
+import com.mimic.monstermod.capability.HunterTransformation;
+import com.mimic.monstermod.capability.HunterTransformationProvider;
+import com.mimic.monstermod.capability.MonsterTransformation;
+import com.mimic.monstermod.capability.MonsterTransformationProvider;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMonsterCapSyncPacket;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
@@ -27,16 +29,27 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class CapabilityRegistry {
 
-    // ====== CAPABILITIES ======
+    // ==========================================================
+    // CAPABILITIES
+    // ==========================================================
+
     public static final Capability<IPlayerData> PLAYER_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
+
     public static final Capability<IMonsterData> MONSTER_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
-    // --- 修正: Capability の型は Provider ではなくデータ本体 (PlayerTransformation) ---
-    public static final Capability<PlayerTransformation> PLAYER_TRANSFORMATION =
+
+    public static final Capability<MonsterTransformation> PLAYER_TRANSFORMATION =
             CapabilityManager.get(new CapabilityToken<>() {});
 
-    // ====== GETTERS ======
+    public static final Capability<HunterTransformation> HUNTER_TRANSFORMATION =
+            CapabilityManager.get(new CapabilityToken<>() {});
+
+
+    // ==========================================================
+    // GETTERS
+    // ==========================================================
+
     public static IPlayerData getPlayerData(LivingEntity entity) {
         return entity.getCapability(PLAYER_CAPABILITY).orElseGet(() -> new PlayerCap(entity));
     }
@@ -53,38 +66,59 @@ public class CapabilityRegistry {
         return entity.getCapability(MONSTER_CAPABILITY);
     }
 
-    // 修正: PlayerTransformation を直接返す
-    public static LazyOptional<PlayerTransformation> getPlayerTransformation(Player player) {
+    public static LazyOptional<MonsterTransformation> getPlayerTransformation(Player player) {
         return player.getCapability(PLAYER_TRANSFORMATION);
     }
 
-    // ====== REGISTER ======
+    // ------ 新規追加: Hunter Transformation Getter ------
+    public static LazyOptional<HunterTransformation> getHunterTransformation(Player player) {
+        return player.getCapability(HUNTER_TRANSFORMATION);
+    }
+
+
+    // ==========================================================
+    // REGISTER CAPABILITIES
+    // ==========================================================
     @SubscribeEvent
     public static void registerCaps(RegisterCapabilitiesEvent event) {
         event.register(IPlayerData.class);
         event.register(IMonsterData.class);
-        // 修正: PlayerTransformation.class を登録（Provider ではない）
-        event.register(PlayerTransformation.class);
+        event.register(MonsterTransformation.class);
+        event.register(HunterTransformation.class); // ★ 追加
     }
 
-    // ====== ATTACH PROVIDERS ======
+
+    // ==========================================================
+    // ATTACH PROVIDERS
+    // ==========================================================
     @SubscribeEvent
     public static void attachCapabilities(AttachCapabilitiesEvent<Entity> event) {
         Entity entity = event.getObject();
 
         if (entity instanceof Player player) {
+
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
-            // Provider は attach する（付与オブジェクト）。Capability の型は上で PlayerTransformation にしてある。
-            event.addCapability(
-                    new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
-                    new PlayerTransformationProvider()
-            );
+
+            // Monster / Player Transformation
+            event.addCapability(new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
+                    new MonsterTransformationProvider());
+
+            // ------ 新規追加: Hunter 用 Provider ------
+            event.addCapability(new ResourceLocation(MonsterMod.MOD_ID, "hunter_transformation"),
+                    new HunterTransformationProvider());
+
         } else if (entity instanceof LivingEntity living) {
+
             event.addCapability(MonsterCapabilityProvider.ID, new MonsterCapabilityProvider(living));
         }
     }
 
+
+    // ==========================================================
+    // COPY CAPABILITIES (player clone: respawn, dimension move)
+    // ==========================================================
     public static void copyCaps(Player oldPlayer, Player newPlayer) {
+
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
                         newCap.deserializeNBT(oldCap.serializeNBT())
@@ -97,26 +131,44 @@ public class CapabilityRegistry {
                 )
         );
 
-        // 修正: PlayerTransformation のデータ本体をコピーする
         oldPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(newCap -> {
                     newCap.deserializeNBT(oldCap.serializeNBT());
                     newCap.onLoad(newPlayer);
                 })
         );
+
+        // ------ 新規追加: Hunter Transformation ------
+        oldPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(oldCap ->
+                newPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(newCap -> {
+                    newCap.deserializeNBT(oldCap.serializeNBT());
+                    newCap.onLoad(newPlayer);
+                })
+        );
     }
 
-    // ====== SYNC TO CLIENT ======
+
+    // ==========================================================
+    // SYNC TO CLIENT
+    // ==========================================================
     public static void syncToClient(Player player) {
+
         if (!(player instanceof ServerPlayer serverPlayer)) return;
 
-        // PLAYER / MONSTER Cap 同期
-        ModMessages.sendToPlayer(new S2CPlayerCapSyncPacket(getPlayerData(player).serializeNBT()), serverPlayer);
-        ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()), serverPlayer);
+        // base caps
+        ModMessages.sendToPlayer(new S2CPlayerCapSyncPacket(
+                getPlayerData(player).serializeNBT()), serverPlayer);
 
-        // PlayerTransformation 同期
+        ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(
+                getMonsterData(player).serializeNBT()), serverPlayer);
+
+        // Player Transformation
         getPlayerTransformation(player).ifPresent(trans -> {
-            // PlayerTransformation 本体に同期呼び出しを任せる
+            trans.syncToClient(player);
+        });
+
+        // ------ 新規追加: Hunter Transformation ------
+        getHunterTransformation(player).ifPresent(trans -> {
             trans.syncToClient(player);
         });
     }

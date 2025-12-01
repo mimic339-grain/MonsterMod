@@ -1,8 +1,8 @@
 package com.mimic.monstermod.command;
 
+import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import com.mimic.monstermod.variable.CapabilityRegistry;
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -11,11 +11,17 @@ import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-public class ModCommands {
+@Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
+public class MonsterCommand {
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+
+            event.getDispatcher().register(
                 Commands.literal("transform")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("target", EntityArgument.player())

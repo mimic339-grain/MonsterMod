@@ -1,6 +1,6 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.capability.PlayerTransformation;
+import com.mimic.monstermod.capability.MonsterTransformation;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -19,7 +19,7 @@ public class ForgeGuiMixin {
     private void cancelHealth(CallbackInfo ci) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null && player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                .map(PlayerTransformation::isTransformed).orElse(false)) {
+                .map(MonsterTransformation::isTransformed).orElse(false)) {
 
             // Vanilla HP 描画をキャンセル
             ci.cancel();

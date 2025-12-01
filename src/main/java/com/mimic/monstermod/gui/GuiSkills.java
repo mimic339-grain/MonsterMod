@@ -1,6 +1,6 @@
 package com.mimic.monstermod.gui;
 
-import com.mimic.monstermod.util.MonsterKeyBindings;
+import com.mimic.monstermod.impl.MonsterKeyBindings;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.variable.entity.IEntityData;
 import com.mojang.blaze3d.platform.GlStateManager.DestFactor;

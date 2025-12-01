@@ -11,13 +11,13 @@ import net.minecraftforge.common.util.LazyOptional;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class PlayerTransformationProvider implements ICapabilityProvider {
+public class MonsterTransformationProvider implements ICapabilityProvider {
 
     // Capability 内部データの実体
-    private final PlayerTransformation data = new PlayerTransformation();
+    private final MonsterTransformation data = new MonsterTransformation();
 
     // LazyOptional（Forge 方式）
-    private final LazyOptional<PlayerTransformation> optional = LazyOptional.of(() -> data);
+    private final LazyOptional<MonsterTransformation> optional = LazyOptional.of(() -> data);
 
     @Nonnull
     @Override
@@ -42,7 +42,7 @@ public class PlayerTransformationProvider implements ICapabilityProvider {
         data.onLoad(player); // プレイヤー依存の初期化を別メソッドで呼ぶ
     }
     // データへの getter
-    public PlayerTransformation get() {
+    public MonsterTransformation get() {
         return data;
     }
 }
