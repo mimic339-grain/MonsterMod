@@ -9,6 +9,9 @@ import net.minecraft.world.item.ItemStack;
 
 public class HunterTransformation {
 
+    // ================================================================
+    // 基本装備情報（既存）
+    // ================================================================
     private ItemStack equippedWeapon = ItemStack.EMPTY;
     private String weaponType = "";
     private boolean isSheathed = true;
@@ -18,7 +21,6 @@ public class HunterTransformation {
     // 攻撃・コンボ
     private int comboCount = 0;
     private float attackStiffness = 0f;
-
     // ================================================================
     // Getters
     // ================================================================
@@ -29,6 +31,20 @@ public class HunterTransformation {
     public boolean isActive() { return isActive; }
     public int getComboCount() { return comboCount; }
     public float getAttackStiffness() { return attackStiffness; }
+
+    // ================================================================
+    // ★ Hunter 専用スロット（GUI の HunterSlot と対応）
+    // ================================================================
+    private ItemStack hunterSlot = ItemStack.EMPTY;  // ← これが GUI の slot の中身
+
+    public ItemStack getHunterSlot() {
+        return hunterSlot;
+    }
+
+    public void setHunterSlot(ItemStack stack, Player player) {
+        this.hunterSlot = stack.copy();
+        syncToClient(player);
+    }
 
     // ================================================================
     // Start / Stop Hunter
@@ -89,16 +105,7 @@ public class HunterTransformation {
         HunterUtil.disableHotbarRender(player);
         HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
     }
-    public void sheathWeapon(Player player) {
-        this.isSheathed = true;
-        // 実際の描画やペナルティはテスト段階ではログだけ
-        System.out.println(player.getName().getString() + " sheath weapon");
-    }
 
-    public void unsheathWeapon(Player player) {
-        this.isSheathed = false;
-        System.out.println(player.getName().getString() + " unsheath weapon");
-    }
     // ================================================================
     // 攻撃・コンボ
     // ================================================================
@@ -107,21 +114,16 @@ public class HunterTransformation {
     public void increaseCombo() { comboCount = (comboCount + 1) % 3; }
 
     // ================================================================
-    // アクションごとのアニメーション名取得（固定）
+    // アニメーション名
     // ================================================================
-// 回避アクション
     public String getDodgeAnimationName() {return "hammer_idle";}
-    // 納刀アクション
     public String getSheathAnimationName() {return "hammer_idle2";}
-    // 抜刀アクション
     public String getDrawAnimationName() {return "hammer_idle3";}
-    // スキル1アクショ
     public String getSkill1AnimationName() {return "hammer_idle4";}
-    // スキル2アクション
     public String getSkill2AnimationName() {return "hammer_idle5";}
-    // スキル3アクション
-    public String getSkill3AnimationName() {return "hammer_idle6";
-    }// ================================================================
+    public String getSkill3AnimationName() {return "hammer_idle6";}
+
+    // ================================================================
     // Sync
     // ================================================================
     public void syncToClient(Player player) {
@@ -137,10 +139,11 @@ public class HunterTransformation {
     }
 
     // ================================================================
-    // NBT
+    // NBT 保存（死んでも slot が残る）
     // ================================================================
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
+
         tag.putBoolean("Sheathed", isSheathed);
         tag.putString("WeaponType", weaponType);
         tag.putFloat("MovePenalty", moveSpeedPenalty);
@@ -148,9 +151,15 @@ public class HunterTransformation {
         tag.putInt("ComboCount", comboCount);
         tag.putFloat("AttackStiffness", attackStiffness);
 
-        CompoundTag stackTag = new CompoundTag();
-        equippedWeapon.save(stackTag);
-        tag.put("WeaponStack", stackTag);
+        // 既存のメイン武器
+        CompoundTag weaponTag = new CompoundTag();
+        equippedWeapon.save(weaponTag);
+        tag.put("WeaponStack", weaponTag);
+
+        // ★ HunterSlot の保存
+        CompoundTag slotTag = new CompoundTag();
+        hunterSlot.save(slotTag);
+        tag.put("HunterSlot", slotTag);
 
         return tag;
     }
@@ -165,10 +174,21 @@ public class HunterTransformation {
         comboCount = tag.getInt("ComboCount");
         attackStiffness = tag.getFloat("AttackStiffness");
 
-        if (tag.contains("WeaponStack")) equippedWeapon = ItemStack.of(tag.getCompound("WeaponStack"));
-        else equippedWeapon = ItemStack.EMPTY;
+        if (tag.contains("WeaponStack"))
+            equippedWeapon = ItemStack.of(tag.getCompound("WeaponStack"));
+        else
+            equippedWeapon = ItemStack.EMPTY;
+
+        // ★ HunterSlot の読み込み
+        if (tag.contains("HunterSlot"))
+            hunterSlot = ItemStack.of(tag.getCompound("HunterSlot"));
+        else
+            hunterSlot = ItemStack.EMPTY;
     }
 
+    // ================================================================
+    // ロード時
+    // ================================================================
     public void onLoad(Player player) {
         if (!isSheathed && isActive) HunterUtil.applyLayerWeapon(player, equippedWeapon);
     }
