@@ -1,10 +1,7 @@
 package com.mimic.monstermod.variable;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.capability.HunterTransformation;
-import com.mimic.monstermod.capability.HunterTransformationProvider;
-import com.mimic.monstermod.capability.MonsterTransformation;
-import com.mimic.monstermod.capability.MonsterTransformationProvider;
+import com.mimic.monstermod.capability.*;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CMonsterCapSyncPacket;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
@@ -26,6 +23,10 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+/**
+ * Capability を一括管理する巨大レジストリ
+ * HunterCombatState まで追加した完全版
+ */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class CapabilityRegistry {
 
@@ -43,6 +44,10 @@ public class CapabilityRegistry {
             CapabilityManager.get(new CapabilityToken<>() {});
 
     public static final Capability<HunterTransformation> HUNTER_TRANSFORMATION =
+            CapabilityManager.get(new CapabilityToken<>() {});
+
+    // ★ 新規追加：ハンター戦闘状態
+    public static final Capability<HunterCombatState> HUNTER_COMBAT_STATE =
             CapabilityManager.get(new CapabilityToken<>() {});
 
 
@@ -70,9 +75,13 @@ public class CapabilityRegistry {
         return player.getCapability(PLAYER_TRANSFORMATION);
     }
 
-    // ------ 新規追加: Hunter Transformation Getter ------
     public static LazyOptional<HunterTransformation> getHunterTransformation(Player player) {
         return player.getCapability(HUNTER_TRANSFORMATION);
+    }
+
+    // ★ 新規追加 Getter
+    public static LazyOptional<HunterCombatState> getHunterCombatState(Player player) {
+        return player.getCapability(HUNTER_COMBAT_STATE);
     }
 
 
@@ -84,38 +93,47 @@ public class CapabilityRegistry {
         event.register(IPlayerData.class);
         event.register(IMonsterData.class);
         event.register(MonsterTransformation.class);
-        event.register(HunterTransformation.class); // ★ 追加
+        event.register(HunterTransformation.class);
+        event.register(HunterCombatState.class); // ★ 戦闘状態登録
     }
 
 
     // ==========================================================
-    // ATTACH PROVIDERS
+    // ATTACH CAPABILITIES
     // ==========================================================
     @SubscribeEvent
     public static void attachCapabilities(AttachCapabilitiesEvent<Entity> event) {
+
         Entity entity = event.getObject();
 
         if (entity instanceof Player player) {
 
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
 
-            // Monster / Player Transformation
-            event.addCapability(new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
-                    new MonsterTransformationProvider());
+            event.addCapability(
+                    new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
+                    new MonsterTransformationProvider()
+            );
 
-            // ------ 新規追加: Hunter 用 Provider ------
-            event.addCapability(new ResourceLocation(MonsterMod.MOD_ID, "hunter_transformation"),
-                    new HunterTransformationProvider());
+            event.addCapability(
+                    new ResourceLocation(MonsterMod.MOD_ID, "hunter_transformation"),
+                    new HunterTransformationProvider()
+            );
+
+            // ★ 新規追加：CombatState
+            event.addCapability(
+                    new ResourceLocation(MonsterMod.MOD_ID, "hunter_combat_state"),
+                    new HunterCombatStateProvider()
+            );
 
         } else if (entity instanceof LivingEntity living) {
-
             event.addCapability(MonsterCapabilityProvider.ID, new MonsterCapabilityProvider(living));
         }
     }
 
 
     // ==========================================================
-    // COPY CAPABILITIES (player clone: respawn, dimension move)
+    // COPY CAPABILITIES（リスポ / 次元移動）
     // ==========================================================
     public static void copyCaps(Player oldPlayer, Player newPlayer) {
 
@@ -138,38 +156,45 @@ public class CapabilityRegistry {
                 })
         );
 
-        // ------ 新規追加: Hunter Transformation ------
         oldPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(oldCap ->
                 newPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(newCap -> {
                     newCap.deserializeNBT(oldCap.serializeNBT());
                     newCap.onLoad(newPlayer);
                 })
         );
+
+        // ★ 新規追加：CombatState コピー
+        oldPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(oldCap ->
+                newPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(newCap ->
+                        newCap.deserializeNBT(oldCap.serializeNBT())
+                )
+        );
     }
 
 
     // ==========================================================
-    // SYNC TO CLIENT
+    // SYNC（サーバー → クライアント）
     // ==========================================================
     public static void syncToClient(Player player) {
 
-        if (!(player instanceof ServerPlayer serverPlayer)) return;
+        if (!(player instanceof ServerPlayer sp)) return;
 
-        // base caps
-        ModMessages.sendToPlayer(new S2CPlayerCapSyncPacket(
-                getPlayerData(player).serializeNBT()), serverPlayer);
+        // -------- base caps --------
+        ModMessages.sendToPlayer(
+                new S2CPlayerCapSyncPacket(getPlayerData(player).serializeNBT()),
+                sp
+        );
 
-        ModMessages.sendToPlayer(new S2CMonsterCapSyncPacket(
-                getMonsterData(player).serializeNBT()), serverPlayer);
+        ModMessages.sendToPlayer(
+                new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()),
+                sp
+        );
 
-        // Player Transformation
-        getPlayerTransformation(player).ifPresent(trans -> {
-            trans.syncToClient(player);
-        });
+        // -------- transformation --------
+        getPlayerTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
+        getHunterTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
 
-        // ------ 新規追加: Hunter Transformation ------
-        getHunterTransformation(player).ifPresent(trans -> {
-            trans.syncToClient(player);
-        });
+        // -------- combat state --------
+        getHunterCombatState(player).ifPresent(combat -> combat.syncToClient(sp));
     }
 }

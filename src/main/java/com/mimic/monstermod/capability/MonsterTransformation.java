@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 public class MonsterTransformation {
@@ -28,8 +29,8 @@ public class MonsterTransformation {
     public @Nullable BaseMonsterIdentity getIdentity() { return identity; }
 
     // =============================================================================
-    // startTransformation
-    // =============================================================================
+// startTransformation
+// =============================================================================
     public void startTransformation(Player player, ResourceLocation mobId) {
         if (player == null || mobId == null) return;
         Level level = player.level();
@@ -52,7 +53,6 @@ public class MonsterTransformation {
 
             if (transformedEntity != null) {
                 MonsterTransformUtil.copyAttributesToDEV(player, transformedEntity);
-                //自動段差上昇 変更
                 ((EntityAccessor) player).setMaxUpStep(transformedEntity.getStepHeightValue());
             }
 
@@ -74,8 +74,8 @@ public class MonsterTransformation {
     }
 
     // =============================================================================
-    // stopTransformation（修正版）
-    // =============================================================================
+// stopTransformation
+// =============================================================================
     public void stopTransformation(Player player) {
         if (!isTransformed || player == null) return;
 
@@ -88,7 +88,6 @@ public class MonsterTransformation {
         MonsterTransformUtil.resetAttributesToPlayer(player, player);
         double prevHP = MonsterTransformUtil.getPlayerHP(player);
         player.setHealth((float) Math.min(prevHP, player.getAttributeValue(Attributes.MAX_HEALTH)));
-        //自動段差上昇　デフォルト
         ((EntityAccessor) player).setMaxUpStep(0.6f);
 
         isTransformed = false;
@@ -103,8 +102,8 @@ public class MonsterTransformation {
     }
 
     // =============================================================================
-    // Identity / Entity
-    // =============================================================================
+// Identity / Entity
+// =============================================================================
     private BaseMonsterIdentity ensureIdentity(Level level, BaseMonsterEntity ent, Player player) {
         if (identity != null) return identity;
         identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, ent);
@@ -126,8 +125,8 @@ public class MonsterTransformation {
     }
 
     // =============================================================================
-    // Sync
-    // =============================================================================
+// Sync
+// =============================================================================
     public void syncToAllClients(Player player) {
         if (player.level().isClientSide) return;
 
@@ -140,8 +139,8 @@ public class MonsterTransformation {
         ModMessages.sendToAllClients(new S2CTransformSyncPacket(player.getUUID(), nbt));
     }
 
-    public void syncToClient(Player player) {
-        if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+    public void syncToClient(ServerPlayer player) {
+        if (player == null) return;
 
         CompoundTag nbt = new CompoundTag();
         nbt.putBoolean("isTransformed", isTransformed);
@@ -149,15 +148,12 @@ public class MonsterTransformation {
         nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
         nbt.putDouble("identityHP", identity != null ? MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth());
 
-        ModMessages.INSTANCE.send(
-                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> sp),
-                new S2CTransformSyncPacket(player.getUUID(), nbt)
-        );
+        ModMessages.sendToPlayer(new S2CTransformSyncPacket(player.getUUID(), nbt), player);
     }
 
     // =============================================================================
-    // NBT（★deserializeNBT 修正版★）
-    // =============================================================================
+// NBT
+// =============================================================================
     public void onLoad(Player player) {
         if (player == null) return;
 
@@ -169,7 +165,6 @@ public class MonsterTransformation {
             return;
         }
 
-        // Entity / Identity を生成
         transformedEntity = ensureEntity(player.level());
         identity = ensureIdentity(player.level(), transformedEntity, player);
 
@@ -193,8 +188,11 @@ public class MonsterTransformation {
         } else {
             transformedMobId = null;
         }
-        // ★ここでは Player や Level に依存する処理は絶対に入れない
+
+        // Player / Level に依存する処理は絶対に入れない
         transformedEntity = null;
         identity = null;
     }
+
+
 }

@@ -4,13 +4,14 @@ import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CHunterSyncPacket;
 import com.mimic.monstermod.util.HunterUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 public class HunterTransformation {
 
     // ================================================================
-    // 基本装備情報（既存）
+    // 基本装備情報
     // ================================================================
     private ItemStack equippedWeapon = ItemStack.EMPTY;
     private String weaponType = "";
@@ -21,8 +22,23 @@ public class HunterTransformation {
     // 攻撃・コンボ
     private int comboCount = 0;
     private float attackStiffness = 0f;
+
     // ================================================================
-    // Getters
+    // Hunter専用スロット
+    // ================================================================
+    private ItemStack weaponSlot = ItemStack.EMPTY;
+
+    public ItemStack getWeaponSlot() {
+        return weaponSlot;
+    }
+
+    public void setWeaponSlot(ItemStack stack, Player player) {
+        this.weaponSlot = stack.copy();
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
+    }
+
+    // ================================================================
+    // 基本Getters
     // ================================================================
     public ItemStack getEquippedWeapon() { return equippedWeapon; }
     public String getWeaponType() { return weaponType; }
@@ -32,19 +48,6 @@ public class HunterTransformation {
     public int getComboCount() { return comboCount; }
     public float getAttackStiffness() { return attackStiffness; }
 
-    // ================================================================
-    // ★ Hunter 専用スロット（GUI の HunterSlot と対応）
-    // ================================================================
-    private ItemStack hunterSlot = ItemStack.EMPTY;  // ← これが GUI の slot の中身
-
-    public ItemStack getHunterSlot() {
-        return hunterSlot;
-    }
-
-    public void setHunterSlot(ItemStack stack, Player player) {
-        this.hunterSlot = stack.copy();
-        syncToClient(player);
-    }
 
     // ================================================================
     // Start / Stop Hunter
@@ -53,7 +56,7 @@ public class HunterTransformation {
         if (player == null) return;
         isActive = true;
         if (!isSheathed) HunterUtil.applyLayerWeapon(player, equippedWeapon);
-        syncToClient(player);
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
     }
 
     public void stopHunter(Player player) {
@@ -62,11 +65,12 @@ public class HunterTransformation {
         if (!isSheathed) setSheathed(player, true);
         resetCombo();
         attackStiffness = 0f;
-        syncToClient(player);
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
     }
 
+
     // ================================================================
-    // 装備変更
+    // 武器変更
     // ================================================================
     public void equipWeapon(Player player, ItemStack stack, String type) {
         if (player == null) return;
@@ -76,8 +80,10 @@ public class HunterTransformation {
 
         if (!isSheathed) HunterUtil.applyLayerWeapon(player, equippedWeapon);
         isActive = !stack.isEmpty();
-        syncToClient(player);
+
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
     }
+
 
     // ================================================================
     // 納刀 / 抜刀
@@ -91,20 +97,21 @@ public class HunterTransformation {
         if (isSheathed) sheatheWeapon(player);
         else unsheatheWeapon(player);
 
-        syncToClient(player);
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
     }
 
-    private void sheatheWeapon(Player player) {
+    public void sheatheWeapon(Player player) {
         HunterUtil.removeHandWeaponLayer(player);
         HunterUtil.enableHotbarRender(player);
         HunterUtil.removeMovePenalty(player, moveSpeedPenalty);
     }
 
-    private void unsheatheWeapon(Player player) {
+    public void unsheatheWeapon(Player player) {
         HunterUtil.applyLayerWeapon(player, equippedWeapon);
         HunterUtil.disableHotbarRender(player);
         HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
     }
+
 
     // ================================================================
     // 攻撃・コンボ
@@ -112,6 +119,7 @@ public class HunterTransformation {
     public void addAttackStiffness(float time) { attackStiffness = time; }
     public void resetCombo() { comboCount = 0; }
     public void increaseCombo() { comboCount = (comboCount + 1) % 3; }
+
 
     // ================================================================
     // アニメーション名
@@ -123,23 +131,25 @@ public class HunterTransformation {
     public String getSkill2AnimationName() {return "hammer_idle5";}
     public String getSkill3AnimationName() {return "hammer_idle6";}
 
+
     // ================================================================
-    // Sync
+    // Sync（★修正版★）
     // ================================================================
-    public void syncToClient(Player player) {
-        if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+    public void syncToClient(ServerPlayer player) {
         CompoundTag nbt = serializeNBT();
-        ModMessages.sendToClient(new S2CHunterSyncPacket(player.getUUID(), nbt), sp);
+        ModMessages.sendToClient(new S2CHunterSyncPacket(player.getUUID(), nbt), player);
     }
 
     public void syncToAll(Player player) {
         if (player.level().isClientSide) return;
+        if (!(player instanceof ServerPlayer)) return;
         CompoundTag nbt = serializeNBT();
         ModMessages.sendToAllClients(new S2CHunterSyncPacket(player.getUUID(), nbt));
     }
 
+
     // ================================================================
-    // NBT 保存（死んでも slot が残る）
+    // NBT 保存
     // ================================================================
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
@@ -151,14 +161,12 @@ public class HunterTransformation {
         tag.putInt("ComboCount", comboCount);
         tag.putFloat("AttackStiffness", attackStiffness);
 
-        // 既存のメイン武器
         CompoundTag weaponTag = new CompoundTag();
         equippedWeapon.save(weaponTag);
         tag.put("WeaponStack", weaponTag);
 
-        // ★ HunterSlot の保存
         CompoundTag slotTag = new CompoundTag();
-        hunterSlot.save(slotTag);
+        weaponSlot.save(slotTag);
         tag.put("HunterSlot", slotTag);
 
         return tag;
@@ -179,17 +187,18 @@ public class HunterTransformation {
         else
             equippedWeapon = ItemStack.EMPTY;
 
-        // ★ HunterSlot の読み込み
         if (tag.contains("HunterSlot"))
-            hunterSlot = ItemStack.of(tag.getCompound("HunterSlot"));
+            weaponSlot = ItemStack.of(tag.getCompound("HunterSlot"));
         else
-            hunterSlot = ItemStack.EMPTY;
+            weaponSlot = ItemStack.EMPTY;
     }
+
 
     // ================================================================
     // ロード時
     // ================================================================
     public void onLoad(Player player) {
-        if (!isSheathed && isActive) HunterUtil.applyLayerWeapon(player, equippedWeapon);
+        if (!isSheathed && isActive)
+            HunterUtil.applyLayerWeapon(player, equippedWeapon);
     }
 }

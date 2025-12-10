@@ -89,8 +89,8 @@ public class C2SHunterInputPacket {
             // Sheath / Draw
             // ============================
             if (sheath) {
-                if (ht.isSheathed()) ht.unsheathWeapon(player);
-                else ht.sheathWeapon(player);
+                if (ht.isSheathed()) ht.unsheatheWeapon(player);
+                else ht.sheatheWeapon(player);
 
                 String sheathAnim = ht.isSheathed() ? ht.getSheathAnimationName() : ht.getDrawAnimationName();
                 if (sheathAnim != null) Animate.play(player, sheathAnim);

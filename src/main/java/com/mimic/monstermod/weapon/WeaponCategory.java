@@ -1,54 +1,156 @@
 package com.mimic.monstermod.weapon;
 
-import net.minecraft.world.item.ItemStack;
+import java.util.List;
 
+/**
+ * WeaponCategory — 完全版
+ * 目的:
+ *  - 各武器カテゴリの基礎ステータスを一元管理する Enum
+ *  - HunterCombatState / WeaponItem / GUI 等から参照される想定
+ * 含まれる情報:
+ *  - id: JSON / NBT / デバッグ用の識別文字列
+ *  - baseDamage: カテゴリ基礎ダメージ（段階倍率と掛け合わせる）
+ *  - attackRange: 攻撃判定の距離（汎用）
+ *  - comboMax: 通常コンボの最大段数（例: 3）
+ *  - comboDamageMultipliers: 各段のダメージ倍率（配列長は comboMax 推奨）
+ *  - comboStiffnessFrames: 各段の硬直（tick 単位）
+ *  - movePenalty: 抜刀時の移動倍率（例: 0.85f = 85%）
+ *  - hpBonus: 抜刀時に適用する最大体力のボーナス（絶対値 or 割合は設計次第）
+ *  - layerName: 表示用レイヤー / アニメ区分名
+ *  - skillSlots: 装備可能なスキルスロット数（GUI と Capability 用）
+ *  - allowedSkills: このカテゴリで使用可能な skill ID の一覧（String）
+ *
+ * 将来的な拡張:
+ *  - カテゴリごとに JSON 定義ファイルでロードする設計にも移しやすい形
+ */
 public enum WeaponCategory {
-    NONE("none", 0f, 0, new float[]{0f,0f,0f}, 0f, 0, "none"),
-    HAMMER("hammer", 12.0f, 3, new float[]{14f,18f,22f}, 0.25f, 3, "hammer"),
-    AXE("axe", 10.0f, 3, new float[]{10f,12f,14f}, 0.18f, 3, "axe"),
-    DUAL("dual_blade", 4.0f, 3, new float[]{6f,6f,6f}, 0.05f, 3, "dualblade"),
-    LONGSWORD("longsword", 8.0f, 3, new float[]{10f,12f,15f}, 0.15f, 3, "longsword"),
-    GREAT_SWORD("greatsword", 14.0f, 3, new float[]{12f,16f,20f}, 0.20f, 3, "greatsword");
 
+    NONE(
+            "none",
+            0f,      // baseDamage
+            2.0f,    // attackRange
+            1,       // comboMax
+            new float[]{1.0f},      // comboDamageMultipliers
+            new int[]{6},           // comboStiffnessFrames (tick)
+            1.0f,    // movePenalty (1.0 = no penalty)
+            0f,      // hpBonus (absolute HP add)
+            "none",
+            List.of()
+    ),
+
+    HAMMER(
+            "hammer",
+            12.0f,
+            3.2f,
+            3,
+            new float[]{1.0f, 1.25f, 1.5f},
+            new int[]{18, 22, 28},
+            0.85f,
+            0f,
+            "hammer_layer",
+            List.of("hammer_spin", "hammer_charge", "hammer_smash")
+    ),
+    SWORD(
+            "greatsword",
+            15.0f,
+            3.4f,
+            3,
+            new float[]{1.0f, 1.3f, 1.6f},
+            new int[]{22, 28, 36},
+            0.8f,
+            4.0f, // example: +4 HP on draw (or interpreted by system)
+            "greatsword_layer",
+            List.of("gs_charge", "gs_upper", "gs_stab")
+    );
+
+    // -------------------------
+    // fields
+    // -------------------------
     private final String id;
     private final float baseDamage;
-    private final int maxCombo;
-    /** comboごとの硬直（seconds or ticks depending on convention — you decide unit） */
-    private final float[] comboStiffness;
+    private final float attackRange;
+    private final int comboMax;
+    private final float[] comboDamageMultipliers;
+    private final int[] comboStiffnessFrames;
     private final float movePenalty;
-    private final int skillSlots;
+    private final float hpBonus;
     private final String layerName;
+    private final List<String> allowedSkills;
 
-    WeaponCategory(String id, float baseDamage, int maxCombo, float[] comboStiffness, float movePenalty, int skillSlots, String layerName) {
+    WeaponCategory(
+            String id,
+            float baseDamage,
+            float attackRange,
+            int comboMax,
+            float[] comboDamageMultipliers,
+            int[] comboStiffnessFrames,
+            float movePenalty,
+            float hpBonus,
+            String layerName,
+            List<String> allowedSkills
+    ) {
         this.id = id;
         this.baseDamage = baseDamage;
-        this.maxCombo = maxCombo;
-        this.comboStiffness = comboStiffness;
+        this.attackRange = attackRange;
+        this.comboMax = Math.max(1, comboMax);
+        this.comboDamageMultipliers = comboDamageMultipliers == null ? new float[]{1.0f} : comboDamageMultipliers;
+        this.comboStiffnessFrames = comboStiffnessFrames == null ? new int[]{6} : comboStiffnessFrames;
         this.movePenalty = movePenalty;
-        this.skillSlots = skillSlots;
+        this.hpBonus = hpBonus;
         this.layerName = layerName;
+        this.allowedSkills = allowedSkills;
     }
 
+    // -------------------------
+    // getters used by other systems
+    // -------------------------
     public String getId() { return id; }
+
+    /** カテゴリ基礎ダメージ（この値にコンボ倍率などを乗算して最終ダメージを得る） */
     public float getBaseDamage() { return baseDamage; }
-    public int getMaxCombo() { return maxCombo; }
+
+    /** 攻撃判定のレンジ（ワールド内判定に使う） */
+    public float getAttackRange() { return attackRange; }
+
+    /** このカテゴリの通常コンボ上限（段数） */
+    public int getComboMax() { return comboMax; }
+
+    /** 指定段のダメージ倍率を返す。stage は 0-based。範囲外は末尾 or 0 を返す */
+    public float getDamageMultiplierForStage(int stage) {
+        if (comboDamageMultipliers == null || comboDamageMultipliers.length == 0) return 1.0f;
+        if (stage < 0) stage = 0;
+        if (stage >= comboDamageMultipliers.length) stage = comboDamageMultipliers.length - 1;
+        return comboDamageMultipliers[stage];
+    }
+
+    /** 指定段の硬直（tick 単位）。範囲外は末尾を返す */
+    public int getStiffnessForStage(int stage) {
+        if (comboStiffnessFrames == null || comboStiffnessFrames.length == 0) return 6;
+        if (stage < 0) stage = 0;
+        if (stage >= comboStiffnessFrames.length) stage = comboStiffnessFrames.length - 1;
+        return comboStiffnessFrames[stage];
+    }
+
+    /** 抜刀時の移動倍率（1.0 = 通常） */
     public float getMovePenalty() { return movePenalty; }
-    public int getSkillSlots() { return skillSlots; }
+
+    /** 抜刀時に加算する HP（解釈は設計次第。割合にしたければ別メソッドを追加） */
+    public float getHpBonus() { return hpBonus; }
+
+    /** レイヤー / アニメ分岐に使う名前 */
     public String getLayerName() { return layerName; }
 
-    /** comboStage は 0-based（0 = 1段目）を想定。範囲外なら最後の値を返す */
-    public float getAttackStiffness(int comboStage) {
-        if (comboStiffness == null || comboStiffness.length == 0) return 0f;
-        if (comboStage < 0) comboStage = 0;
-        if (comboStage >= comboStiffness.length) comboStage = comboStiffness.length - 1;
-        return comboStiffness[comboStage];
+    /** このカテゴリで使用可能なスキル ID 一覧 */
+    public List<String> getAllowedSkills() { return allowedSkills; }
+
+    /** スキル許可チェック */
+    public boolean isSkillAllowed(String skillId) {
+        if (skillId == null || allowedSkills == null) return false;
+        return allowedSkills.contains(skillId);
     }
 
-    /** 必要なら ItemStack を受け取りカテゴリ固有の補正ダメージを返すためのフック */
-    public float getDamageForStage(ItemStack stack, int comboStage) {
-        // デフォルトは baseDamage。個別の ItemStack の NBT やタグで上書きする場合はここに実装を追加
-        // 例えば comboStage による倍率を入れるなら：
-        float multiplier = 1.0f + comboStage * 0.2f; // 例: 1.0, 1.2, 1.4
-        return baseDamage * multiplier;
+    // ユーティリティ: コンボ段の最終ダメージ（基礎 × 段倍率）
+    public float getDamageForStage(int stage) {
+        return getBaseDamage() * getDamageMultiplierForStage(stage);
     }
 }
