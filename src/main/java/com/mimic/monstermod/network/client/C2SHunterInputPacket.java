@@ -10,48 +10,47 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /**
- * クライアント → サーバー入力パケット
- * キー入力に応じてスキル・DODGE・抜刀/納刀・メニューを反映
- * サーバー側でアニメーションも再生
+ * クライアント → サーバー戦闘入力パケット
+ * - Skill1 / Skill2 / Skill3
+ * - Dodge
+ * - Sheath / Draw
  */
 public class C2SHunterInputPacket {
 
-    private final boolean pressed;
-    private final int skillIndex; // 1,2,3 または 0:スキル無し
-    private final boolean menu;
+    private final int skillIndex; // 0 = none, 1~3 = skill
     private final boolean dodge;
     private final boolean sheath;
 
     // ================================
     // コンストラクタ
     // ================================
-    public C2SHunterInputPacket(int skillIndex, boolean dodge, boolean sheath, boolean menu) {
-        this.pressed = skillIndex > 0;
+    public C2SHunterInputPacket(int skillIndex, boolean dodge, boolean sheath) {
         this.skillIndex = skillIndex;
-        this.menu = menu;
         this.dodge = dodge;
         this.sheath = sheath;
     }
 
-    // デシリアライズ
+    // ================================
+    // Decode
+    // ================================
     public C2SHunterInputPacket(FriendlyByteBuf buf) {
-        this.pressed = buf.readBoolean();
         this.skillIndex = buf.readInt();
-        this.menu = buf.readBoolean();
         this.dodge = buf.readBoolean();
         this.sheath = buf.readBoolean();
     }
 
-    // シリアライズ
+    // ================================
+    // Encode
+    // ================================
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeBoolean(pressed);
         buf.writeInt(skillIndex);
-        buf.writeBoolean(menu);
         buf.writeBoolean(dodge);
         buf.writeBoolean(sheath);
     }
 
-    // サーバー側処理
+    // ================================
+    // Handle (Server)
+    // ================================
     public void handle(Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
         ctx.enqueueWork(() -> {
@@ -62,27 +61,24 @@ public class C2SHunterInputPacket {
             if (ht == null || !ht.isActive()) return;
 
             // ============================
-            // スキル使用
+            // Skill
             // ============================
-            if (pressed && skillIndex > 0) {
-                String skillAnim = switch (skillIndex) {
+            if (skillIndex > 0) {
+                String anim = switch (skillIndex) {
                     case 1 -> ht.getSkill1AnimationName();
                     case 2 -> ht.getSkill2AnimationName();
                     case 3 -> ht.getSkill3AnimationName();
                     default -> null;
                 };
-                if (skillAnim != null) {
-                    // テスト用：攻撃判定は未実装
-                    Animate.play(player, skillAnim);
-                }
+                if (anim != null) Animate.play(player, anim);
             }
 
             // ============================
-            // DODGE
+            // Dodge
             // ============================
             if (dodge) {
-                String dodgeAnim = ht.getDodgeAnimationName();
-                if (dodgeAnim != null) Animate.play(player, dodgeAnim);
+                String anim = ht.getDodgeAnimationName();
+                if (anim != null) Animate.play(player, anim);
             }
 
             // ============================
@@ -92,15 +88,11 @@ public class C2SHunterInputPacket {
                 if (ht.isSheathed()) ht.unsheatheWeapon(player);
                 else ht.sheatheWeapon(player);
 
-                String sheathAnim = ht.isSheathed() ? ht.getSheathAnimationName() : ht.getDrawAnimationName();
-                if (sheathAnim != null) Animate.play(player, sheathAnim);
-            }
+                String anim = ht.isSheathed()
+                        ? ht.getSheathAnimationName()
+                        : ht.getDrawAnimationName();
 
-            // ============================
-            // Menu
-            // ============================
-            if (menu) {
-                // GUI開く処理（後で実装）
+                if (anim != null) Animate.play(player, anim);
             }
         });
         ctx.setPacketHandled(true);

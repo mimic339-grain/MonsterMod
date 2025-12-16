@@ -1,61 +1,44 @@
 package com.mimic.monstermod.gui.hunter;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import com.mimic.monstermod.item.weapon.WeaponItem;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * WeaponSlot
- * -------------
- * GUI上の1スロットを表現。
- * 描画・サーバー同期更新を担当。
- * クリック操作は WeaponSlotWidget が担当。
- */
-public class WeaponSlot {
+public class WeaponSlot extends Slot {
 
-    /** スロット内のアイテム */
-    private ItemStack stack = ItemStack.EMPTY;
+    private final WeaponContainer container;
 
-    /** スロットの位置 */
-    private int x, y;
-
-    /** スロットのサイズ（正方形） */
-    private final int size;
-
-    public WeaponSlot(int x, int y, int size) {
-        this.x = x;
-        this.y = y;
-        this.size = size;
+    public WeaponSlot(WeaponContainer container, int x, int y) {
+        super(container, 0, x, y);
+        this.container = container;
     }
 
-    /** GUI描画処理 */
-    public void render(Minecraft mc, GuiGraphics gui) {
-        if (stack == null || stack.isEmpty()) return;
-
-        gui.renderItem(stack, x, y);
-        gui.renderItemDecorations(mc.font, stack, x, y);
+    @Override
+    public boolean mayPlace(ItemStack stack) {
+        return stack.isEmpty() || stack.getItem() instanceof WeaponItem;
     }
 
-    /** スロット位置更新 */
-    public void setPosition(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    /** スロット内のアイテム取得 */
-    public ItemStack getStack() {
-        return stack == null ? ItemStack.EMPTY : stack;
+    @Override
+    public int getMaxStackSize() {
+        return 1;
     }
 
     /**
-     * サーバーから送られてきた状態で更新
-     * マルチプレイヤーでクライアント側の表示を同期
+     * InventoryMenu(active=false) でも操作可能にする
      */
-    public void updateFromServer(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            this.stack = ItemStack.EMPTY;
-        } else {
-            this.stack = stack.copy();
-        }
+    @Override
+    public boolean isActive() {
+        return true;
+    }
+
+    @Override
+    public ItemStack getItem() {
+        return container.getItem(0); // 常に Capability を参照
+    }
+
+    @Override
+    public boolean mayPickup(Player player) {
+        return !getItem().isEmpty();
     }
 }

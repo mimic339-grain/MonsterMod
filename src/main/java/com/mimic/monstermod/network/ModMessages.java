@@ -39,7 +39,8 @@ public class ModMessages {
                 .serverAcceptedVersions(s -> true)
                 .simpleChannel();
 
-        registerMessage(C2S_SetHunterSlotPacket.class, C2S_SetHunterSlotPacket::toBytes, C2S_SetHunterSlotPacket::new, C2S_SetHunterSlotPacket::handle,NetworkDirection.PLAY_TO_SERVER);
+
+        registerMessage(C2S_SetWeaponSlotPacket.class, C2S_SetWeaponSlotPacket::encode, C2S_SetWeaponSlotPacket::decode, C2S_SetWeaponSlotPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SAttackPacket.class, C2SAttackPacket::toBytes, C2SAttackPacket::new, C2SAttackPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(PlayerTransformC2SPacket.class, PlayerTransformC2SPacket::toBytes, PlayerTransformC2SPacket::new, PlayerTransformC2SPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SMonsterInputPacket.class, C2SMonsterInputPacket::encode, C2SMonsterInputPacket::decode, C2SMonsterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
@@ -52,7 +53,7 @@ public class ModMessages {
         registerMessage(S2CHunterSyncPacket.class, S2CHunterSyncPacket::encode, S2CHunterSyncPacket::decode, S2CHunterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncCombatStatePacket.class, S2C_SyncCombatStatePacket::toBytes, S2C_SyncCombatStatePacket::new, S2C_SyncCombatStatePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2C_SyncHunterSlotPacket.class, S2C_SyncHunterSlotPacket::toBytes, S2C_SyncHunterSlotPacket::new, S2C_SyncHunterSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
     // ----------------------------
     // 共通メソッドで1行登録

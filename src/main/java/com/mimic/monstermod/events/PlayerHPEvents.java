@@ -15,7 +15,7 @@ import net.minecraftforge.fml.common.Mod;
 public class PlayerHPEvents {
 
     // ================================
-    // ダメージを受けたとき
+    // ダメージ
     // ================================
     @SubscribeEvent
     public static void onPlayerHurt(LivingHurtEvent event) {
@@ -26,8 +26,11 @@ public class PlayerHPEvents {
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     if (transformation.isTransformed() && transformation.getIdentity() != null) {
-                        String identityId = transformation.getIdentity().getId();
-                        MonsterTransformUtil.damageIdentity(player, identityId, damage);
+                        MonsterTransformUtil.damageIdentity(
+                                player,
+                                transformation.getIdentity().getId(),
+                                damage
+                        );
                     } else {
                         MonsterTransformUtil.damagePlayer(player, damage);
                     }
@@ -35,95 +38,121 @@ public class PlayerHPEvents {
     }
 
     // ================================
-    // 自然回復 / 回復アイテム
+    // 回復
     // ================================
     @SubscribeEvent
     public static void onPlayerHeal(LivingHealEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
 
-        double healAmount = event.getAmount();
+        double heal = event.getAmount();
 
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
                     if (transformation.isTransformed() && transformation.getIdentity() != null) {
-                        String identityId = transformation.getIdentity().getId();
-                        double newHP = MonsterTransformUtil.getIdentityHP(player, identityId) + healAmount;
-                        MonsterTransformUtil.setIdentityHP(player, identityId, newHP);
+                        String id = transformation.getIdentity().getId();
+                        MonsterTransformUtil.setIdentityHP(
+                                player,
+                                id,
+                                MonsterTransformUtil.getIdentityHP(player, id) + heal
+                        );
                     } else {
-                        double newHP = MonsterTransformUtil.getPlayerHP(player) + healAmount;
-                        MonsterTransformUtil.setPlayerHP(player, newHP);
+                        MonsterTransformUtil.setPlayerHP(
+                                player,
+                                MonsterTransformUtil.getPlayerHP(player) + heal
+                        );
                     }
                 });
     }
 
     // ================================
-    // プレイヤークローン時（死亡・リスポーン）
+    // PlayerClone（死亡・リスポーン）
     // ================================
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
         Player oldPlayer = event.getOriginal();
         Player newPlayer = event.getEntity();
 
-        // 古い Player を一時的に復活（Capability コピーの安全確保用）
         oldPlayer.revive();
-
-        // Capability コピー
         CapabilityRegistry.copyCaps(oldPlayer, newPlayer);
 
-        // PlayerHP をコピー
-        double oldPlayerHP = MonsterTransformUtil.getPlayerHP(oldPlayer);
-        MonsterTransformUtil.setPlayerHP(newPlayer, oldPlayerHP);
+        /* =========================
+         * HP / Identity HP
+         * ========================= */
+        MonsterTransformUtil.setPlayerHP(
+                newPlayer,
+                MonsterTransformUtil.getPlayerHP(oldPlayer)
+        );
 
-        // IdentityHP をコピー（変身中の Identity のみ）
         oldPlayer.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                .ifPresent(transformation -> {
-                    if (transformation.isTransformed() && transformation.getIdentity() != null) {
-                        String identityId = transformation.getIdentity().getId();
-                        double oldIdentityHP = MonsterTransformUtil.getIdentityHP(oldPlayer, identityId);
-                        MonsterTransformUtil.setIdentityHP(newPlayer, identityId, oldIdentityHP);
+                .ifPresent(oldTrans -> {
+                    if (oldTrans.isTransformed() && oldTrans.getIdentity() != null) {
+                        String id = oldTrans.getIdentity().getId();
+                        MonsterTransformUtil.setIdentityHP(
+                                newPlayer,
+                                id,
+                                MonsterTransformUtil.getIdentityHP(oldPlayer, id)
+                        );
                     }
                 });
 
-        // NBT データもコピー
+        /* =========================
+         * ★ Hunter Clone 再構築（slot優先設計）
+         * ========================= */
+        oldPlayer.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
+                .ifPresent(oldHunter ->
+                        newPlayer.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
+                                .ifPresent(newHunter -> {
+
+                                    // weaponSlot は既にコピー済み
+                                    if (newHunter.getWeaponSlot().isEmpty()) return;
+
+                                    // 死亡前に Hunter が有効だった場合のみ復元
+                                    if (oldHunter.isActive()) {
+                                        newHunter.syncEquippedFromSlot(newPlayer);
+                                    }
+                                })
+                );
+
+        /* =========================
+         * NBT 同期
+         * ========================= */
         MonsterTransformUtil.loadAllFromNBT(oldPlayer);
         MonsterTransformUtil.saveAllToNBT(newPlayer);
 
-        // クライアント同期
-        if (newPlayer instanceof ServerPlayer serverPlayer) {
-            CapabilityRegistry.syncToClient(serverPlayer);
+        if (newPlayer instanceof ServerPlayer sp) {
+            CapabilityRegistry.syncToClient(sp);
         }
     }
 
     // ================================
-    // ログイン時
+    // ログイン
     // ================================
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            CapabilityRegistry.syncToClient(serverPlayer);
+        if (event.getEntity() instanceof ServerPlayer sp) {
+            CapabilityRegistry.syncToClient(sp);
         }
     }
 
     // ================================
-    // リスポーン時
+    // リスポーン
     // ================================
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
-        // HP が 0 の Identity を最大値に復活
-        MonsterTransformUtil.resetPlayerHP(serverPlayer);
-        MonsterTransformUtil.resetIdentityHPOnRespawn(serverPlayer);
-        // クライアント同期
-        CapabilityRegistry.syncToClient(serverPlayer);
+        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+
+        MonsterTransformUtil.resetPlayerHP(sp);
+        MonsterTransformUtil.resetIdentityHPOnRespawn(sp);
+        CapabilityRegistry.syncToClient(sp);
     }
 
     // ================================
-    // ディメンション移動時
+    // ディメンション移動
     // ================================
     @SubscribeEvent
     public static void onPlayerDimChanged(PlayerEvent.PlayerChangedDimensionEvent event) {
-        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            CapabilityRegistry.syncToClient(serverPlayer);
+        if (event.getEntity() instanceof ServerPlayer sp) {
+            CapabilityRegistry.syncToClient(sp);
         }
     }
 }

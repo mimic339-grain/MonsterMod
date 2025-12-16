@@ -12,7 +12,9 @@
     "player.EntityRenderDispatcherMixin",
     "player.ForgeGuiMixin",
     "player.HeldItemLayerHunterMixin",
-    "accessor.EntityAccessor"
+    "player.InventoryMenuMixin",
+    "accessor.EntityAccessor",
+    "accessor.AbstractContainerMenuAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

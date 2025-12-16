@@ -1,11 +1,10 @@
 package com.mimic.monstermod.item.weapon;
 
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.server.S2C_SyncHunterSlotPacket;
+import com.mimic.monstermod.network.client.C2S_SetWeaponSlotPacket;
 import com.mimic.monstermod.weapon.WeaponCategory;
 import com.mimic.monstermod.weapon.WeaponCategoryUtil;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
@@ -22,24 +21,28 @@ import software.bernie.geckolib.renderer.GeoItemRenderer;
 import java.util.function.Consumer;
 
 /**
- * WeaponItem 完全版
- * - カテゴリ保持
- * - GeoRenderer 提供
- * - 右クリック・左クリックで WeaponSlot に装備
- * - 既存装備があればインベントリに戻す
+ * WeaponItem（完全版・最終設計）
+ *
+ * - UI / Menu / Slot に一切依存しない
+ * - Capability を唯一の真実とする
+ * - S2C パケットでクライアント描画を同期
  */
 public abstract class WeaponItem extends Item implements GeoItem {
 
-    private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
+    private final AnimatableInstanceCache cache =
+            new SingletonAnimatableInstanceCache(this);
+
     private final WeaponCategory category;
 
-    public WeaponItem(Properties props, WeaponCategory category) {
+    protected WeaponItem(Properties props, WeaponCategory category) {
         super(props);
         this.category = category;
-
-        // Weapon → Category の登録
         WeaponCategoryUtil.registerCategoryItem(category, this);
     }
+
+    /* ===============================
+     *  GeoItem
+     * =============================== */
 
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
@@ -49,17 +52,10 @@ public abstract class WeaponItem extends Item implements GeoItem {
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {}
 
-    public WeaponCategory getCategory() {
-        return category;
-    }
-
-    public WeaponCategory getCategory(ItemStack stack) {
-        return category;
-    }
+    public abstract GeoItemRenderer<? extends WeaponItem> getRenderer();
 
     @Override
     public void initializeClient(Consumer<IClientItemExtensions> consumer) {
-        super.initializeClient(consumer);
         consumer.accept(new IClientItemExtensions() {
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer() {
@@ -68,42 +64,28 @@ public abstract class WeaponItem extends Item implements GeoItem {
         });
     }
 
-    public abstract GeoItemRenderer<? extends WeaponItem> getRenderer();
+    /* ===============================
+     *  Category
+     * =============================== */
 
-    public BlockEntityWithoutLevelRenderer getStackRenderer(ItemStack stack) {
-        return getRenderer();
+    public WeaponCategory getCategory() {
+        return category;
     }
 
-    /**
-     * 右クリック・左クリックで WeaponSlot に装備
-     * 左右どちらでもこのメソッドで処理
-     */
+    /* ===============================
+     *  右クリック装備
+     * =============================== */
     @Override
-    public InteractionResultHolder<ItemStack> use(Level world, Player player, InteractionHand hand) {
-        if (!world.isClientSide && player instanceof ServerPlayer serverPlayer) {
-            player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.HUNTER_TRANSFORMATION)
-                    .ifPresent(hunter -> {
-                        if (!hunter.isActive()) return;
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
 
-                        ItemStack held = player.getItemInHand(hand);
-                        ItemStack currentSlot = hunter.getWeaponSlot();
+        if (held.isEmpty()) return InteractionResultHolder.pass(held);
 
-                        // もしスロットにすでに装備中のアイテムがある場合、インベントリに戻す
-                        if (!currentSlot.isEmpty()) {
-                            if (!player.addItem(currentSlot.copy())) {
-                                player.drop(currentSlot.copy(), false); // インベントリがいっぱいならドロップ
-                            }
-                        }
-
-                        // 新しいアイテムを WeaponSlot に装備
-                        hunter.setWeaponSlot(held.copy(), player);
-
-                        // サーバー→クライアント同期（S2C）
-                        ModMessages.sendToPlayer(new S2C_SyncHunterSlotPacket(hunter.getWeaponSlot()), serverPlayer);
-                    });
+        if (!level.isClientSide) {
+            ModMessages.sendToServer(new C2S_SetWeaponSlotPacket(held));
         }
 
-        return InteractionResultHolder.success(player.getItemInHand(hand));
+        return InteractionResultHolder.sidedSuccess(held, level.isClientSide());
     }
 
 }
