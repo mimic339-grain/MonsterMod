@@ -13,6 +13,8 @@
     "player.ForgeGuiMixin",
     "player.HeldItemLayerHunterMixin",
     "player.InventoryMenuMixin",
+    "player.PlayerAttackMixin",
+    "player.AttackIndicatorMixin",
     "accessor.EntityAccessor",
     "accessor.AbstractContainerMenuAccessor"
   ],
