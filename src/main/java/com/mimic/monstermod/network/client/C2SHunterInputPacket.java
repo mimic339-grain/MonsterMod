@@ -6,63 +6,85 @@ import com.mimic.monstermod.util.HunterUtil;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.function.Supplier;
 
 /**
- * クライアント → サーバー戦闘入力パケット
- * - Skill1 / Skill2 / Skill3
- * - Dodge
- * - Sheath / Draw
+ * Client → Server
+ * Hunter入力パケット（入力解釈＋アニメ再生）
  */
 public class C2SHunterInputPacket {
 
-    private final int skillIndex; // 0 = none, 1~3 = skill
-    private final boolean dodge;
-    private final boolean sheath;
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger("C2SHunterInputPacket");
 
-    // ================================
-    // コンストラクタ
-    // ================================
-    public C2SHunterInputPacket(int skillIndex, boolean dodge, boolean sheath) {
+    private final int skillIndex;
+    private final boolean dodge;
+    private final boolean sheathToggle;
+
+    // ------------------------------------------------
+    // Ctor
+    // ------------------------------------------------
+    public C2SHunterInputPacket(int skillIndex, boolean dodge, boolean sheathToggle) {
         this.skillIndex = skillIndex;
         this.dodge = dodge;
-        this.sheath = sheath;
+        this.sheathToggle = sheathToggle;
     }
 
-    // ================================
-    // Decode
-    // ================================
     public C2SHunterInputPacket(FriendlyByteBuf buf) {
         this.skillIndex = buf.readInt();
         this.dodge = buf.readBoolean();
-        this.sheath = buf.readBoolean();
+        this.sheathToggle = buf.readBoolean();
     }
 
-    // ================================
-    // Encode
-    // ================================
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeInt(skillIndex);
         buf.writeBoolean(dodge);
-        buf.writeBoolean(sheath);
+        buf.writeBoolean(sheathToggle);
     }
 
-    // ================================
-    // Handle (Server)
-    // ================================
+    // ------------------------------------------------
+    // Server Handle
+    // ------------------------------------------------
     public void handle(Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
+
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
 
             HunterTransformation ht = HunterUtil.getHunter(player);
-            if (ht == null || !ht.isActive()) return;
+            if (ht == null) return;
 
-            // ============================
-            // Skill
-            // ============================
+            // ----------------------------
+            // 納刀 / 抜刀（常に処理）
+            // ----------------------------
+            if (sheathToggle) {
+                boolean before = ht.isSheathed();
+                ht.setSheathed(player, !before);
+
+                String anim = ht.isSheathed()
+                        ? ht.getSheathAnimationName()
+                        : ht.getDrawAnimationName();
+
+                if (anim != null)
+                    Animate.play(player, anim);
+
+                LOGGER.info(
+                        "[Sheath] {} : {} -> {}",
+                        player.getName().getString(),
+                        before,
+                        ht.isSheathed()
+                );
+            }
+
+            // ----------------------------
+            // Skill / Dodge（Active時のみ）
+            // ----------------------------
+            if (!ht.isActive()) return;
+
             if (skillIndex > 0) {
                 String anim = switch (skillIndex) {
                     case 1 -> ht.getSkill1AnimationName();
@@ -70,31 +92,22 @@ public class C2SHunterInputPacket {
                     case 3 -> ht.getSkill3AnimationName();
                     default -> null;
                 };
-                if (anim != null) Animate.play(player, anim);
+
+                if (anim != null) {
+                    Animate.play(player, anim);
+                    LOGGER.info("[Skill] {} -> {}", skillIndex, anim);
+                }
             }
 
-            // ============================
-            // Dodge
-            // ============================
             if (dodge) {
                 String anim = ht.getDodgeAnimationName();
-                if (anim != null) Animate.play(player, anim);
-            }
-
-            // ============================
-            // Sheath / Draw
-            // ============================
-            if (sheath) {
-                if (ht.isSheathed()) ht.unsheatheWeapon(player);
-                else ht.sheatheWeapon(player);
-
-                String anim = ht.isSheathed()
-                        ? ht.getSheathAnimationName()
-                        : ht.getDrawAnimationName();
-
-                if (anim != null) Animate.play(player, anim);
+                if (anim != null) {
+                    Animate.play(player, anim);
+                    LOGGER.info("[Dodge] {}", anim);
+                }
             }
         });
+
         ctx.setPacketHandled(true);
     }
 }

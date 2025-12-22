@@ -16,17 +16,12 @@ import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 
 import java.util.function.Consumer;
 
-/**
- * WeaponItem（完全版・最終設計）
- *
- * - UI / Menu / Slot に一切依存しない
- * - Capability を唯一の真実とする
- * - S2C パケットでクライアント描画を同期
- */
 public abstract class WeaponItem extends Item implements GeoItem {
 
     private final AnimatableInstanceCache cache =
@@ -40,17 +35,20 @@ public abstract class WeaponItem extends Item implements GeoItem {
         WeaponCategoryUtil.registerCategoryItem(category, this);
     }
 
-    /* ===============================
-     *  GeoItem
-     * =============================== */
-
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return cache;
     }
 
     @Override
-    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {}
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(
+                this,
+                "controller",
+                0,
+                state -> PlayState.CONTINUE
+        ));
+    }
 
     public abstract GeoItemRenderer<? extends WeaponItem> getRenderer();
 
@@ -64,21 +62,17 @@ public abstract class WeaponItem extends Item implements GeoItem {
         });
     }
 
-    /* ===============================
-     *  Category
-     * =============================== */
-
     public WeaponCategory getCategory() {
         return category;
     }
 
-    /* ===============================
-     *  右クリック装備
-     * =============================== */
     @Override
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+    public InteractionResultHolder<ItemStack> use(
+            Level level,
+            Player player,
+            InteractionHand hand
+    ) {
         ItemStack held = player.getItemInHand(hand);
-
         if (held.isEmpty()) return InteractionResultHolder.pass(held);
 
         if (!level.isClientSide) {
@@ -88,4 +82,15 @@ public abstract class WeaponItem extends Item implements GeoItem {
         return InteractionResultHolder.sidedSuccess(held, level.isClientSide());
     }
 
+    /**
+     * HunterAnimationController / WeaponAnimator から呼ぶ
+     */
+    public void playWeaponAnimation(
+            Player player,
+            ItemStack stack,
+            String animationId
+    ) {
+        long instanceId = GeoItem.getId(stack);
+        this.triggerAnim(player, instanceId, "controller", animationId);
+    }
 }

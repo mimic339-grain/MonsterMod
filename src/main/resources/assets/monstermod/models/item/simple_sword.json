@@ -9,33 +9,64 @@
     "thirdperson_righthand": {
       "translation": [
         0,
-        -2.25,
-        -0.25
+        -12.75,
+        0
       ]
     },
     "thirdperson_lefthand": {
       "translation": [
         0,
-        -2.25,
-        -0.25
+        -12.5,
+        0
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        -21,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        -9,
+        6.5
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        -21,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        -9,
+        6.5
       ]
     },
     "ground": {
       "translation": [
         0,
-        -3.75,
+        -12.5,
         0
       ]
     },
     "gui": {
       "rotation": [
-        0,
         90,
-        0
+        45,
+        -90
       ],
       "translation": [
+        -13.75,
+        -13.25,
+        0
+      ]
+    },
+    "head": {
+      "translation": [
         0,
-        -9.25,
+        -1,
         0
       ]
     },
@@ -47,7 +78,7 @@
       ],
       "translation": [
         0,
-        -8.5,
+        -18.75,
         0
       ]
     },
@@ -56,10 +87,15 @@
         0,
         90,
         0
+      ],
+      "translation": [
+        9.25,
+        -43.5,
+        0
       ]
     }
   },
   "textures": {
-    "particle": "monstermod:item/sword.simple"
+    "particle": "monstermod:item/sword_simple"
   }
 }

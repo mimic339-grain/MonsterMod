@@ -1,26 +1,28 @@
 package com.mimic.monstermod.network.server;
 
-import com.mimic.monstermod.capability.HunterTransformation;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.NetworkEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * サーバー → クライアント
- * Hunter状態の同期（サーバー authoritative）
- *
- * クライアント側：
- *  - HunterTransformation の反映
- *  - 納刀状態（sheath = true/false）の同期
- *  - Layer の切り替え（武器を背中に回す・手に持つ の切替）
+ * Server → Client
+ * HunterTransformation 同期パケット
+ * ・サーバー authoritative
+ * ・Client 側 Capability を完全同期
+ * ・Layer は Capability を参照して自動更新
  */
 public class S2CHunterSyncPacket {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger("S2CHunterSyncPacket");
 
     private final UUID playerId;
     private final CompoundTag nbt;
@@ -30,59 +32,64 @@ public class S2CHunterSyncPacket {
         this.nbt = nbt;
     }
 
+    // ------------------------------------------------
+    // Codec
+    // ------------------------------------------------
     public static void encode(S2CHunterSyncPacket msg, FriendlyByteBuf buf) {
         buf.writeUUID(msg.playerId);
         buf.writeNbt(msg.nbt);
     }
 
     public static S2CHunterSyncPacket decode(FriendlyByteBuf buf) {
-        return new S2CHunterSyncPacket(buf.readUUID(), buf.readNbt());
+        return new S2CHunterSyncPacket(
+                buf.readUUID(),
+                buf.readNbt()
+        );
     }
 
-    /** クライアントでの処理 */
+    // ------------------------------------------------
+    // Client Handle
+    // ------------------------------------------------
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.level == null) return;
+            if (mc.level == null) {
+                LOGGER.warn("[S2C] level is null");
+                return;
+            }
 
             Player player = mc.level.getPlayerByUUID(playerId);
-            if (player == null) return;
+            if (player == null) {
+                LOGGER.warn("[S2C] player not found: {}", playerId);
+                return;
+            }
 
-            player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
-                    .ifPresent((HunterTransformation hunter) -> {
+            player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
+                        // ---- BEFORE ----
+                        LOGGER.info(
+                                "[S2C][BEFORE] {} active={} sheath={} slot={}",
+                                player.getName().getString(),
+                                hunter.isActive(),
+                                hunter.isSheathed(),
+                                hunter.getWeaponSlot()
+                        );
 
-                        boolean prevSheath = hunter.isSheathed();
-
-                        // NBT反映
+                        // ---- APPLY ----
                         hunter.deserializeNBT(nbt);
+                        hunter.onLoad(player); // client-only補正（Hotbarなど）
 
-                        // 納刀状態が変化 → Layer 更新
-                        boolean nowSheath = hunter.isSheathed();
-                        if (prevSheath != nowSheath) {
-                            // TODO: Layer表示切替用メソッド
-                            // 例: HunterUtil.updateWeaponLayer(player, nowSheath);
-                        }
+                        // ---- AFTER ----
+                        LOGGER.info(
+                                "[S2C][AFTER ] {} active={} sheath={} slot={}",
+                                player.getName().getString(),
+                                hunter.isActive(),
+                                hunter.isSheathed(),
+                                hunter.getWeaponSlot()
+                        );
+
                     });
         });
+
         ctx.get().setPacketHandled(true);
-    }
-
-    /** サーバー → クライアント用 NBT を作成 */
-    public static CompoundTag createNBT(Player player) {
-        CompoundTag tag = new CompoundTag();
-
-        player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
-                .ifPresent((HunterTransformation hunter) -> {
-                    // HunterTransformation の全状態をマージ
-                    tag.merge(hunter.serializeNBT());
-
-                    // 納刀フラグ（Layer制御用）
-                    tag.putBoolean("sheath", hunter.isSheathed());
-
-                    // HUDやゲージ同期が必要ならここで追加
-                    // tag.putFloat("hunterGauge", HunterUtil.getHunterGauge(player));
-                });
-
-        return tag;
     }
 }

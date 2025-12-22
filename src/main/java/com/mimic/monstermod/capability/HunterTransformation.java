@@ -14,38 +14,32 @@ import net.minecraft.world.item.ItemStack;
 public class HunterTransformation {
 
     // ================================================================
-    // 基本装備情報
+    // 基本状態
     // ================================================================
     private ItemStack equippedWeapon = ItemStack.EMPTY;
+    private ItemStack weaponSlot = ItemStack.EMPTY;
+
     private String weaponType = "";
     private boolean isSheathed = true;
-    private float moveSpeedPenalty = 0.0f;
     private boolean isActive = false;
 
-    // 攻撃・コンボ
+    private float moveSpeedPenalty = 0.0f;
+
+    // 攻撃関連
     private int comboCount = 0;
     private float attackStiffness = 0f;
 
     // ================================================================
-    // Hunter専用 WeaponSlot（★Inventory外の実体★）
+    // Getter
     // ================================================================
-    private ItemStack weaponSlot = ItemStack.EMPTY;
-
-    /* ================================================================
-     * Getter
-     * ================================================================ */
-
-    public ItemStack getWeaponSlot() {
-        return weaponSlot;
-    }
-
+    public ItemStack getWeaponSlot() { return weaponSlot; }
     public ItemStack getEquippedWeapon() { return equippedWeapon; }
     public String getWeaponType() { return weaponType; }
     public boolean isSheathed() { return isSheathed; }
-    public float getPenalty() { return moveSpeedPenalty; }
     public boolean isActive() { return isActive; }
     public int getComboCount() { return comboCount; }
     public float getAttackStiffness() { return attackStiffness; }
+    public float getPenalty() { return moveSpeedPenalty; }
 
     public static boolean isHunter(Player player) {
         if (player == null) return false;
@@ -54,182 +48,148 @@ public class HunterTransformation {
                 .orElse(false);
     }
 
-    /* ================================================================
-     * WeaponSlot 制御（★重要★）
-     * ================================================================ */
-    /** サーバー権威で WeaponSlot を更新 */
+    // ================================================================
+    // WeaponSlot（Inventory外）
+    // ================================================================
     public void setWeaponSlotServer(ItemStack stack, ServerPlayer player) {
         if (!canAcceptWeapon(stack)) return;
-        // ★ ログイン完了前は送らない
         if (player.connection == null) return;
+
         this.weaponSlot = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
         this.weaponSlot.setCount(1);
 
-        // デバッグログ
-        MonsterMod.LOGGER.info("[WeaponSlot][SERVER] setWeaponSlotServer: {} x{} (player={})",
-                this.weaponSlot.isEmpty() ? "EMPTY" : this.weaponSlot.getItem().toString(),
-                this.weaponSlot.getCount(),
+        MonsterMod.LOGGER.info(
+                "[WeaponSlot][SERVER] {} x{} ({})",
+                weaponSlot.isEmpty() ? "EMPTY" : weaponSlot.getItem(),
+                weaponSlot.getCount(),
                 player.getGameProfile().getName()
         );
 
         syncToClient(player);
     }
 
-    /** 受け入れ判定（サーバー側） */
     public boolean canAcceptWeapon(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return true;
-
-        boolean accepted = stack.getItem() instanceof WeaponItem;
-
-        return accepted;
+        return stack.getItem() instanceof WeaponItem;
     }
 
-    // client 専用
+    // client only
     public void setWeaponSlotClient(ItemStack stack) {
         this.weaponSlot = stack == null ? ItemStack.EMPTY : stack.copy();
     }
 
-    /** WeaponSlot → 現在装備へ反映 */
+    /** WeaponSlot → 現在装備 */
     public void syncEquippedFromSlot(Player player) {
-        if (player == null) return;
         if (weaponSlot.isEmpty()) return;
 
         this.equippedWeapon = weaponSlot.copy();
         this.isActive = true;
 
-        if (!isSheathed)
-            HunterUtil.applyLayerWeapon(player, equippedWeapon);
-
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
-    /* ================================================================
-     * Hunter 開始 / 終了
-     * ================================================================ */
 
+    // ================================================================
+    // Hunter 開始 / 終了
+    // ================================================================
     public void startHunter(Player player) {
-        if (player == null) return;
         isActive = true;
-
-        if (!isSheathed)
-            HunterUtil.applyLayerWeapon(player, equippedWeapon);
-
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
 
     public void stopHunter(Player player) {
-        if (player == null) return;
-
         isActive = false;
+        comboCount = 0;
+        attackStiffness = 0f;
+
         if (!isSheathed)
             setSheathed(player, true);
 
-        resetCombo();
-        attackStiffness = 0f;
-
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
 
-    /* ================================================================
-     * 武器変更
-     * ================================================================ */
-
+    // ================================================================
+    // 武器変更
+    // ================================================================
     public void equipWeapon(Player player, ItemStack stack, String type) {
-        if (player == null) return;
-
         this.equippedWeapon = stack.copy();
         this.weaponType = type;
-        this.isActive = !stack.isEmpty();
 
-        if (!isSheathed)
-            HunterUtil.applyLayerWeapon(player, equippedWeapon);
+        // isActive は変更しない
 
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
 
-    /* ================================================================
-     * 納刀 / 抜刀
-     * ================================================================ */
-
+    // ================================================================
+    // 納刀 / 抜刀
+    // ================================================================
     public void setSheathed(Player player, boolean state) {
-        if (player == null) return;
-
         this.isSheathed = state;
-        this.isActive = !state && !equippedWeapon.isEmpty();
 
-        if (isSheathed) sheatheWeapon(player);
-        else unsheatheWeapon(player);
+        if (!isActive) return; // Hunterでないなら何もしない
+
+        if (isSheathed) {
+            HunterUtil.enableHotbarRender(player);
+            HunterUtil.removeMovePenalty(player);
+        } else {
+            HunterUtil.disableHotbarRender(player);
+            HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
+        }
 
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
 
-    public void sheatheWeapon(Player player) {
-        HunterUtil.removeHandWeaponLayer(player);
-        HunterUtil.enableHotbarRender(player);
-        HunterUtil.removeMovePenalty(player, moveSpeedPenalty);
-    }
-
-    public void unsheatheWeapon(Player player) {
-        HunterUtil.applyLayerWeapon(player, equippedWeapon);
-        HunterUtil.disableHotbarRender(player);
-        HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
-    }
-
-    /* ================================================================
-     * 攻撃・コンボ
-     * ================================================================ */
-
+    // ================================================================
+    // 攻撃・コンボ
+    // ================================================================
     public void addAttackStiffness(float time) { attackStiffness = time; }
     public void resetCombo() { comboCount = 0; }
     public void increaseCombo() { comboCount = (comboCount + 1) % 3; }
-    /* ================================================================
-     * Sync
-     * ================================================================ */
 
+    // ================================================================
+    // Sync
+    // ================================================================
     public void syncToClient(ServerPlayer player) {
-        CompoundTag nbt = serializeNBT();
-        ModMessages.sendToClient(new S2CHunterSyncPacket(player.getUUID(), nbt), player);
+        ModMessages.sendToClient(
+                new S2CHunterSyncPacket(player.getUUID(), serializeNBT()),
+                player
+        );
     }
 
-    public void syncToAll(Player player) {
-        if (!(player instanceof ServerPlayer)) return;
-        CompoundTag nbt = serializeNBT();
-        ModMessages.sendToAllClients(new S2CHunterSyncPacket(player.getUUID(), nbt));
-    }
     // ================================================================
     // アニメーション名
     // ================================================================
-    public String getDodgeAnimationName() {return "hammer_idle";}
-    public String getSheathAnimationName() {return "hammer_idle2";}
-    public String getDrawAnimationName() {return "hammer_idle3";}
-    public String getSkill1AnimationName() {return "hammer_idle4";}
-    public String getSkill2AnimationName() {return "hammer_idle5";}
-    public String getSkill3AnimationName() {return "hammer_idle6";}
-    /* ================================================================
-     * NBT
-     * ================================================================ */
+    public String getDodgeAnimationName() { return "sword_simple_idle"; }
+    public String getSheathAnimationName() { return "hammer_idle2"; }
+    public String getDrawAnimationName() { return "sword_simple_attack1"; }
+    public String getSkill1AnimationName() { return "sword_simple_attack2"; }
+    public String getSkill2AnimationName() { return "sword_simple_sheathed"; }
+    public String getSkill3AnimationName() { return "hammer_idle6"; }
 
+    // ================================================================
+    // NBT
+    // ================================================================
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
 
         tag.putBoolean("Sheathed", isSheathed);
+        tag.putBoolean("IsActive", isActive);
         tag.putString("WeaponType", weaponType);
         tag.putFloat("MovePenalty", moveSpeedPenalty);
-        tag.putBoolean("IsActive", isActive);
         tag.putInt("ComboCount", comboCount);
         tag.putFloat("AttackStiffness", attackStiffness);
 
-        CompoundTag weaponTag = new CompoundTag();
-        equippedWeapon.save(weaponTag);
-        tag.put("WeaponStack", weaponTag);
+        CompoundTag eq = new CompoundTag();
+        equippedWeapon.save(eq);
+        tag.put("EquippedWeapon", eq);
 
-        CompoundTag slotTag = new CompoundTag();
-        weaponSlot.save(slotTag);
-        tag.put("HunterSlot", slotTag);
+        CompoundTag slot = new CompoundTag();
+        weaponSlot.save(slot);
+        tag.put("WeaponSlot", slot);
 
         return tag;
     }
@@ -238,29 +198,31 @@ public class HunterTransformation {
         if (tag == null) return;
 
         isSheathed = tag.getBoolean("Sheathed");
+        isActive = tag.getBoolean("IsActive");
         weaponType = tag.getString("WeaponType");
         moveSpeedPenalty = tag.getFloat("MovePenalty");
-        isActive = tag.getBoolean("IsActive");
         comboCount = tag.getInt("ComboCount");
         attackStiffness = tag.getFloat("AttackStiffness");
 
-        equippedWeapon = tag.contains("WeaponStack")
-                ? ItemStack.of(tag.getCompound("WeaponStack"))
+        equippedWeapon = tag.contains("EquippedWeapon")
+                ? ItemStack.of(tag.getCompound("EquippedWeapon"))
                 : ItemStack.EMPTY;
 
-        weaponSlot = tag.contains("HunterSlot")
-                ? ItemStack.of(tag.getCompound("HunterSlot"))
+        weaponSlot = tag.contains("WeaponSlot")
+                ? ItemStack.of(tag.getCompound("WeaponSlot"))
                 : ItemStack.EMPTY;
     }
 
-    /* ================================================================
-     * ロード時
-     * ================================================================ */
-
+    // ================================================================
+    // Client Load / Sync 後
+    // ================================================================
     public void onLoad(Player player) {
-        if (!isSheathed && isActive)
-            HunterUtil.applyLayerWeapon(player, equippedWeapon);
+        if (!isSheathed && isActive) {
+            HunterUtil.disableHotbarRender(player);
+            HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
+        } else {
+            HunterUtil.enableHotbarRender(player);
+            HunterUtil.removeMovePenalty(player);
+        }
     }
-
-
 }

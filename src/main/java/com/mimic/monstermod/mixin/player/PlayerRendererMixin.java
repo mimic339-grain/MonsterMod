@@ -2,8 +2,11 @@ package com.mimic.monstermod.mixin.player;
 
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
+import com.mimic.monstermod.weapon.WeaponItemInHandLayer;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,14 +37,23 @@ public class PlayerRendererMixin {
             if (identity != null) {
                 // クライアント側同期
                 identity.copyFromPlayerClient(player);
-
                 // Identity に描画を委譲
                 identity.render(player, partialTicks, poseStack, buffer, packedLight);
-
                 // Player 描画はキャンセル
                 ci.cancel();
             }
         });
     }
+    @Inject(method = "<init>", at = @At("TAIL"))
+    private void monstermod$addWeaponLayer(CallbackInfo ci) {
+        PlayerRenderer renderer = (PlayerRenderer)(Object)this;
 
+        ItemInHandRenderer itemRenderer =
+                Minecraft.getInstance().gameRenderer.itemInHandRenderer;
+
+        // ★ vanilla は残したまま
+        renderer.addLayer(
+                new WeaponItemInHandLayer<>(renderer, itemRenderer)
+        );
+    }
 }

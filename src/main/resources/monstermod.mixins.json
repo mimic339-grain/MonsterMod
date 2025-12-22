@@ -16,6 +16,7 @@
     "player.PlayerAttackMixin",
     "player.AttackIndicatorMixin",
     "accessor.EntityAccessor",
+    "accessor.LivingEntityRendererAccessor",
     "accessor.AbstractContainerMenuAccessor"
   ],
   "injectors": {

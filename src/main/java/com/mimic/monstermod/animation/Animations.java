@@ -1,3 +1,4 @@
+
 package com.mimic.monstermod.animation;
 
 /**
@@ -11,12 +12,10 @@ public class Animations {
         // 💡 デフォルト設定: false (上書きを禁止)
         boolean allowOverride = false;
         // 💡 JSONに定義されている6つのアニメーションに対して、allowOverride = false の状態を維持
-        if (animation.equals("hammer_idle") ||
-                animation.equals("hammer_idle2") ||
-                animation.equals("hammer_idle3") ||
-                animation.equals("hammer_idle4") ||
-                animation.equals("hammer_idle5") ||
-                animation.equals("hammer_idle6")) {
+        if (animation.equals("sword_simple_sheathed") ||
+                animation.equals("sword_simple_idle") ||
+                animation.equals("sword_simple_attack1") ||
+                animation.equals("sword_simple_attack2")) {
         }
         /*
         if (animation.equals("player_animation/hammer_attack")) {
