@@ -3,6 +3,7 @@ package com.mimic.monstermod.impl;
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.client.C2SHunterInputPacket;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
@@ -16,7 +17,7 @@ import net.minecraftforge.fml.common.Mod;
  * - メニューキーは存在しない
  * - インベントリ（Eキー）＝ Hunterメニュー
  */
-@Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class HunterKeyHandler {
 
     private static final Minecraft mc = Minecraft.getInstance();
@@ -24,35 +25,38 @@ public class HunterKeyHandler {
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+
+        if (mc.player == null) return;
         if (mc.screen != null) return;
 
-        // Skill1 / Skill2 / Skill3
-        for (int i = 0; i < HunterKeyBindings.SKILL_KEYS.length; i++) {
-            if (HunterKeyBindings.SKILL_KEYS[i].consumeClick()) {
-                ModMessages.sendToServer(new C2SHunterInputPacket(
-                        i + 1,
-                        false,
-                        false
-                ));
-            }
-        }
+        mc.player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
+                .ifPresent(hunter -> {
 
-        // Dodge
-        if (HunterKeyBindings.DODGE_KEY.consumeClick()) {
-            ModMessages.sendToServer(new C2SHunterInputPacket(
-                    0,
-                    true,
-                    false
-            ));
-        }
+                    // ★ Hunter状態でなければ一切処理しない
+                    if (!hunter.isActive()) return;
 
-        // Sheath
-        if (HunterKeyBindings.SHEATH_KEY.consumeClick()) {
-            ModMessages.sendToServer(new C2SHunterInputPacket(
-                    0,
-                    false,
-                    true
-            ));
-        }
+                    // Skill1 / 2 / 3
+                    for (int i = 0; i < HunterKeyBindings.SKILL_KEYS.length; i++) {
+                        if (HunterKeyBindings.SKILL_KEYS[i].consumeClick()) {
+                            ModMessages.sendToServer(
+                                    new C2SHunterInputPacket(i + 1, false, false)
+                            );
+                        }
+                    }
+
+                    // Dodge
+                    if (HunterKeyBindings.DODGE_KEY.consumeClick()) {
+                        ModMessages.sendToServer(
+                                new C2SHunterInputPacket(0, true, false)
+                        );
+                    }
+
+                    // Sheath（Hunter状態なら常に許可）
+                    if (HunterKeyBindings.SHEATH_KEY.consumeClick()) {
+                        ModMessages.sendToServer(
+                                new C2SHunterInputPacket(0, false, true)
+                        );
+                    }
+                });
     }
 }
