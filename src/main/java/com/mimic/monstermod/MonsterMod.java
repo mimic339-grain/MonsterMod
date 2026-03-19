@@ -3,6 +3,7 @@ package com.mimic.monstermod;
 import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.entity.ModEntityAttributes;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.identity.util.MimicSkillLeads;
 import com.mimic.monstermod.item.ModItems;
 import com.mimic.monstermod.network.ModMessages;
 import com.mojang.logging.LogUtils;
@@ -36,5 +37,11 @@ public class MonsterMod {
         // イベント登録
         modEventBus.register(ModEntityAttributes.class);
         modEventBus.register(BaseMonsterIdentityRegistry.class);
+
+        /* =========================
+           Skill 登録
+        ========================= */
+
+        MimicSkillLeads.registerAll();
     }
 }

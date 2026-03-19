@@ -1,7 +1,7 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.identity.IdentityType;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -61,7 +61,7 @@ public class PlayerTransformC2SPacket {
                                 return;
                             }
 
-                            if (!BaseMonsterIdentityRegistry.hasIdentity(mobId)) {
+                            if (IdentityType.fromId(mobId) == null) {
                                 MonsterMod.getLogger().warn("[C2SPacket] 未登録のmobId: {}", mobId);
                                 return;
                             }

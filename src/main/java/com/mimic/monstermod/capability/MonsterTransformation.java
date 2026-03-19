@@ -3,17 +3,17 @@ package com.mimic.monstermod.capability;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
-import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.identity.IdentityType;
 import com.mimic.monstermod.mixin.accessor.EntityAccessor;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import com.mimic.monstermod.util.MonsterTransformUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 public class MonsterTransformation {
@@ -106,12 +106,26 @@ public class MonsterTransformation {
 // =============================================================================
     private BaseMonsterIdentity ensureIdentity(Level level, BaseMonsterEntity ent, Player player) {
         if (identity != null) return identity;
-        identity = BaseMonsterIdentityRegistry.getIdentity(transformedMobId, ent);
-        if (identity == null && ent != null) identity = new BaseMonsterIdentity(ent, 3);
 
-        if (!level.isClientSide && player != null && identity != null) identity.copyFromPlayerServer(player);
+        if (transformedMobId != null && ent != null) {
+            var type = IdentityType.fromId(transformedMobId);
+            if (type != null) {
+                identity = type.createIdentity(ent);
+            }
+        }
+
+        // フォールバック（デバッグ・未登録モンスター用）
+        if (identity == null && ent != null) {
+            identity = new BaseMonsterIdentity(ent, 3);
+        }
+
+        if (!level.isClientSide && player != null && identity != null) {
+            identity.copyFromPlayerServer(player);
+        }
+
         return identity;
     }
+
 
     private BaseMonsterEntity ensureEntity(Level level) {
         if (transformedEntity != null) return transformedEntity;

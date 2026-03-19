@@ -6,8 +6,10 @@ import com.mimic.monstermod.identity.impl.MimicIdentity;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * モンスター IdentityType を管理
@@ -27,6 +29,14 @@ public class IdentityType {
     /** Identity生成用インターフェース */
     public interface IdentityFactory {
         BaseMonsterIdentity create(@Nullable BaseMonsterEntity entity);
+    }
+
+    public static Set<ResourceLocation> getAllIds() {
+        return Collections.unmodifiableSet(ID_MAP.keySet());
+    }
+
+    public static boolean exists(ResourceLocation id) {
+        return ID_MAP.containsKey(id);
     }
 
     private IdentityType(ResourceLocation id,

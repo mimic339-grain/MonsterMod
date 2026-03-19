@@ -1,7 +1,7 @@
 package com.mimic.monstermod.command;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
+import com.mimic.monstermod.identity.IdentityType;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.CommandSourceStack;
@@ -21,7 +21,7 @@ public class MonsterCommand {
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
 
-            event.getDispatcher().register(
+        event.getDispatcher().register(
                 Commands.literal("transform")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("target", EntityArgument.player())
@@ -34,7 +34,7 @@ public class MonsterCommand {
                                         ))
                                         .then(Commands.argument("identityId", ResourceLocationArgument.id())
                                                 .suggests((context, builder) -> {
-                                                    BaseMonsterIdentityRegistry.getAllIdentityIds()
+                                                    IdentityType.getAllIds()
                                                             .forEach(id -> builder.suggest(id.toString()));
                                                     return builder.buildFuture();
                                                 })
@@ -50,34 +50,43 @@ public class MonsterCommand {
         );
     }
 
-    private static int transformPlayer(CommandSourceStack source, ServerPlayer targetPlayer, boolean transform, ResourceLocation identityId) {
+    private static int transformPlayer(CommandSourceStack source,
+                                       ServerPlayer targetPlayer,
+                                       boolean transform,
+                                       ResourceLocation identityId) {
+
         targetPlayer.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .ifPresent(transformation -> {
+
                     if (transform) {
                         if (identityId == null) {
                             source.sendFailure(Component.literal("変身するにはIdentity IDを指定してください。"));
                             return;
                         }
-                        if (!BaseMonsterIdentityRegistry.hasIdentity(identityId)) {
+
+                        if (!IdentityType.exists(identityId)) {
                             source.sendFailure(Component.literal("不明なIdentity ID: " + identityId));
                             return;
                         }
 
-                        // 変身開始
                         transformation.startTransformation(targetPlayer, identityId);
 
-                        source.sendSuccess(() -> Component.literal(
-                                targetPlayer.getName().getString() + " を " + identityId.getPath() + " に変身させました。"), true);
+                        source.sendSuccess(() ->
+                                        Component.literal(targetPlayer.getName().getString()
+                                                + " を " + identityId.getPath() + " に変身させました。"),
+                                true
+                        );
 
                     } else {
-                        // 変身解除
                         transformation.stopTransformation(targetPlayer);
 
-                        source.sendSuccess(() -> Component.literal(
-                                targetPlayer.getName().getString() + " の変身を解除しました。"), true);
+                        source.sendSuccess(() ->
+                                        Component.literal(targetPlayer.getName().getString()
+                                                + " の変身を解除しました。"),
+                                true
+                        );
                     }
 
-                    // クライアント同期
                     transformation.syncToClient(targetPlayer);
                 });
 

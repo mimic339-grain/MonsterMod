@@ -1,10 +1,13 @@
 package com.mimic.monstermod.overlay;
 
-import com.mimic.monstermod.Math.AttackPreview3DMath;
-import com.mimic.monstermod.overlay.AoeMarkerManager.AoeMarker;
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.mimic.monstermod.Math.AoeMeshBuilder2D;
+import com.mimic.monstermod.Math.AoeMeshBuilder3D;
+import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.skill.SkillLead;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -12,97 +15,195 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
 
-@Mod.EventBusSubscriber(modid = "monstermod", value = Dist.CLIENT)
-public class ClientEvents {
+/**
+ * ClientEvents
+ * Client Preview の唯一の管理点
+ * 設計思想
+ * ・MathMain = 唯一の真理
+ * ・Sampler はここで生成
+ * ・Renderer は Sample のみ受け取る
+ * ・Client は Attack に関与しない
+ */
 
-    // ============================================================
-    //   UPDATE
-    // ============================================================
-    @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            AoeMarkerManager.updateMarkers();
+@Mod.EventBusSubscriber(
+        modid = "monstermod",
+        value = Dist.CLIENT,
+        bus = Mod.EventBusSubscriber.Bus.FORGE
+)
+public final class ClientEvents {
+
+    static {
+        System.out.println("[ClientEvents] Loaded");
+    }
+
+    public static void spawnLocal(Entity caster, SkillLead lead, MathMain math) {
+
+        System.out.println("[Preview] Local spawn " + lead.skillId());
+
+        PREVIEWS.add(new Preview(caster, lead, math));
+    }
+
+
+    /* ===================== */
+    /* Preview Entry         */
+    /* ===================== */
+
+    private static final class Preview {
+
+        final Entity caster;
+        final SkillLead lead;
+        final MathMain math;
+
+        int life;
+
+        Preview(Entity caster, SkillLead lead, MathMain math) {
+            this.caster = caster;
+            this.lead = lead;
+            this.math = math;
+            this.life = lead.lifetimeTick;
+
+            System.out.println("[Preview] Created " + lead.skillId());
         }
     }
 
-    // ============================================================
-    //   RENDER
-    // ============================================================
-    @SubscribeEvent
-    public static void onRenderLevelStage(RenderLevelStageEvent event) {
+    private static final List<Preview> PREVIEWS = new LinkedList<>();
 
-        // 1.20系 Forge は AFTER_PARTICLES が透明描画に最適
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) {
-            return;
+    private ClientEvents() {}
+
+    /* ===================== */
+    /* Spawn (S2C Packet)    */
+    /* ===================== */
+
+    public static void spawnFromServer(Entity caster, SkillLead lead, MathMain math) {
+
+        System.out.println("[Preview] S2C spawn " + lead.skillId());
+
+        PREVIEWS.add(new Preview(caster, lead, math));
+    }
+
+    /* ===================== */
+    /* Tick                  */
+    /* ===================== */
+
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent e) {
+
+        if (e.phase != TickEvent.Phase.END) return;
+
+        if (!PREVIEWS.isEmpty()) {
+            System.out.println("[Preview] Tick previews=" + PREVIEWS.size());
         }
 
+        Iterator<Preview> it = PREVIEWS.iterator();
+
+        while (it.hasNext()) {
+
+            Preview p = it.next();
+
+            if (!p.caster.isAlive()) {
+                System.out.println("[Preview] Removed (caster dead)");
+                it.remove();
+                continue;
+            }
+
+            p.life--;
+
+            if (p.life <= 0) {
+                System.out.println("[Preview] Removed (timeout)");
+                it.remove();
+            }
+        }
+    }
+
+    /* ===================== */
+    /* Render                */
+    /* ===================== */
+
+    @SubscribeEvent
+    public static void onRender(RenderLevelStageEvent e) {
+
+        if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS)
+            return;
+
+        if (PREVIEWS.isEmpty()) return;
+
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.cameraEntity == null) return;
 
-        List<AoeMarker> markers = AoeMarkerManager.getMarkers();
-        if (markers.isEmpty()) return;
+        MultiBufferSource.BufferSource buffers =
+                mc.renderBuffers().bufferSource();
 
-        PoseStack poseStack = event.getPoseStack();
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
 
-        // forge / 1.20.1 ならこれが正しい取得方法
-        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
+        e.getPoseStack().pushPose();
+        e.getPoseStack().translate(-cam.x, -cam.y, -cam.z);
 
-        // カメラシフト
-        poseStack.pushPose();
-        poseStack.translate(-cam.x, -cam.y, -cam.z);
+        for (Preview p : PREVIEWS) {
 
-        // ============================================================
-        //   3D マーカー
-        // ============================================================
-        List<AoeMarker> markers3D = markers.stream()
-                .filter(m -> switch (m.shape) {
-                    case BOX, SPHERE, CYLINDER, CAPSULE, FAN3D, CROSS3D, TRIANGLE_PRISM -> true;
-                    default -> false;
-                })
-                .collect(Collectors.toList());
+            SkillLead lead = p.lead;
+            MathMain math = p.math;
 
-        for (AoeMarker m : markers3D) {
-            AttackPreview3DMath.ShapeData data = m.get3DShapeData();
-            if (data != null) {
-                AoeRenderer3D.render(poseStack, bufferSource, data, event.getPartialTick());
+            float range = 32f;
+
+            /* ---------- 2D ---------- */
+            if (lead.render2D) {
+
+                AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
+
+                AoeRenderer2D.render(
+                        e.getPoseStack(),
+                        buffers,
+                        builder
+                );
+            }
+
+            /* ---------- 2D Overlay ---------- */
+            if (lead.render2DOverlay) {
+
+                AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
+
+                AoeRenderer2DOverlay.render(
+                        e.getPoseStack(),
+                        buffers,
+                        builder
+                );
+            }
+            /* ---------- Block 2D ---------- */
+
+            if (lead.renderBlock2D) {
+
+                AoeRenderer2DBlock.render(
+                        e.getPoseStack(),
+                        buffers,
+                        math,
+                        (int) p.caster.getY(),
+                        (int) range,
+                        true,
+                        new ResourceLocation(
+                                "monstermod",
+                                "textures/misc/attackpreview.png"
+                        )
+                );
+            }
+            /* ---------- 3D Preview ---------- */
+            if (lead.render3DPreview) {
+
+                AoeMeshBuilder3D builder =
+                        new AoeMeshBuilder3D(math);
+
+                AoeRenderer3D.render(
+                        e.getPoseStack(),
+                        buffers,
+                        builder
+                );
             }
         }
 
-        // ============================================================
-        //   BLOCK2D マーカー
-        // ============================================================
-        List<AoeMarker> markersBlock2D = markers.stream()
-                .filter(m -> switch (m.shape) {
-                    case CIRCLE_BLOCK2D, FAN_BLOCK2D, TRIANGLE_BLOCK2D,
-                         RECT_BLOCK2D, CROSS_BLOCK2D, RANDOM_BLOCK2D -> true;
-                    default -> false;
-                })
-                .collect(Collectors.toList());
+        e.getPoseStack().popPose();
 
-        if (!markersBlock2D.isEmpty()) {
-            AoeRenderer2DBlock.renderAoeMarkers(poseStack, markersBlock2D);
-        }
-
-        // ============================================================
-        //   2D（上からの描画）
-        // ============================================================
-        List<AoeMarker> markers2D = markers.stream()
-                .filter(m -> switch (m.shape) {
-                    case CIRCLE_2D, FAN_2D, TRIANGLE_2D,
-                         RECT_2D, CROSS_2D, RANDOM_2D -> true;
-                    default -> false;
-                })
-                .collect(Collectors.toList());
-
-        if (!markers2D.isEmpty()) {
-            AoeRenderer2D.renderAoeMarkers(poseStack, markers2D);
-        }
-
-        poseStack.popPose();
-        bufferSource.endBatch();
+        buffers.endBatch();
     }
 }
