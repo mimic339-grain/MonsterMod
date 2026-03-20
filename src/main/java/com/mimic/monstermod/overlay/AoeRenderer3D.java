@@ -20,9 +20,6 @@ import java.util.List;
  */
 public final class AoeRenderer3D {
 
-    private static final ResourceLocation TEX =
-            new ResourceLocation("monstermod", "textures/misc/attackpreview.png");
-
     private static final float ALPHA = 0.4f;
     private static final float OFFSET = 0.01f;
 
@@ -31,11 +28,12 @@ public final class AoeRenderer3D {
     public static void render(
             PoseStack poseStack,
             MultiBufferSource buffers,
-            AoeMeshBuilder3D builder
+            AoeMeshBuilder3D builder,
+            ResourceLocation texture
     ){
 
         VertexConsumer vc =
-                buffers.getBuffer(RenderType.entityTranslucent(TEX));
+                buffers.getBuffer(RenderType.entityTranslucent(texture));
 
         PoseStack.Pose pose = poseStack.last();
 

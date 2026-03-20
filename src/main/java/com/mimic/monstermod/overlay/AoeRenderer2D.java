@@ -21,19 +21,17 @@ public final class AoeRenderer2D {
 
     private static final float ALPHA = 0.35f;
 
-    private static final ResourceLocation TEX =
-            new ResourceLocation("monstermod","textures/misc/attackpreview.png");
-
     private AoeRenderer2D(){}
 
     public static void render(
             PoseStack poseStack,
             MultiBufferSource buffers,
-            AoeMeshBuilder2D builder
+            AoeMeshBuilder2D builder,
+            ResourceLocation texture
     ){
 
         VertexConsumer vc =
-                buffers.getBuffer(RenderType.entityTranslucent(TEX));
+                buffers.getBuffer(RenderType.entityTranslucent(texture));
 
         PoseStack.Pose pose = poseStack.last();
 

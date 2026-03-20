@@ -44,8 +44,7 @@ public final class AoEExecutor {
             MathMain math
     ) {
         // MathMain → BlockPos 板を生成（量子化）
-        List<BlockPos> blocks = SamplerBlock2D.sample(math);
-
+        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level);
         // Block 板を基準に Entity を列挙
         return BlockAttackExecutor.collect(level, blocks);
     }

@@ -1,36 +1,30 @@
 package com.mimic.monstermod.overlay;
 
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.Math.SamplerBlock2D;
+import com.mimic.monstermod.Math.MeshBlockConverter;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
 
 import java.util.List;
 
 /**
- * AoeRenderer2DBlock
+ * AoeRenderer2DBlock（Mesh版）
  *
  * 【役割】
- * ・SamplerBlock2D が生成した「Block 板 AoE」をそのまま描画
+ * ・Mesh → Block に変換して描画
  *
- * 【設計原則】
- * ・MathMain.contains を直接使わない
- * ・SamplerBlock2D の結果を唯一の真理とする
- * ・Block 単位（ギザギザ前提）
- * ・XZ 平面専用（上から見る用途）
- *
- * 【用途】
- * ・Block AoE の Preview
- * ・Discrete AoE のロジック検証
- * ・AttackExecutor(Block) と完全同期
+ * 【設計】
+ * ・Sampler完全排除
+ * ・Meshが唯一の真実
  */
 public final class AoeRenderer2DBlock {
 
-    /** Z-fighting 回避用の極小オフセット */
     private static final float Y_OFFSET = 0.002f;
 
     private AoeRenderer2DBlock() {}
@@ -39,15 +33,13 @@ public final class AoeRenderer2DBlock {
             PoseStack poseStack,
             MultiBufferSource buffers,
             MathMain math,
-            int centerY,
-            int radius,
-            boolean useTop,
+            Level level,
             ResourceLocation texture
     ) {
-        List<BlockPos> blocks =
-                SamplerBlock2D.sample(math, centerY, radius, useTop);
 
-        if (blocks == null || blocks.isEmpty()) return;
+        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level);
+
+        if (blocks.isEmpty()) return;
 
         VertexConsumer vc =
                 buffers.getBuffer(RenderType.entityTranslucent(texture));
@@ -59,11 +51,6 @@ public final class AoeRenderer2DBlock {
         }
     }
 
-    /**
-     * Block 上面に 1x1 Quad を描画
-     * ・XZ 専用
-     * ・下面・側面は描かない
-     */
     private static void drawTopQuad(
             VertexConsumer vc,
             PoseStack.Pose pose,
@@ -75,7 +62,6 @@ public final class AoeRenderer2DBlock {
         float z1 = z0 + 1f;
         float y  = pos.getY() + Y_OFFSET;
 
-        // 上面 Quad（反時計回り）
         put(vc, pose, x0, y, z0, 0, 0);
         put(vc, pose, x1, y, z0, 1, 0);
         put(vc, pose, x1, y, z1, 1, 1);
@@ -89,9 +75,10 @@ public final class AoeRenderer2DBlock {
             float u, float v
     ) {
         vc.vertex(pose.pose(), x, y, z)
-                .color(1f, 0f, 0f, 0.35f)   // 赤・半透明
+                .color(1f, 0f, 0f, 0.35f)
                 .uv(u, v)
-                .uv2(0xF000F0)
+                .overlayCoords(OverlayTexture.NO_OVERLAY) // ← ここ重要
+                .uv2(240)
                 .normal(pose.normal(), 0, 1, 0)
                 .endVertex();
     }

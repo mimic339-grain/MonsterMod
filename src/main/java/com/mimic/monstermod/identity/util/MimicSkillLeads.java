@@ -37,7 +37,6 @@ public final class MimicSkillLeads {
 
         register2D();
         registerBlock();
-        registerOverlay();
         register3D();
     }
 
@@ -49,73 +48,28 @@ public final class MimicSkillLeads {
 
         SkillLead lead =
                 new SkillLead.Builder(TEST_2D)
-
-                        .shape(MathMain.Shape.SPHERE)
-
-                        .sphere(3.0f) // ★ これ追加
-
+                        .shape(MathMain.Shape.CYLINDER)
+                        .cylinder(12.0f, 4.0f) // ← 高さを持たせる
                         .followCaster(true)
-
                         .attackType(AttackType.NONE)
-
                         .lifetime(40)
-
                         .render2D()
-
                         .build();
-
         SkillLeadRegistry.register(lead);
     }
 
     /* ======================
      * Block Preview
      * ====================== */
-
     private static void registerBlock() {
-
-        SkillLead lead =
-                new SkillLead.Builder(TEST_BLOCK)
-
-                        .shape(MathMain.Shape.BOX)
-
-                        .followCaster(true)
-
-                        .attackType(AttackType.NONE)
-
-                        .lifetime(60)
-
-                        .renderBlock2D()
-
-                        .build();
-
-        SkillLeadRegistry.register(lead);
-    }
-
-    /* ======================
-     * Overlay Preview
-     * ====================== */
-
-    private static void registerOverlay() {
-
-        SkillLead lead =
-                new SkillLead.Builder(TEST_OVERLAY)
-
-                        .shape(MathMain.Shape.SPHERE)
-
-                        .sphere(3.0f)
-
-                        .followCaster(true)
-
-                        .yAnchorToGround(true)
-
-                        .attackType(AttackType.NONE)
-
-                        .lifetime(80)
-
-                        .render2DOverlay()
-
-                        .build();
-
+        SkillLead lead = new SkillLead.Builder(TEST_BLOCK)
+                .shape(MathMain.Shape.SPHERE)
+                .sphere(12.0f)
+                .followCaster(true)
+                .attackType(AttackType.NONE)
+                .lifetime(60)
+                .renderBlock2D() // Mesh→Block描画
+                .build();
         SkillLeadRegistry.register(lead);
     }
 
@@ -128,7 +82,7 @@ public final class MimicSkillLeads {
         SkillLead lead =
                 new SkillLead.Builder(TEST_3D)
                         .shape(MathMain.Shape.SPHERE)
-                        .sphere(3.0f) // ★ これ追加（最重要）
+                        .sphere(19.0f) // ★ これ追加（最重要）
                         .followCaster(true)
                         .attackType(AttackType.NONE)
                         .lifetime(80)

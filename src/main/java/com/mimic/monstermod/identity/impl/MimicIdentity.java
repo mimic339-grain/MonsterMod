@@ -25,7 +25,6 @@ public class MimicIdentity extends BaseMonsterIdentity {
     private static final SkillId[] SKILLS = {
             MimicSkillLeads.TEST_2D,
             MimicSkillLeads.TEST_BLOCK,
-            MimicSkillLeads.TEST_OVERLAY,
             MimicSkillLeads.TEST_3D
     };
 

@@ -94,10 +94,6 @@ public final class ClientEvents {
 
         if (e.phase != TickEvent.Phase.END) return;
 
-        if (!PREVIEWS.isEmpty()) {
-            System.out.println("[Preview] Tick previews=" + PREVIEWS.size());
-        }
-
         Iterator<Preview> it = PREVIEWS.iterator();
 
         while (it.hasNext()) {
@@ -105,7 +101,6 @@ public final class ClientEvents {
             Preview p = it.next();
 
             if (!p.caster.isAlive()) {
-                System.out.println("[Preview] Removed (caster dead)");
                 it.remove();
                 continue;
             }
@@ -113,7 +108,6 @@ public final class ClientEvents {
             p.life--;
 
             if (p.life <= 0) {
-                System.out.println("[Preview] Removed (timeout)");
                 it.remove();
             }
         }
@@ -146,7 +140,7 @@ public final class ClientEvents {
             SkillLead lead = p.lead;
             MathMain math = p.math;
 
-            float range = 32f;
+            ResourceLocation tex = lead.previewTexture;
 
             /* ---------- 2D ---------- */
             if (lead.render2D) {
@@ -156,39 +150,23 @@ public final class ClientEvents {
                 AoeRenderer2D.render(
                         e.getPoseStack(),
                         buffers,
-                        builder
+                        builder,
+                        tex
                 );
             }
 
-            /* ---------- 2D Overlay ---------- */
-            if (lead.render2DOverlay) {
-
-                AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
-
-                AoeRenderer2DOverlay.render(
-                        e.getPoseStack(),
-                        buffers,
-                        builder
-                );
-            }
             /* ---------- Block 2D ---------- */
-
             if (lead.renderBlock2D) {
-
                 AoeRenderer2DBlock.render(
                         e.getPoseStack(),
                         buffers,
                         math,
-                        (int) p.caster.getY(),
-                        (int) range,
-                        true,
-                        new ResourceLocation(
-                                "monstermod",
-                                "textures/misc/attackpreview.png"
-                        )
+                        Minecraft.getInstance().level,
+                        tex
                 );
             }
-            /* ---------- 3D Preview ---------- */
+
+            /* ---------- 3D ---------- */
             if (lead.render3DPreview) {
 
                 AoeMeshBuilder3D builder =
@@ -197,7 +175,8 @@ public final class ClientEvents {
                 AoeRenderer3D.render(
                         e.getPoseStack(),
                         buffers,
-                        builder
+                        builder,
+                        tex
                 );
             }
         }

@@ -1,6 +1,7 @@
 package com.mimic.monstermod.skill;
 
 import com.mimic.monstermod.Math.MathMain;
+import net.minecraft.resources.ResourceLocation;
 
 public final class SkillLead {
 
@@ -31,6 +32,13 @@ public final class SkillLead {
     public final boolean renderBlock2D;
     public final boolean render3DPreview;
 
+    /* ===== 見た目 ===== */
+    public final ResourceLocation previewTexture;
+
+    /* ====================== */
+    /* Constructor            */
+    /* ====================== */
+
     private SkillLead(Builder b) {
         this.id = b.id;
         this.shape = b.shape;
@@ -54,15 +62,18 @@ public final class SkillLead {
         this.render2DOverlay = b.render2DOverlay;
         this.renderBlock2D = b.renderBlock2D;
         this.render3DPreview = b.render3DPreview;
+
+        this.previewTexture = b.previewTexture; // ★ ここ重要
     }
 
     public SkillId skillId() {
         return id;
     }
 
-    /* ======================
-     * Builder（正しい形）
-     * ====================== */
+    /* ====================== */
+    /* Builder                */
+    /* ====================== */
+
     public static class Builder {
 
         private final SkillId id;
@@ -70,7 +81,6 @@ public final class SkillLead {
         private MathMain.Shape shape;
         private MathMain.Transform transform = MathMain.Transform.identity();
 
-        /* ★ mutableにする（重要） */
         private float radius = 0f;
         private float height = 0f;
         private float angleDeg = 0f;
@@ -90,10 +100,16 @@ public final class SkillLead {
         private boolean renderBlock2D = false;
         private boolean render3DPreview = false;
 
+        /* ===== 見た目 ===== */
+        private ResourceLocation previewTexture =
+                new ResourceLocation("monstermod", "textures/misc/attackpreview.png");
+
         public Builder(SkillId id) {
             if (id == null) throw new NullPointerException("SkillId null");
             this.id = id;
         }
+
+        /* ===== shape ===== */
 
         public Builder shape(MathMain.Shape shape) {
             this.shape = shape;
@@ -105,7 +121,7 @@ public final class SkillLead {
             return this;
         }
 
-        /* ===== サイズ設定 ===== */
+        /* ===== サイズ ===== */
 
         public Builder sphere(float r) {
             this.radius = r;
@@ -118,21 +134,30 @@ public final class SkillLead {
             return this;
         }
 
-        public Builder fan(float r, float angle) {
+        public Builder fan(float r, float angle, float h) {
             this.radius = r;
             this.angleDeg = angle;
+            this.height = h;
             return this;
         }
 
-        public Builder rect(float xr, float zr) {
+        public Builder rect(float xr, float zr, float h) {
             this.xRadius = xr;
             this.zRadius = zr;
+            this.height = h;
             return this;
         }
 
         public Builder triangle(float baseHalf, float depth) {
             this.baseHalf = baseHalf;
             this.depth = depth;
+            return this;
+        }
+
+        public Builder box(float x, float y, float z) {
+            this.xRadius = x / 2f;
+            this.height = y;
+            this.zRadius = z / 2f;
             return this;
         }
 
@@ -180,10 +205,79 @@ public final class SkillLead {
             return this;
         }
 
+        public Builder texture(ResourceLocation tex) {
+            this.previewTexture = tex;
+            return this;
+        }
+
+        /* ===== build ===== */
+
         public SkillLead build() {
+
             if (shape == null) {
                 throw new IllegalStateException("shape未設定: " + id);
             }
+
+            switch (shape) {
+
+                case SPHERE -> {
+                    if (radius <= 0f) {
+                        throw new IllegalStateException("SPHERE radius未設定: " + id);
+                    }
+
+                    // ★ 超重要
+                    if (height <= 0f) {
+                        height = radius * 2f;
+                    }
+                }
+
+                case CYLINDER -> {
+                    if (radius <= 0f) {
+                        throw new IllegalStateException("CYLINDER radius未設定: " + id);
+                    }
+
+                    if (height <= 0f) {
+                        height = 1f; // デフォルト薄さ
+                    }
+                }
+
+                case FAN -> {
+                    if (radius <= 0f || angleDeg <= 0f) {
+                        throw new IllegalStateException("FAN size未設定: " + id);
+                    }
+
+                    if (height <= 0f) {
+                        height = 1f;
+                    }
+                }
+
+                case RECT_PRISM, BOX -> {
+                    if (xRadius <= 0f || zRadius <= 0f) {
+                        throw new IllegalStateException("BOX size未設定: " + id);
+                    }
+
+                    if (height <= 0f) {
+                        height = 1f;
+                    }
+                }
+
+                case TRI_PRISM -> {
+                    if (baseHalf <= 0f || depth <= 0f) {
+                        throw new IllegalStateException("TRI size未設定: " + id);
+                    }
+
+                    if (height <= 0f) {
+                        height = 1f;
+                    }
+                }
+
+                case CAPSULE -> {
+                    if (radius <= 0f || height <= 0f) {
+                        throw new IllegalStateException("CAPSULE size未設定: " + id);
+                    }
+                }
+            }
+
             return new SkillLead(this);
         }
     }
