@@ -10,15 +10,14 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
 /**
  * AoeRenderer2DBlock（Mesh版）
- *
  * 【役割】
  * ・Mesh → Block に変換して描画
- *
  * 【設計】
  * ・Sampler完全排除
  * ・Meshが唯一の真実
@@ -34,10 +33,11 @@ public final class AoeRenderer2DBlock {
             MultiBufferSource buffers,
             MathMain math,
             Level level,
-            ResourceLocation texture
+            ResourceLocation texture,
+            Vec3 playerPos
     ) {
 
-        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level);
+        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level, playerPos);
 
         if (blocks.isEmpty()) return;
 

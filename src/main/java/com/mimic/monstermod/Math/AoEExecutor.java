@@ -3,6 +3,7 @@ package com.mimic.monstermod.Math;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
 import java.util.List;
@@ -41,10 +42,11 @@ public final class AoEExecutor {
 
     public static Collection<LivingEntity> collectBlockTargets(
             ServerLevel level,
-            MathMain math
-    ) {
-        // MathMain → BlockPos 板を生成（量子化）
-        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level);
+            MathMain math,
+            Vec3 playerPos
+    ){
+        // Mesh → BlockPos 板を生成（量子化 + プレイヤー距離優先）
+        List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level, playerPos);
         // Block 板を基準に Entity を列挙
         return BlockAttackExecutor.collect(level, blocks);
     }

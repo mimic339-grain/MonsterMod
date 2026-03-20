@@ -2,35 +2,33 @@ package com.mimic.monstermod.Math;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MeshBlockConverter（完成版）
+ * MeshBlockConverter（プレイヤー距離優先完全版）
  *
- * ✔ Mesh → Block 量子化
- * ✔ Quad完全対応（2三角）
- * ✔ 4点サンプリング（高精度）
- * ✔ 動的範囲
+ * ・Mesh → BlockPos量子化
+ * ・XZごとに1ブロック以上
+ * ・Y方向はプレイヤーに近いBlockを優先
+ * ・同距離なら複数Quad生成
  */
 public final class MeshBlockConverter {
 
     private MeshBlockConverter() {}
 
-    public static List<BlockPos> toBlocks(MathMain math, Level level) {
+    public static List<BlockPos> toBlocks(MathMain math, Level level, Vec3 playerPos) {
 
         AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
         List<AoeMeshBuilder2D.Quad> quads = builder.build();
 
         List<BlockPos> result = new ArrayList<>();
 
-        float r = Math.max(
-                Math.max(math.radius, math.xRadius),
-                Math.max(math.zRadius, math.depth)
-        );
+        float r = Math.max(Math.max(math.radius, math.xRadius),
+                Math.max(math.zRadius, math.depth));
 
         int minX = (int)Math.floor(math.origin.x - r - 1);
         int maxX = (int)Math.ceil (math.origin.x + r + 1);
@@ -39,63 +37,96 @@ public final class MeshBlockConverter {
 
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
-
-                int yBlock = level.getHeight(
-                        Heightmap.Types.WORLD_SURFACE,
-                        x, z
-                );
-
-                double ySample = yBlock + 0.1;
-
-                if (blockHit(quads, x, z, ySample)) {
-                    result.add(new BlockPos(x, yBlock, z));
-                }
+                List<BlockPos> candidates =
+                        findNearbyPlaceableBlocks(quads, x, z, level, playerPos);
+                result.addAll(candidates);
             }
         }
 
         return result;
     }
 
-    /* ========================= */
-
-    private static boolean blockHit(
+    /**
+     * プレイヤーに近い順にBlockPos候補を返す
+     * 同距離で複数あれば両方返す
+     */
+    private static List<BlockPos> findNearbyPlaceableBlocks(
             List<AoeMeshBuilder2D.Quad> quads,
-            int x, int z,
-            double y
+            int x,
+            int z,
+            Level level,
+            Vec3 playerPos
     ) {
-        // ★ 4点サンプリング（超重要）
-        return insideAnyQuad(new Vec3(x+0.2, y, z+0.2), quads) ||
-                insideAnyQuad(new Vec3(x+0.8, y, z+0.2), quads) ||
-                insideAnyQuad(new Vec3(x+0.2, y, z+0.8), quads) ||
-                insideAnyQuad(new Vec3(x+0.8, y, z+0.8), quads);
+        List<BlockPos> candidates = new ArrayList<>();
+
+        int playerY = (int)Math.floor(playerPos.y);
+
+        int minY = Math.max(level.getMinBuildHeight(), playerY - 10);
+        int maxY = Math.min(level.getMaxBuildHeight(), playerY + 10);
+
+        double closestDistSq = Double.MAX_VALUE;
+
+        for (int offset = 0; offset <= Math.max(maxY - playerY, playerY - minY); offset++) {
+            // 上方向
+            int yUp = playerY + offset;
+            if (yUp < maxY) {
+                BlockPos pos = new BlockPos(x, yUp, z);
+                if (isPlaceable(quads, pos, level)) {
+                    double dist = playerPos.distanceToSqr(x + 0.5, yUp + 0.5, z + 0.5);
+                    if (dist < closestDistSq) {
+                        candidates.clear();
+                        candidates.add(pos);
+                        closestDistSq = dist;
+                    } else if (dist == closestDistSq) {
+                        candidates.add(pos);
+                    }
+                }
+            }
+            // 下方向
+            int yDown = playerY - offset;
+            if (yDown >= minY) {
+                BlockPos pos = new BlockPos(x, yDown, z);
+                if (isPlaceable(quads, pos, level)) {
+                    double dist = playerPos.distanceToSqr(x + 0.5, yDown + 0.5, z + 0.5);
+                    if (dist < closestDistSq) {
+                        candidates.clear();
+                        candidates.add(pos);
+                        closestDistSq = dist;
+                    } else if (dist == closestDistSq) {
+                        candidates.add(pos);
+                    }
+                }
+            }
+        }
+
+        return candidates;
     }
 
-    private static boolean insideAnyQuad(
-            Vec3 p,
-            List<AoeMeshBuilder2D.Quad> quads
-    ) {
+    /**
+     * 下がsolid、上が空気でMesh内なら立てられるBlockPos
+     */
+    private static boolean isPlaceable(List<AoeMeshBuilder2D.Quad> quads,
+                                       BlockPos pos, Level level) {
+        BlockState below = level.getBlockState(pos.below());
+        BlockState here  = level.getBlockState(pos);
+
+        if (!below.isSolidRender(level, pos.below()) || !here.isAir()) return false;
+
+        Vec3 sample = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        return insideAnyQuad(sample, quads);
+    }
+
+    private static boolean insideAnyQuad(Vec3 p, List<AoeMeshBuilder2D.Quad> quads) {
         for (AoeMeshBuilder2D.Quad q : quads) {
-
             Vec3[] v = q.pos();
-
-            // ★ Quad → 2 triangle
             if (pointInTriangle(p, v[0], v[1], v[2])) return true;
             if (pointInTriangle(p, v[0], v[2], v[3])) return true;
         }
         return false;
     }
 
-    /* ========================= */
-
-    private static boolean pointInTriangle(
-            Vec3 p,
-            Vec3 a,
-            Vec3 b,
-            Vec3 c
-    ) {
-        double px = p.x;
-        double pz = p.z;
-
+    private static boolean pointInTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c) {
+        double px = p.x, pz = p.z;
         double ax = a.x, az = a.z;
         double bx = b.x, bz = b.z;
         double cx = c.x, cz = c.z;
@@ -104,15 +135,12 @@ public final class MeshBlockConverter {
         double bc = cross(bx, bz, cx, cz, px, pz);
         double ca = cross(cx, cz, ax, az, px, pz);
 
-        return (ab >= 0 && bc >= 0 && ca >= 0) ||
-                (ab <= 0 && bc <= 0 && ca <= 0);
+        return (ab >= 0 && bc >= 0 && ca >= 0) || (ab <= 0 && bc <= 0 && ca <= 0);
     }
 
-    private static double cross(
-            double ax, double az,
-            double bx, double bz,
-            double px, double pz
-    ) {
+    private static double cross(double ax, double az,
+                                double bx, double bz,
+                                double px, double pz) {
         return (bx - ax) * (pz - az) - (bz - az) * (px - ax);
     }
 }

@@ -6,7 +6,6 @@ import net.minecraft.resources.ResourceLocation;
 public final class SkillLead {
 
     public final SkillId id;
-
     public final MathMain.Shape shape;
     public final MathMain.Transform transform;
 
@@ -23,6 +22,11 @@ public final class SkillLead {
     public final boolean followCaster;
     public final boolean yAnchorToGround;
 
+    // ★ 自動 Root / Preview タイミング
+    public final boolean autoRoot;
+    public final int rootTickBeforeDamage;   // ダメージ直前に Root するティック数
+    public final int totalPreviewTicks;      // デフォルト 60ティック = 3秒
+
     public final AttackType attackType;
     public final int lifetimeTick;
 
@@ -38,7 +42,6 @@ public final class SkillLead {
     /* ====================== */
     /* Constructor            */
     /* ====================== */
-
     private SkillLead(Builder b) {
         this.id = b.id;
         this.shape = b.shape;
@@ -55,6 +58,10 @@ public final class SkillLead {
         this.followCaster = b.followCaster;
         this.yAnchorToGround = b.yAnchorToGround;
 
+        this.autoRoot = b.autoRoot;
+        this.rootTickBeforeDamage = b.rootTickBeforeDamage;
+        this.totalPreviewTicks = b.totalPreviewTicks;
+
         this.attackType = b.attackType;
         this.lifetimeTick = b.lifetimeTick;
 
@@ -63,7 +70,7 @@ public final class SkillLead {
         this.renderBlock2D = b.renderBlock2D;
         this.render3DPreview = b.render3DPreview;
 
-        this.previewTexture = b.previewTexture; // ★ ここ重要
+        this.previewTexture = b.previewTexture;
     }
 
     public SkillId skillId() {
@@ -73,9 +80,7 @@ public final class SkillLead {
     /* ====================== */
     /* Builder                */
     /* ====================== */
-
     public static class Builder {
-
         private final SkillId id;
 
         private MathMain.Shape shape;
@@ -89,6 +94,14 @@ public final class SkillLead {
         private float baseHalf = 0f;
         private float depth = 0f;
 
+        private boolean autoRoot = true;
+        private int rootTickBeforeDamage = 10; // 0.5秒
+        private int totalPreviewTicks = 60;    // 3秒
+
+        public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
+        public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
+        public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
+
         private boolean followCaster = false;
         private boolean yAnchorToGround = false;
 
@@ -100,7 +113,6 @@ public final class SkillLead {
         private boolean renderBlock2D = false;
         private boolean render3DPreview = false;
 
-        /* ===== 見た目 ===== */
         private ResourceLocation previewTexture =
                 new ResourceLocation("monstermod", "textures/misc/attackpreview.png");
 
@@ -109,175 +121,43 @@ public final class SkillLead {
             this.id = id;
         }
 
-        /* ===== shape ===== */
-
-        public Builder shape(MathMain.Shape shape) {
-            this.shape = shape;
-            return this;
-        }
-
-        public Builder transform(MathMain.Transform transform) {
-            this.transform = transform;
-            return this;
-        }
+        /* ===== shape / transform ===== */
+        public Builder shape(MathMain.Shape shape) { this.shape = shape; return this; }
+        public Builder transform(MathMain.Transform transform) { this.transform = transform; return this; }
 
         /* ===== サイズ ===== */
-
-        public Builder sphere(float r) {
-            this.radius = r;
-            return this;
-        }
-
-        public Builder cylinder(float r, float h) {
-            this.radius = r;
-            this.height = h;
-            return this;
-        }
-
-        public Builder fan(float r, float angle, float h) {
-            this.radius = r;
-            this.angleDeg = angle;
-            this.height = h;
-            return this;
-        }
-
-        public Builder rect(float xr, float zr, float h) {
-            this.xRadius = xr;
-            this.zRadius = zr;
-            this.height = h;
-            return this;
-        }
-
-        public Builder triangle(float baseHalf, float depth) {
-            this.baseHalf = baseHalf;
-            this.depth = depth;
-            return this;
-        }
-
-        public Builder box(float x, float y, float z) {
-            this.xRadius = x / 2f;
-            this.height = y;
-            this.zRadius = z / 2f;
-            return this;
-        }
+        public Builder sphere(float r) { this.radius = r; return this; }
+        public Builder cylinder(float r, float h) { this.radius = r; this.height = h; return this; }
+        public Builder fan(float r, float angle, float h) { this.radius = r; this.angleDeg = angle; this.height = h; return this; }
+        public Builder rect(float xr, float zr, float h) { this.xRadius = xr; this.zRadius = zr; this.height = h; return this; }
+        public Builder triangle(float baseHalf, float depth) { this.baseHalf = baseHalf; this.depth = depth; return this; }
+        public Builder box(float x, float y, float z) { this.xRadius = x/2f; this.zRadius = z/2f; this.height = y; return this; }
 
         /* ===== 挙動 ===== */
-
-        public Builder followCaster(boolean v) {
-            this.followCaster = v;
-            return this;
-        }
-
-        public Builder yAnchorToGround(boolean v) {
-            this.yAnchorToGround = v;
-            return this;
-        }
-
-        public Builder attackType(AttackType t) {
-            this.attackType = t;
-            return this;
-        }
-
-        public Builder lifetime(int t) {
-            this.lifetimeTick = t;
-            return this;
-        }
+        public Builder followCaster(boolean v) { this.followCaster = v; return this; }
+        public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }
+        public Builder attackType(AttackType t) { this.attackType = t; return this; }
+        public Builder lifetime(int t) { this.lifetimeTick = t; return this; }
 
         /* ===== 描画 ===== */
-
-        public Builder render2D() {
-            this.render2D = true;
-            return this;
-        }
-
-        public Builder render2DOverlay() {
-            this.render2DOverlay = true;
-            return this;
-        }
-
-        public Builder renderBlock2D() {
-            this.renderBlock2D = true;
-            return this;
-        }
-
-        public Builder render3DPreview() {
-            this.render3DPreview = true;
-            return this;
-        }
-
-        public Builder texture(ResourceLocation tex) {
-            this.previewTexture = tex;
-            return this;
-        }
+        public Builder render2D() { this.render2D = true; return this; }
+        public Builder render2DOverlay() { this.render2DOverlay = true; return this; }
+        public Builder renderBlock2D() { this.renderBlock2D = true; return this; }
+        public Builder render3DPreview() { this.render3DPreview = true; return this; }
+        public Builder texture(ResourceLocation tex) { this.previewTexture = tex; return this; }
 
         /* ===== build ===== */
-
         public SkillLead build() {
-
-            if (shape == null) {
-                throw new IllegalStateException("shape未設定: " + id);
-            }
+            if (shape == null) throw new IllegalStateException("shape未設定: " + id);
 
             switch (shape) {
-
-                case SPHERE -> {
-                    if (radius <= 0f) {
-                        throw new IllegalStateException("SPHERE radius未設定: " + id);
-                    }
-
-                    // ★ 超重要
-                    if (height <= 0f) {
-                        height = radius * 2f;
-                    }
-                }
-
-                case CYLINDER -> {
-                    if (radius <= 0f) {
-                        throw new IllegalStateException("CYLINDER radius未設定: " + id);
-                    }
-
-                    if (height <= 0f) {
-                        height = 1f; // デフォルト薄さ
-                    }
-                }
-
-                case FAN -> {
-                    if (radius <= 0f || angleDeg <= 0f) {
-                        throw new IllegalStateException("FAN size未設定: " + id);
-                    }
-
-                    if (height <= 0f) {
-                        height = 1f;
-                    }
-                }
-
-                case RECT_PRISM, BOX -> {
-                    if (xRadius <= 0f || zRadius <= 0f) {
-                        throw new IllegalStateException("BOX size未設定: " + id);
-                    }
-
-                    if (height <= 0f) {
-                        height = 1f;
-                    }
-                }
-
-                case TRI_PRISM -> {
-                    if (baseHalf <= 0f || depth <= 0f) {
-                        throw new IllegalStateException("TRI size未設定: " + id);
-                    }
-
-                    if (height <= 0f) {
-                        height = 1f;
-                    }
-                }
-
-                case CAPSULE -> {
-                    if (radius <= 0f || height <= 0f) {
-                        throw new IllegalStateException("CAPSULE size未設定: " + id);
-                    }
-                }
+                case SPHERE -> { if (radius <= 0f) throw new IllegalStateException("SPHERE radius未設定: " + id); if (height <= 0f) height = radius*2f; }
+                case CYLINDER -> { if (radius <= 0f) throw new IllegalStateException("CYLINDER radius未設定: " + id); if (height <= 0f) height = 1f; }
+                case FAN -> { if (radius <= 0f || angleDeg <= 0f) throw new IllegalStateException("FAN size未設定: " + id); if (height <= 0f) height = 1f; }
+                case RECT_PRISM, BOX -> { if (xRadius <= 0f || zRadius <= 0f) throw new IllegalStateException("BOX size未設定: " + id); if (height <= 0f) height = 1f; }
+                case TRI_PRISM -> { if (baseHalf <= 0f || depth <= 0f) throw new IllegalStateException("TRI size未設定: " + id); if (height <= 0f) height = 1f; }
+                case CAPSULE -> { if (radius <= 0f || height <= 0f) throw new IllegalStateException("CAPSULE size未設定: " + id); }
             }
-
             return new SkillLead(this);
         }
     }

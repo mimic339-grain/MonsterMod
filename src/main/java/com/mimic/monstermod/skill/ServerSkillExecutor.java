@@ -10,13 +10,7 @@ import java.util.*;
 
 public final class ServerSkillExecutor {
 
-    /**
-     * caster → (instanceId → ActiveSkill)
-     */
-    private static final Map<
-            LivingEntity,
-            Map<UUID, ActiveSkill>
-            > ACTIVE_SKILLS = new HashMap<>();
+    private static final Map<LivingEntity, Map<UUID, ActiveSkill>> ACTIVE_SKILLS = new HashMap<>();
 
     private ServerSkillExecutor() {}
 
@@ -29,20 +23,31 @@ public final class ServerSkillExecutor {
              ACTIVE_SKILLS.entrySet().iterator(); it.hasNext();) {
 
             Map.Entry<LivingEntity, Map<UUID, ActiveSkill>> casterEntry = it.next();
-
             LivingEntity caster = casterEntry.getKey();
             Map<UUID, ActiveSkill> skills = casterEntry.getValue();
 
             skills.values().removeIf(active -> {
 
+                // Root判定（ダメージ前）
+                if (active.lead.autoRoot && active.ticksLeft == active.lead.rootTickBeforeDamage) {
+                    rootCaster(caster, true);
+                }
+
+                // 1 Tick 実行（ダメージ判定）
                 executeOnce(level, caster, active);
 
-                return --active.ticksLeft <= 0;
+                // Tick 減算
+                active.ticksLeft--;
+
+                // Root解除（ダメージ後）
+                if (active.lead.autoRoot && active.ticksLeft <= 0) {
+                    rootCaster(caster, false);
+                }
+
+                return active.ticksLeft <= 0;
             });
 
-            if (skills.isEmpty()) {
-                it.remove();
-            }
+            if (skills.isEmpty()) it.remove();
         }
     }
 
@@ -59,65 +64,46 @@ public final class ServerSkillExecutor {
         if (!(casterEntity instanceof LivingEntity caster)) return;
         if (lead.attackType == AttackType.NONE) return;
 
-        SkillAttackSpec spec =
-                SkillAttackRegistry.getStrict(lead.skillId());
-
+        SkillAttackSpec spec = SkillAttackRegistry.getStrict(lead.skillId());
         int ticks = Math.max(lead.lifetimeTick, 1);
 
-        ActiveSkill active = new ActiveSkill(
-                lead,
-                math,
-                spec,
-                ticks
-        );
+        ActiveSkill active = new ActiveSkill(lead, math, spec, ticks);
 
-        // ★ 修正ポイント：UUIDで完全独立インスタンス化
         ACTIVE_SKILLS
                 .computeIfAbsent(caster, k -> new HashMap<>())
                 .put(UUID.randomUUID(), active);
     }
 
     /* ======================
-     * 1 Tick 実行
+     * 1 Tick 実行（ダメージ判定）
      * ====================== */
     private static void executeOnce(
             ServerLevel level,
             LivingEntity caster,
             ActiveSkill active
     ) {
-
-        MathMain math = active.math;
-        SkillAttackSpec spec = active.spec;
+        // ダメージは ticksLeft == 0 で発生
+        if (active.ticksLeft != 0) return;
 
         Collection<LivingEntity> targets;
-
         switch (active.lead.attackType) {
-
-            case ENTITY_AOE -> {
-                targets = AttackExecutor.collect(level, math);
-            }
-
-            case BLOCK_AOE -> {
-                // 将来用（今は空）
-                targets = List.of();
-            }
-
-            case NONE -> {
-                targets = List.of();
-            }
-
-            default -> {
-                targets = List.of();
-            }
+            case ENTITY_AOE -> targets = AttackExecutor.collect(level, active.math);
+            case BLOCK_AOE -> targets = List.of();
+            case NONE -> targets = List.of();
+            default -> targets = List.of();
         }
 
         for (LivingEntity target : targets) {
-
-            // ★ 多段ヒット制御（1回のみ）
-            if (!active.hitTargets.add(target)) continue;
-
-            spec.apply(caster, target);
+            if (!active.hitTargets.add(target)) continue; // 多段ヒット防止
+            active.spec.apply(caster, target);
         }
+    }
+
+    /* ======================
+     * プレイヤー Root
+     * ====================== */
+    private static void rootCaster(LivingEntity caster, boolean root) {
+        //TODO 0.5秒間だけ持続して動けないようにする　鈍足を付与したり　個人的には位置の固定がいいんじゃないかなって思う　さーばーとクライアントで両方やるんでもいいけどとりあえず動けないようにしてくれたらいい　
     }
 
     /* ======================
@@ -128,20 +114,10 @@ public final class ServerSkillExecutor {
         final SkillLead lead;
         final MathMain math;
         final SkillAttackSpec spec;
-
-        /**
-         * 既にヒットした対象
-         */
         final Set<LivingEntity> hitTargets = new HashSet<>();
-
         int ticksLeft;
 
-        ActiveSkill(
-                SkillLead lead,
-                MathMain math,
-                SkillAttackSpec spec,
-                int ticksLeft
-        ) {
+        ActiveSkill(SkillLead lead, MathMain math, SkillAttackSpec spec, int ticksLeft) {
             this.lead = lead;
             this.math = math;
             this.spec = spec;

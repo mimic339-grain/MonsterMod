@@ -88,7 +88,6 @@ public final class ClientEvents {
     /* ===================== */
     /* Tick                  */
     /* ===================== */
-
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent e) {
 
@@ -105,6 +104,12 @@ public final class ClientEvents {
                 continue;
             }
 
+            // ★ followCaster 対応
+            if (p.lead.followCaster) {
+                // caster の現在位置に origin を移動
+                p.math.origin = p.caster.position(); // MathMain.origin を更新
+            }
+
             p.life--;
 
             if (p.life <= 0) {
@@ -112,7 +117,6 @@ public final class ClientEvents {
             }
         }
     }
-
     /* ===================== */
     /* Render                */
     /* ===================== */
@@ -157,12 +161,16 @@ public final class ClientEvents {
 
             /* ---------- Block 2D ---------- */
             if (lead.renderBlock2D) {
+                // プレイヤー位置を取得
+                Vec3 playerPos = Minecraft.getInstance().player.position();
+
                 AoeRenderer2DBlock.render(
                         e.getPoseStack(),
                         buffers,
                         math,
                         Minecraft.getInstance().level,
-                        tex
+                        tex,
+                        playerPos
                 );
             }
 

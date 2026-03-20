@@ -31,7 +31,7 @@ public class MathMain {
     /* =========================
      * Transform
      * ========================= */
-    public final Vec3 origin;
+    public Vec3 origin;
     public final float yaw;
     public final float pitch;
     public final float roll;

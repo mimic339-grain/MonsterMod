@@ -54,6 +54,7 @@ public class ModMessages {
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncCombatStatePacket.class, S2C_SyncCombatStatePacket::toBytes, S2C_SyncCombatStatePacket::new, S2C_SyncCombatStatePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
     // ----------------------------
     // 共通メソッドで1行登録
