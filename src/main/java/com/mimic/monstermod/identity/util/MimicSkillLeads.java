@@ -47,7 +47,7 @@ public final class MimicSkillLeads {
     private static void register2D() {
         SkillLead lead = new SkillLead.Builder(TEST_2D)
                 .shape(MathMain.Shape.CYLINDER)
-                .cylinder(12.0f, 4.0f)
+                .cylinder(8.0f, 2.0f)
                 .followCaster(true)
                 .attackType(AttackType.ENTITY_AOE)
                 .render2D()
@@ -61,7 +61,7 @@ public final class MimicSkillLeads {
     private static void registerBlock() {
         SkillLead lead = new SkillLead.Builder(TEST_BLOCK)
                 .shape(MathMain.Shape.SPHERE)
-                .sphere(12.0f)
+                .sphere(8.0f)
                 .followCaster(true)
                 .attackType(AttackType.NONE)
                 .renderBlock2D() // Mesh→Block描画
@@ -78,7 +78,7 @@ public final class MimicSkillLeads {
         SkillLead lead =
                 new SkillLead.Builder(TEST_3D)
                         .shape(MathMain.Shape.SPHERE)
-                        .sphere(19.0f) // ★ これ追加（最重要）
+                        .sphere(10.0f)
                         .followCaster(true)
                         .attackType(AttackType.NONE)
                         .render3DPreview()

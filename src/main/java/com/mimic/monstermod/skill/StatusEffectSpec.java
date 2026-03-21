@@ -10,8 +10,7 @@ public record StatusEffectSpec(
         int amplifier
 ) {
     public void apply(LivingEntity target) {
-        target.addEffect(
-                new MobEffectInstance(effect, duration, amplifier)
-        );
+        if (target == null) return;
+        target.addEffect(new MobEffectInstance(effect, duration, amplifier));
     }
 }

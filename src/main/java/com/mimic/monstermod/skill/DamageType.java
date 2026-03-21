@@ -12,7 +12,7 @@ public enum DamageType {
         return switch (this) {
             case PHYSICAL -> attacker.damageSources().mobAttack(attacker);
             case MAGIC    -> attacker.damageSources().magic();
-            case POISON   -> attacker.damageSources().magic();
+            case POISON   -> attacker.damageSources().magic(); // 毒ダメージ源として魔法属性を使用
         };
     }
 }

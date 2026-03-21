@@ -20,83 +20,85 @@ public final class SkillUtil {
         for (Iterator<Map.Entry<LivingEntity, Map<UUID, ActiveSkill>>> it = ACTIVE_SKILLS.entrySet().iterator(); it.hasNext();) {
             Map.Entry<LivingEntity, Map<UUID, ActiveSkill>> casterEntry = it.next();
             LivingEntity caster = casterEntry.getKey();
+
+            // ★重要: キャスターが今処理中のディメンションにいない場合はスキップ（2重進捗防止）
+            if (caster.level() != level) continue;
+
             Map<UUID, ActiveSkill> skills = casterEntry.getValue();
 
             skills.values().removeIf(active -> {
                 active.ticksLeft--;
 
                 // --- Root 開始判定 ---
+                // 残り時間が設定値(デフォルト10)になった瞬間、クライアントへ停止命令を送る
                 if (active.lead.autoRoot && active.ticksLeft == active.lead.rootTickBeforeDamage) {
-                    System.out.println("[ROOT DEBUG] Root conditions met for: " + caster.getName().getString());
                     rootCaster(caster, true, active.lead.rootTickBeforeDamage);
                 }
 
                 // --- ダメージ実行 ---
-                if (active.ticksLeft == 0) {
-                    System.out.println("[DEBUG] Damage Execution at 0 ticks");
+                if (active.ticksLeft <= 0) {
                     executeOnce(level, caster, active);
 
-                    // ★重要: ダメージが出た瞬間に移動制限を強制解除（0ティックで上書き送信）
+                    // ダメージと同時に移動制限を解除
                     if (active.lead.autoRoot) {
                         rootCaster(caster, false, 0);
-                        System.out.println("[ROOT DEBUG] Force Unroot on Damage: " + caster.getName().getString());
                     }
+                    return true; // このtickで削除
                 }
 
-                return active.ticksLeft <= -1;
+                return false;
             });
+
             if (skills.isEmpty()) it.remove();
         }
     }
 
     public static void execute(ServerLevel level, Entity casterEntity, SkillLead lead, MathMain math) {
-        System.out.println("[DEBUG] SkillUtil.execute ENTERED for: " + lead.id);
+        if (!(casterEntity instanceof ServerPlayer player)) return;
 
-        if (!(casterEntity instanceof ServerPlayer player)) {
-            System.out.println("[DEBUG] Execute FAILED: Caster is not ServerPlayer");
-            return;
-        }
+        // ★上書き対策: 同じプレイヤーの古いスキル（プレビュー）を一旦クリア
+        ACTIVE_SKILLS.remove(player);
 
-        // 1. 登録準備（プレビュー時間を取得。設定がなければ3秒=60tick）
         int duration = lead.totalPreviewTicks > 0 ? lead.totalPreviewTicks : 60;
         SkillAttackSpec spec;
 
-        // 2. レジストリ取得 (失敗時はダミーを匿名クラスで作成)
         try {
             spec = SkillAttackRegistry.getStrict(lead.skillId());
         } catch (Exception e) {
-            System.out.println("[ERROR] SkillAttackRegistry not found for " + lead.id + ". Using dummy spec.");
             spec = new SkillAttackSpec() {
                 @Override
                 public void apply(LivingEntity attacker, LivingEntity target) {}
             };
         }
 
-        // 3. 登録
         ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
         ACTIVE_SKILLS.computeIfAbsent(player, k -> new HashMap<>()).put(UUID.randomUUID(), active);
-        System.out.println("[DEBUG] ActiveSkill REGISTERED SUCCESS: " + lead.id + " (Duration: " + duration + ")");
     }
 
     private static void executeOnce(ServerLevel level, LivingEntity caster, ActiveSkill active) {
-        Collection<LivingEntity> targets;
-        switch (active.lead.attackType) {
-            case ENTITY_AOE -> targets = AttackExecutor.collect(level, active.math);
-            default -> targets = List.of();
-        }
+        // プレビューが 2D でも 3D でも Block でも、ENTITY_AOE なら一律で 3D 判定を実行
+        // もし attackType が NONE でないなら必ず判定するように条件を緩めます
+        if (active.lead.attackType == AttackType.NONE) return;
+
+        // AttackExecutor に自分自身 (caster) を渡して除外させる
+        Collection<LivingEntity> targets = AttackExecutor.collect(level, active.math, caster);
+
+        System.out.println("=== AOE EXECUTION: " + active.lead.id + " ===");
 
         for (LivingEntity target : targets) {
             if (!active.hitTargets.add(target)) continue;
+
+            // 実際のダメージ処理へ
             active.spec.apply(caster, target);
-            System.out.println("[DEBUG] Damage applied to " + target.getName().getString());
+            System.out.println("-> [HIT] " + target.getName().getString());
         }
     }
 
     private static void rootCaster(LivingEntity caster, boolean root, int durationTicks) {
         if (!(caster instanceof ServerPlayer sp)) return;
-        // root=false の場合は 0 を送る
-        int ticks = root ? durationTicks : 0;
-        ModMessages.sendToPlayer(new S2C_PlayerRootPacket(sp.getUUID(), ticks), sp);
+        // durationTicksを送るが、クライアント側では「0になるまで止まる」フラグとして使う
+        ModMessages.sendToPlayer(new S2C_PlayerRootPacket
+                (sp.getUUID(), root ? durationTicks : 0), sp);
     }
 
     private static final class ActiveSkill {
