@@ -11,15 +11,9 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-/**
- * AoeRenderer2D（完全版）
- *
- * ✔ Meshをそのまま描画
- * ✔ Sampler完全非依存
- */
 public final class AoeRenderer2D {
 
-    private static final float ALPHA = 0.35f;
+    private static final float ALPHA = 0.3f;
 
     private AoeRenderer2D(){}
 

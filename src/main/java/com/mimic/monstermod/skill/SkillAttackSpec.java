@@ -4,12 +4,17 @@ import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
 
-public final class SkillAttackSpec {
+public class SkillAttackSpec {
 
     public final float damage;
     public final DamageType type;
     public final List<StatusEffectSpec> effects;
-
+    // ダミー作成用の引数なしコンストラクタ
+    SkillAttackSpec() {
+        this.damage = 0.0f;
+        this.type = null; // または適切なデフォルト
+        this.effects = java.util.Collections.emptyList();
+    }
     public SkillAttackSpec(
             float damage,
             DamageType type,

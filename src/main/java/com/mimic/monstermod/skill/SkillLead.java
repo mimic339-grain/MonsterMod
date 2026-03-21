@@ -28,7 +28,6 @@ public final class SkillLead {
     public final int totalPreviewTicks;      // デフォルト 60ティック = 3秒
 
     public final AttackType attackType;
-    public final int lifetimeTick;
 
     /* ===== 描画 ===== */
     public final boolean render2D;
@@ -63,7 +62,6 @@ public final class SkillLead {
         this.totalPreviewTicks = b.totalPreviewTicks;
 
         this.attackType = b.attackType;
-        this.lifetimeTick = b.lifetimeTick;
 
         this.render2D = b.render2D;
         this.render2DOverlay = b.render2DOverlay;
@@ -94,19 +92,14 @@ public final class SkillLead {
         private float baseHalf = 0f;
         private float depth = 0f;
 
-        private boolean autoRoot = true;
-        private int rootTickBeforeDamage = 10; // 0.5秒
-        private int totalPreviewTicks = 60;    // 3秒
-
-        public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
-        public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
-        public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
+        private boolean autoRoot = true;           // デフォルトでON
+        private int rootTickBeforeDamage = 10;     // 0.5秒前からRoot (100から修正)
+        private int totalPreviewTicks = 60;        // 3秒間プレビュー
 
         private boolean followCaster = false;
         private boolean yAnchorToGround = false;
 
         private AttackType attackType = AttackType.NONE;
-        private int lifetimeTick = 1;
 
         private boolean render2D = false;
         private boolean render2DOverlay = false;
@@ -137,7 +130,11 @@ public final class SkillLead {
         public Builder followCaster(boolean v) { this.followCaster = v; return this; }
         public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }
         public Builder attackType(AttackType t) { this.attackType = t; return this; }
-        public Builder lifetime(int t) { this.lifetimeTick = t; return this; }
+
+        public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
+        public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
+        public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
+
 
         /* ===== 描画 ===== */
         public Builder render2D() { this.render2D = true; return this; }

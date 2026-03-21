@@ -16,15 +16,11 @@ import java.util.List;
 
 /**
  * AoeRenderer2DBlock（Mesh版）
- * 【役割】
- * ・Mesh → Block に変換して描画
- * 【設計】
- * ・Sampler完全排除
- * ・Meshが唯一の真実
  */
 public final class AoeRenderer2DBlock {
 
-    private static final float Y_OFFSET = 0.002f;
+    private static final float ALPHA = 0.3f;
+    private static final float OFFSET = 0.002f;
 
     private AoeRenderer2DBlock() {}
 
@@ -36,31 +32,23 @@ public final class AoeRenderer2DBlock {
             ResourceLocation texture,
             Vec3 playerPos
     ) {
-
         List<BlockPos> blocks = MeshBlockConverter.toBlocks(math, level, playerPos);
-
         if (blocks.isEmpty()) return;
 
-        VertexConsumer vc =
-                buffers.getBuffer(RenderType.entityTranslucent(texture));
-
+        VertexConsumer vc = buffers.getBuffer(RenderType.entityTranslucent(texture));
         PoseStack.Pose pose = poseStack.last();
 
         for (BlockPos pos : blocks) {
-            drawTopQuad(vc, pose, pos);
+            draw(vc, pose, pos);
         }
     }
 
-    private static void drawTopQuad(
-            VertexConsumer vc,
-            PoseStack.Pose pose,
-            BlockPos pos
-    ) {
+    private static void draw(VertexConsumer vc, PoseStack.Pose pose, BlockPos pos) {
         float x0 = pos.getX();
         float x1 = x0 + 1f;
         float z0 = pos.getZ();
         float z1 = z0 + 1f;
-        float y  = pos.getY() + Y_OFFSET;
+        float y  = pos.getY() + OFFSET;
 
         put(vc, pose, x0, y, z0, 0, 0);
         put(vc, pose, x1, y, z0, 1, 0);
@@ -75,9 +63,9 @@ public final class AoeRenderer2DBlock {
             float u, float v
     ) {
         vc.vertex(pose.pose(), x, y, z)
-                .color(1f, 0f, 0f, 0.35f)
+                .color(1f, 0f, 0f, ALPHA) // ★ 定数 ALPHA を使うように修正
                 .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY) // ← ここ重要
+                .overlayCoords(OverlayTexture.NO_OVERLAY)
                 .uv2(240)
                 .normal(pose.normal(), 0, 1, 0)
                 .endVertex();

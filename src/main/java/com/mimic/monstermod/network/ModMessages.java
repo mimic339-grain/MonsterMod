@@ -44,6 +44,7 @@ public class ModMessages {
         registerMessage(C2S_SkillCastRequestPacket.class, C2S_SkillCastRequestPacket::encode, C2S_SkillCastRequestPacket::decode,C2S_SkillCastRequestPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SMonsterInputPacket.class, C2SMonsterInputPacket::encode, C2SMonsterInputPacket::decode, C2SMonsterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SpawnSkillLeadPacket.class, S2C_SpawnSkillLeadPacket::encode, S2C_SpawnSkillLeadPacket::decode, S2C_SpawnSkillLeadPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CMimicDodgePacket.class, S2CMimicDodgePacket::toBytes, S2CMimicDodgePacket::new, S2CMimicDodgePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
@@ -54,7 +55,7 @@ public class ModMessages {
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncCombatStatePacket.class, S2C_SyncCombatStatePacket::toBytes, S2C_SyncCombatStatePacket::new, S2C_SyncCombatStatePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_PlayerRootPacket.class, S2C_PlayerRootPacket::encode, S2C_PlayerRootPacket::decode, S2C_PlayerRootPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
     // ----------------------------
     // 共通メソッドで1行登録

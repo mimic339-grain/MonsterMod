@@ -64,7 +64,7 @@ public final class ClientEvents {
             this.caster = caster;
             this.lead = lead;
             this.math = math;
-            this.life = lead.lifetimeTick;
+            this.life = lead.totalPreviewTicks;
 
             System.out.println("[Preview] Created " + lead.skillId());
         }

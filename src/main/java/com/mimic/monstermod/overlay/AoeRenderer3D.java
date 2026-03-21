@@ -11,17 +11,10 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-/**
- * AoeRenderer3D（完全版）
- *
- * ✔ Meshをそのまま描画
- * ✔ Sampler完全非依存
- * ✔ 法線方向オフセットでZ-fighting完全回避
- */
 public final class AoeRenderer3D {
 
-    private static final float ALPHA = 0.4f;
-    private static final float OFFSET = 0.01f;
+    private static final float ALPHA = 0.3f;//透明度
+    private static final float OFFSET = 0.01f;//浮かせる度合い
 
     private AoeRenderer3D(){}
 
@@ -52,7 +45,7 @@ public final class AoeRenderer3D {
                     .normalize()
                     .scale(OFFSET);
 
-            // 裏面（法線方向に押し出し）
+            // 裏面　これがないと中からみえなかったり外から見えない
             drawOffset(vc, pose,
                     p[3].add(normal),
                     p[2].add(normal),

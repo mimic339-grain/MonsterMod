@@ -21,11 +21,11 @@ public final class MeshBlockConverter {
     private MeshBlockConverter() {}
 
     public static List<BlockPos> toBlocks(MathMain math, Level level, Vec3 playerPos) {
-
         AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
         List<AoeMeshBuilder2D.Quad> quads = builder.build();
 
-        List<BlockPos> result = new ArrayList<>();
+        // ★ List ではなく Set を使って重複を自動排除する
+        java.util.Set<BlockPos> resultSet = new java.util.HashSet<>();
 
         float r = Math.max(Math.max(math.radius, math.xRadius),
                 Math.max(math.zRadius, math.depth));
@@ -39,13 +39,14 @@ public final class MeshBlockConverter {
             for (int z = minZ; z <= maxZ; z++) {
                 List<BlockPos> candidates =
                         findNearbyPlaceableBlocks(quads, x, z, level, playerPos);
-                result.addAll(candidates);
+                // ★ Set に追加（同じ座標なら無視される）
+                resultSet.addAll(candidates);
             }
         }
 
-        return result;
+        // 最後に List に戻して返す
+        return new ArrayList<>(resultSet);
     }
-
     /**
      * プレイヤーに近い順にBlockPos候補を返す
      * 同距離で複数あれば両方返す
