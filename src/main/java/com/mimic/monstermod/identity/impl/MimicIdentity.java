@@ -30,7 +30,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
     };
 
     // 各スキルの基本クールダウン(ticks)
-    private static final int[] COOLDOWNS = { 160, 100, 120, 70 };
+    private static final int[] COOLDOWNS = { 0, 0, 0, 0 };
 
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
         super(entity, SKILLS.length);

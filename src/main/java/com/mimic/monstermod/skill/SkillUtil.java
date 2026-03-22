@@ -61,19 +61,18 @@ public final class SkillUtil {
             System.out.println("[SkillUtil] 緊急キャンセル発動: " + lead.id);
             activeList.clear();
             rootCaster(player, false, 0);
+            // キャンセル後、即座に自身のスキル（回避移動など）を開始
         }
         // 2. 実行中のスキルがある場合
         else if (!activeList.isEmpty()) {
-            // コンボスキルの場合：同時発動を許可
+            // コンボスキルの場合：既存のスキルを消さずに追加（同時発動を許可）
             if (lead.category == AttackType.Category.COMBO) {
-                System.out.println("[SkillUtil] コンボ接続 (同時実行): " + lead.id);
+                System.out.println("[SkillUtil] コンボ接続: " + lead.id);
+                // そのまま下で add される
             } else {
-                // 通常スキルの場合：★「実行中のNORMALスキル」がある時だけ上書き禁止にする
-                boolean hasNormalActive = activeList.stream().anyMatch(a -> a.lead.category == AttackType.Category.NORMAL);
-                if (hasNormalActive) {
-                    System.out.println("[SkillUtil] 通常スキル実行中のため無視 (待機): " + lead.id);
-                    return;
-                }
+                // 通常スキルの場合：上書き禁止！
+                System.out.println("[SkillUtil] 通常スキル実行中のため無視: " + lead.id);
+                return;
             }
         }
 
@@ -81,7 +80,6 @@ public final class SkillUtil {
         SkillAttackSpec spec = SkillAttackRegistry.getStrict(lead.skillId());
         ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
 
-        System.out.println("[SkillUtil] スキル登録完了: " + lead.id + " | Category: " + lead.category + " | Duration: " + duration);
         activeList.add(active);
     }
 

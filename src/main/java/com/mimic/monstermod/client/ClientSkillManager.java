@@ -2,6 +2,7 @@ package com.mimic.monstermod.client;
 
 import com.mimic.monstermod.MonsterMod;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.MovementInputUpdateEvent;
 import net.minecraftforge.event.TickEvent;
@@ -47,15 +48,15 @@ public final class ClientSkillManager {
 
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.START || ROOT_MAP.isEmpty()) return;
+        if (event.phase != TickEvent.Phase.START) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        if (mc.player == null || ROOT_MAP.isEmpty()) return;
 
-        // 自分の物理慣性（滑り）のみを止める
-        // カウントダウン処理(ticksLeft-1)はサーバーに任せるため削除
         if (ROOT_MAP.containsKey(mc.player.getUUID())) {
-            mc.player.setDeltaMovement(0, mc.player.getDeltaMovement().y, 0);
+            // Y軸（重力）は維持しつつ、XZ軸の慣性だけを完全に殺す
+            Vec3 current = mc.player.getDeltaMovement();
+            mc.player.setDeltaMovement(0, current.y, 0);
         }
     }
 }
