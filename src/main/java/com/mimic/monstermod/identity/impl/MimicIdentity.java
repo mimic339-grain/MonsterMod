@@ -25,10 +25,12 @@ public class MimicIdentity extends BaseMonsterIdentity {
     private static final SkillId[] SKILLS = {
             MimicSkillLeads.TEST_2D,
             MimicSkillLeads.TEST_BLOCK,
-            MimicSkillLeads.TEST_3D
+            MimicSkillLeads.TEST_3D,
+            MimicSkillLeads.TEST_EMERGENCY, // インデックス 3
     };
 
-    private static final int[] COOLDOWNS = { 1600, 1000, 1210 };
+    // 各スキルの基本クールダウン(ticks)
+    private static final int[] COOLDOWNS = { 160, 100, 120, 70 };
 
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
         super(entity, SKILLS.length);
@@ -38,47 +40,88 @@ public class MimicIdentity extends BaseMonsterIdentity {
     public void handleAbility(Player player, int skillIndex) {
         if (skillIndex < 0 || skillIndex >= SKILLS.length) return;
 
-        int currentCD = getCooldown(skillIndex);
         SkillId skillId = SKILLS[skillIndex];
 
+        // ★ 緊急回避スキルの場合、専用の回避メソッドへ飛ばす
+        if (skillId.equals(MimicSkillLeads.TEST_EMERGENCY)) {
+            handleDodge(player);
+            return;
+        }
+
+        // 通常スキルの処理
+        int currentCD = getCooldown(skillIndex);
         if (player.level().isClientSide()) {
             if (currentCD > 0) return;
 
             SkillLead lead = SkillLeadRegistry.getNullable(skillId);
             if (lead == null) return;
 
-            // クライアント側で溜め時間を含めた暫定クールダウンを設定
-            int totalWait = lead.totalPreviewTicks + COOLDOWNS[skillIndex];
-            this.abilityCooldowns[skillIndex] = totalWait;
+            // クライアント側で即座にCD表示を開始（予兆時間 + 本CD）
+            this.abilityCooldowns[skillIndex] = lead.totalPreviewTicks + COOLDOWNS[skillIndex];
 
-            System.out.println("[クライアント] スキル予約: " + skillId + " | 合計待機(溜め含む): " + totalWait + " ticks");
-
+            System.out.println("[クライアント] スキル予約: " + skillId);
             MathMain math = SkillLeadUtil.buildMath(lead, player.position());
             ClientEvents.spawnLocal(player, lead, math);
 
             ModMessages.INSTANCE.sendToServer(new C2S_SkillCastRequestPacket(skillId));
 
         } else {
-            // サーバー側：実際の攻撃が出るまで「1」を維持して重複発動を防ぐ
+            // サーバー側：二重発動防止のロック
             if (this.abilityCooldowns[skillIndex] <= 0) {
                 this.abilityCooldowns[skillIndex] = 1;
-                System.out.println("[サーバー] スキル受付完了（プレビュー待機中...）: " + skillId);
+                System.out.println("[サーバー] スキル受付完了: " + skillId);
             }
         }
     }
 
-    /**
-     * 指定されたスキルのクールダウンを実際に開始する（SkillUtilから呼ばれる）
-     */
+    @Override
+    public void handleDodge(Player player) {
+        if (player == null) return;
+
+        // EMERGENCYスキルのインデックスを特定
+        int index = findSkillIndex(MimicSkillLeads.TEST_EMERGENCY);
+        if (index == -1) return;
+
+        // クールダウン判定
+        if (getCooldown(index) > 0) return;
+
+        // 1. スキルとしての発動（パケット送信とキャンセル処理）
+        if (player.level().isClientSide()) {
+            SkillLead lead = SkillLeadRegistry.getNullable(MimicSkillLeads.TEST_EMERGENCY);
+            if (lead != null) {
+                this.abilityCooldowns[index] = lead.totalPreviewTicks + COOLDOWNS[index];
+                // 予兆表示（EMERGENCYは通常、一瞬で終わる）
+                MathMain math = SkillLeadUtil.buildMath(lead, player.position());
+                ClientEvents.spawnLocal(player, lead, math);
+                ModMessages.INSTANCE.sendToServer(new C2S_SkillCastRequestPacket(MimicSkillLeads.TEST_EMERGENCY));
+            }
+        } else {
+            this.abilityCooldowns[index] = 1;
+        }
+
+        // 2. 即時ワープ処理を実行
+        float yaw = player.getYRot();
+        double rad = Math.toRadians(yaw);
+        // 向いている方向の逆に飛ばしたい場合は +sin / -cos に調整してください
+        Vec3 target = player.position().add(-Math.sin(rad) * 15.0, 0, Math.cos(rad) * 15.0);
+        player.setPos(target);
+        player.setDeltaMovement(Vec3.ZERO);
+
+        // サーバー側からクライアントへワープ位置を同期
+        if (!player.level().isClientSide() && player instanceof ServerPlayer sp) {
+            ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> sp), new S2CMimicDodgePacket(player.getId(), target));
+        }
+    }
+
     public void startActualCooldown(int index) {
         if (index >= 0 && index < COOLDOWNS.length) {
             this.abilityCooldowns[index] = COOLDOWNS[index];
-            System.out.println("[サーバー] 正式クールダウン開始: " + SKILLS[index] + " (" + COOLDOWNS[index] + " ticks)");
+            System.out.println("[サーバー] 正式クールダウン開始: " + SKILLS[index]);
         }
     }
 
     @Override
-    public int findSkillIndex(com.mimic.monstermod.skill.SkillId skillId) {
+    public int findSkillIndex(SkillId skillId) {
         if (skillId == null) return -1;
         String searchTarget = skillId.toString();
         for (int i = 0; i < SKILLS.length; i++) {
@@ -89,68 +132,19 @@ public class MimicIdentity extends BaseMonsterIdentity {
         return -1;
     }
 
-    /**
-     * 描画用の同期メソッド。
-     * ここでカウントダウンを行うとFPS依存で加速するため、superの呼び出しのみにする。
-     */
-    @Override
-    public void copyFromPlayerClient(Player player) {
-        super.copyFromPlayerClient(player);
-        // ここにあった processCooldowns は削除しました
-    }
-
-    /**
-     * サーバー側のTick処理。
-     * 親クラスの super.tickServer(player) が内部で一度だけカウントダウンを行います。
-     */
     @Override
     public void tickServer(Player player) {
-        // カウントダウン前の値を保持（ログ用）
-        int[] prevCD = abilityCooldowns.clone();
-
         super.tickServer(player);
-
-        // ログ出力処理（0になった瞬間だけ表示）
-        for (int i = 0; i < abilityCooldowns.length; i++) {
-            if (prevCD[i] > 0 && abilityCooldowns[i] == 0) {
-                System.out.println("[サーバー] クールダウン終了: " + SKILLS[i]);
-            }
-        }
     }
 
-    /**
-     * クライアント側で ClientEvents (ClientTickEvent) から呼び出す専用メソッド。
-     */
     public void tickClient(Player player) {
-        int[] prevCD = abilityCooldowns.clone();
-
-        // 親クラスが持つ共通のカウントダウン処理を1回だけ実行
         updateCooldowns();
-
-        for (int i = 0; i < abilityCooldowns.length; i++) {
-            if (prevCD[i] > 0 && abilityCooldowns[i] == 0) {
-                System.out.println("[クライアント] クールダウン終了: " + SKILLS[i]);
-            }
-        }
     }
 
     @Override
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
-    }
-
-    @Override
-    public void handleDodge(Player player) {
-        if (player == null) return;
-        float yaw = player.getYRot();
-        double rad = Math.toRadians(yaw);
-        Vec3 target = player.position().add(-Math.sin(rad) * 15.0, 0, Math.cos(rad) * 15.0);
-        player.setPos(target);
-        player.setDeltaMovement(Vec3.ZERO);
-        if (!player.level().isClientSide() && player instanceof ServerPlayer sp) {
-            ModMessages.INSTANCE.send(PacketDistributor.PLAYER.with(() -> sp), new S2CMimicDodgePacket(player.getId(), target));
-        }
     }
 
     @Override
@@ -167,7 +161,9 @@ public class MimicIdentity extends BaseMonsterIdentity {
         if (getEntity() instanceof MimicEntity mimic && tag.contains("isOpen")) mimic.setOpen(tag.getBoolean("isOpen"));
         if (tag.contains("cooldowns")) {
             int[] cd = tag.getIntArray("cooldowns");
-            for (int i = 0; i < abilityCooldowns.length && i < cd.length; i++) abilityCooldowns[i] = cd[i];
+            for (int i = 0; i < abilityCooldowns.length && i < cd.length; i++) {
+                abilityCooldowns[i] = cd[i];
+            }
         }
     }
 }

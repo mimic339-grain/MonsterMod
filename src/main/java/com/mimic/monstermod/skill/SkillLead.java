@@ -21,6 +21,10 @@ public final class SkillLead {
     public final float baseHalf;
     public final float depth;
 
+    /* ===== 挙動制御 (新規追加: 上書き・コンボ・キャンセル) ===== */
+    public final AttackType.Category category;
+    public final boolean canBeCanceled;
+
     /* ===== 挙動 ===== */
     public final boolean followCaster;
     public final boolean yAnchorToGround;
@@ -52,6 +56,10 @@ public final class SkillLead {
         this.zRadius = b.zRadius;
         this.baseHalf = b.baseHalf;
         this.depth = b.depth;
+
+        // 挙動制御の反映
+        this.category = b.category;
+        this.canBeCanceled = b.canBeCanceled;
 
         this.followCaster = b.followCaster;
         this.yAnchorToGround = b.yAnchorToGround;
@@ -85,10 +93,14 @@ public final class SkillLead {
         private float baseHalf = 0f;
         private float depth = 0f;
 
-        private boolean autoRoot = true;
-        private int rootTickBeforeDamage = 10;
-        private int totalPreviewTicks = 60;
-        private boolean followCaster = false;
+        // 挙動制御の初期値
+        private AttackType.Category category = AttackType.Category.NORMAL;
+        private boolean canBeCanceled = false;//緊急回避用
+
+        private boolean autoRoot = true;//硬直あるかどうか
+        private int rootTickBeforeDamage = 10;//硬直時間
+        private int totalPreviewTicks = 60;//デフォルト３秒間プレビュー　プレビューそう時間
+        private boolean followCaster = false;//
         private boolean yAnchorToGround = false;
         private AttackType attackType = AttackType.NONE;
 
@@ -108,6 +120,17 @@ public final class SkillLead {
 
         public Builder transform(MathMain.Transform t) { this.transform = t; return this; }
 
+        /* ===== 挙動制御設定 ===== */
+        public Builder category(AttackType.Category category) {
+            this.category = category;
+            return this;
+        }
+
+        public Builder canBeCanceled(boolean canBeCanceled) {
+            this.canBeCanceled = canBeCanceled;
+            return this;
+        }
+
         /* ===== サイズ設定 (MathMain.Builderと同期させる) ===== */
         public Builder sphere(float r) {
             this.radius = r; this.height = r * 2;
@@ -126,7 +149,7 @@ public final class SkillLead {
         }
         public Builder rect(float xr, float zr, float h) {
             this.xRadius = xr; this.zRadius = zr; this.height = h;
-            mathBuilder.rect(xr, zr).height(h);
+            mathBuilder.shape(MathMain.Shape.RECT_PRISM).rect(xr, zr).height(h);
             return this;
         }
         public Builder triangle(float baseHalf, float depth) {
@@ -136,7 +159,7 @@ public final class SkillLead {
         }
         public Builder box(float x, float y, float z) {
             this.xRadius = x/2f; this.zRadius = z/2f; this.height = y;
-            mathBuilder.rect(x/2f, z/2f).height(y);
+            mathBuilder.shape(MathMain.Shape.BOX).rect(x/2f, z/2f).height(y);
             return this;
         }
 
@@ -155,17 +178,35 @@ public final class SkillLead {
         public Builder render3DPreview() { this.render3DPreview = true; return this; }
         public Builder texture(ResourceLocation tex) { this.previewTexture = tex; return this; }
 
+        // SkillLead.java の Builder クラス内
         public SkillLead build() {
-            if (shape == null) throw new IllegalStateException("shape未設定: " + id);
+            // 1. 形状が必要なタイプなのに Shape が無い場合だけエラーにする
+            if (shape == null) {
+                if (this.attackType == AttackType.STRIKE || this.attackType == AttackType.TOUCH) {
+                    throw new IllegalStateException("攻撃・接触スキルには shape 設定が必要です: " + id);
+                }
 
-            // NONEのままなら、デフォルトでENTITY_AOEにする安全策
-            if (this.attackType == AttackType.NONE) {
-                this.attackType = AttackType.ENTITY_AOE;
+                // --- 追加: Shapeが無いスキル用の安全策 ---
+                // 内部の mathBuilder が build() で落ちないように最小のダミー形状を入れる
+                this.shape = MathMain.Shape.CYLINDER;
+                this.mathBuilder.shape(MathMain.Shape.CYLINDER).radius(0).height(0);
+
+                // 描画フラグを強制OFF
+                this.render2D = false;
+                this.renderBlock2D = false;
+                this.render3DPreview = false;
             }
 
-            // MathMain.Builder に原点を仮置き
-            mathBuilder.origin(net.minecraft.world.phys.Vec3.ZERO);
+            // 2. 回避・移動スキルなら「溜め」と「硬直」を自動で消す
+            if (this.attackType == AttackType.MOVEMENT) {
+                this.totalPreviewTicks = 0;
+                this.autoRoot = false;
+                this.render2D = false;
+                this.renderBlock2D = false;
+                this.render3DPreview = false;
+            }
 
+            mathBuilder.origin(net.minecraft.world.phys.Vec3.ZERO);
             return new SkillLead(this);
         }
     }
