@@ -2,12 +2,15 @@ package com.mimic.monstermod.skill;
 
 import com.mimic.monstermod.Math.AttackExecutor;
 import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.identity.impl.MimicIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_PlayerRootPacket;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.*;
 
@@ -21,7 +24,6 @@ public final class SkillUtil {
             Map.Entry<LivingEntity, Map<UUID, ActiveSkill>> casterEntry = it.next();
             LivingEntity caster = casterEntry.getKey();
 
-            // ★重要: キャスターが今処理中のディメンションにいない場合はスキップ（2重進捗防止）
             if (caster.level() != level) continue;
 
             Map<UUID, ActiveSkill> skills = casterEntry.getValue();
@@ -29,21 +31,18 @@ public final class SkillUtil {
             skills.values().removeIf(active -> {
                 active.ticksLeft--;
 
-                // --- Root 開始判定 ---
-                // 残り時間が設定値(デフォルト10)になった瞬間、クライアントへ停止命令を送る
                 if (active.lead.autoRoot && active.ticksLeft == active.lead.rootTickBeforeDamage) {
                     rootCaster(caster, true, active.lead.rootTickBeforeDamage);
                 }
 
-                // --- ダメージ実行 ---
                 if (active.ticksLeft <= 0) {
+                    System.out.println("[SkillUtil] 最終攻撃実行: " + active.lead.id);
                     executeOnce(level, caster, active);
 
-                    // ダメージと同時に移動制限を解除
                     if (active.lead.autoRoot) {
                         rootCaster(caster, false, 0);
                     }
-                    return true; // このtickで削除
+                    return true;
                 }
 
                 return false;
@@ -56,19 +55,16 @@ public final class SkillUtil {
     public static void execute(ServerLevel level, Entity casterEntity, SkillLead lead, MathMain math) {
         if (!(casterEntity instanceof ServerPlayer player)) return;
 
-        // ★上書き対策: 同じプレイヤーの古いスキル（プレビュー）を一旦クリア
-        ACTIVE_SKILLS.remove(player);
+        ACTIVE_SKILLS.remove((LivingEntity) player);
 
-        int duration = lead.totalPreviewTicks > 0 ? lead.totalPreviewTicks : 60;
+        int duration = Math.max(1, lead.totalPreviewTicks);
+        System.out.println("[SkillUtil] スキル予約: " + lead.id + " | 待ち時間: " + duration + " ticks");
+
         SkillAttackSpec spec;
-
         try {
             spec = SkillAttackRegistry.getStrict(lead.skillId());
         } catch (Exception e) {
-            spec = new SkillAttackSpec() {
-                @Override
-                public void apply(LivingEntity attacker, LivingEntity target) {}
-            };
+            spec = new SkillAttackSpec();
         }
 
         ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
@@ -76,29 +72,37 @@ public final class SkillUtil {
     }
 
     private static void executeOnce(ServerLevel level, LivingEntity caster, ActiveSkill active) {
-        // プレビューが 2D でも 3D でも Block でも、ENTITY_AOE なら一律で 3D 判定を実行
-        // もし attackType が NONE でないなら必ず判定するように条件を緩めます
-        if (active.lead.attackType == AttackType.NONE) return;
+        // 1. ヒット判定とダメージ処理
+        if (active.lead.attackType != AttackType.NONE) {
+            Collection<LivingEntity> targets = AttackExecutor.collect(level, active.lead, active.math, caster);
+            System.out.println("=== 範囲攻撃実行: " + active.lead.id + " | ヒット数: " + targets.size() + " ===");
 
-        // AttackExecutor に自分自身 (caster) を渡して除外させる
-        Collection<LivingEntity> targets = AttackExecutor.collect(level, active.math, caster);
+            for (LivingEntity target : targets) {
+                if (target == caster) continue;
+                if (!active.hitTargets.add(target)) continue;
 
-        System.out.println("=== AOE EXECUTION: " + active.lead.id + " ===");
+                active.spec.apply(caster, target);
+                System.out.println("-> [命中] " + target.getName().getString());
+            }
+        }
 
-        for (LivingEntity target : targets) {
-            if (!active.hitTargets.add(target)) continue;
-
-            // 実際のダメージ処理へ
-            active.spec.apply(caster, target);
-            System.out.println("-> [HIT] " + target.getName().getString());
+        // 2. ★ クールダウンの正式開始処理
+        if (caster instanceof Player player) {
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                var identity = trans.getIdentity();
+                if (identity instanceof MimicIdentity mimic) {
+                    int index = mimic.findSkillIndex(active.lead.skillId());
+                    if (index != -1) {
+                        mimic.startActualCooldown(index);
+                    }
+                }
+            });
         }
     }
 
     private static void rootCaster(LivingEntity caster, boolean root, int durationTicks) {
         if (!(caster instanceof ServerPlayer sp)) return;
-        // durationTicksを送るが、クライアント側では「0になるまで止まる」フラグとして使う
-        ModMessages.sendToPlayer(new S2C_PlayerRootPacket
-                (sp.getUUID(), root ? durationTicks : 0), sp);
+        ModMessages.sendToPlayer(new S2C_PlayerRootPacket(sp.getUUID(), root ? durationTicks : 0), sp);
     }
 
     private static final class ActiveSkill {

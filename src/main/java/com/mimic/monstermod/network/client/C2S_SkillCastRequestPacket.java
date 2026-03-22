@@ -3,35 +3,22 @@ package com.mimic.monstermod.network.client;
 import com.mimic.monstermod.Math.MathMain;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_SpawnSkillLeadPacket;
-import com.mimic.monstermod.skill.SkillUtil;
-import com.mimic.monstermod.skill.SkillId;
-import com.mimic.monstermod.skill.SkillLead;
-import com.mimic.monstermod.skill.SkillLeadRegistry;
-import com.mimic.monstermod.skill.SkillLeadUtil;
+import com.mimic.monstermod.skill.*;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 
 import java.util.function.Supplier;
 
-/**
- * Client → Server
- * Clientは「SkillIdを使いたい」という意思のみ送る
- * Serverがすべてを決定する
- */
 public class C2S_SkillCastRequestPacket {
-
     private final SkillId skillId;
+    private static final int COOLDOWN_BUFFER = 5;
 
     public C2S_SkillCastRequestPacket(SkillId skillId) {
         this.skillId = skillId;
     }
 
-    // ======================
-    // Encode / Decode
-    // ======================
     public static void encode(C2S_SkillCastRequestPacket msg, FriendlyByteBuf buf) {
         msg.skillId.write(buf);
     }
@@ -40,66 +27,49 @@ public class C2S_SkillCastRequestPacket {
         return new C2S_SkillCastRequestPacket(SkillId.read(buf));
     }
 
-    // ======================
-    // Handle (SERVER)
-    // ======================
     public static void handle(C2S_SkillCastRequestPacket msg, Supplier<NetworkEvent.Context> ctx) {
-
-        System.out.println("### C2S_SkillCastRequestPacket RECEIVED ###");
-
         NetworkEvent.Context context = ctx.get();
-
         context.enqueueWork(() -> {
-
             ServerPlayer player = context.getSender();
+            if (player == null) return;
 
-            if (player == null) {
-                System.out.println("[ERROR] SkillCast player is null");
-                return;
-            }
+            player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                var identity = trans.getIdentity();
+                if (identity == null) return;
 
-            System.out.println("[SkillCast] Player: " + player.getName().getString());
-            System.out.println("[SkillCast] SkillId: " + msg.skillId);
+                // 1. インデックス特定とCD判定（見つかった場合のみ厳密にチェック）
+                int skillIndex = identity.findSkillIndex(msg.skillId);
+                if (skillIndex != -1) {
+                    int currentCD = identity.getCooldown(skillIndex);
+                    if (currentCD > COOLDOWN_BUFFER) {
+                        System.out.println("[Packet] Rejected: Still in Cooldown (" + currentCD + " ticks left)");
+                        return;
+                    }
+                    // サーバー側の Identity 状態を更新
+                    identity.handleAbility(player, skillIndex);
+                }
 
-            SkillLead lead;
+                // 2. スキルデータの取得（Registryから直接取得することで Index 依存を回避）
+                SkillLead lead = SkillLeadRegistry.getNullable(msg.skillId);
+                if (lead == null) {
+                    System.out.println("[Packet] Rejected: Unknown Skill ID " + msg.skillId);
+                    return;
+                }
 
-            try {
-                lead = SkillLeadRegistry.getStrict(msg.skillId);
-                System.out.println("[SkillCast] SkillLead FOUND: " + msg.skillId);
-            } catch (Exception e) {
-                System.out.println("[SkillCast] SkillLead NOT FOUND: " + msg.skillId);
-                e.printStackTrace();
-                return;
-            }
+                MathMain math = SkillLeadUtil.buildMath(lead, player.position());
 
-            Vec3 origin = player.position();
-            System.out.println("[SkillCast] Origin: " + origin);
-
-            MathMain math = SkillLeadUtil.buildMath(lead, origin);
-            System.out.println("[SkillCast] Math built");
-
-            // Preview Packet
-            if (lead.render2D
-                    || lead.render2DOverlay
-                    || lead.renderBlock2D
-                    || lead.render3DPreview) {
-
-                System.out.println("[SkillCast] Sending Preview Packet");
-
+                // 3. 他プレイヤーへのプレビュー同期
                 ModMessages.INSTANCE.send(
                         PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
                         new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
                 );
 
-                System.out.println("[SkillCast] Preview Packet sent");
-            }
+                // 4. サーバー側のダメージ・停止ロジック (SkillUtil) へ流す
+                SkillUtil.execute(player.serverLevel(), player, lead, math);
 
-            // ActiveSkill 登録
-            System.out.println("[SkillCast] Executing SkillUtil.execute");
-            SkillUtil.execute(player.serverLevel(), player, lead, math);
-            System.out.println("[SkillCast] SkillUtil.execute complete");
+                System.out.println("[Packet] Successfully executed: " + msg.skillId);
+            });
         });
-
         context.setPacketHandled(true);
     }
 }

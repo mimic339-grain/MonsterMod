@@ -14,11 +14,11 @@ public final class ServerTickEvents {
 
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.START) return;
+        // START ではなく END に変更することで、その tick の全移動が終わった後に判定を行う
+        if (event.phase != TickEvent.Phase.END) return;
         if (event.getServer() == null) return;
 
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            if (level == null) continue;
             SkillUtil.tick(level);
         }
     }

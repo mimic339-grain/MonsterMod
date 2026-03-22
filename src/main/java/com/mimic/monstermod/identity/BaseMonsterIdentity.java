@@ -38,11 +38,24 @@ public class BaseMonsterIdentity {
     // サーバー Tick: クールダウンのみ
     // -----------------------------
     public void tickServer(Player player) {
+        updateCooldowns();
+    }
+    // サーバー・クライアント共通のTick処理
+    public void updateCooldowns() {
         for (int i = 0; i < abilityCooldowns.length; i++) {
-            if (abilityCooldowns[i] > 0) abilityCooldowns[i]--;
+            if (abilityCooldowns[i] > 0) {
+                abilityCooldowns[i]--;
+            }
         }
     }
-
+    public int getCooldown(int index) {
+        if (index < 0 || index >= abilityCooldowns.length) return 0;
+        return abilityCooldowns[index];
+    }
+    // 共通で使えるように空のメソッドを定義（MimicIdentityでオーバーライドする）
+    public int findSkillIndex(com.mimic.monstermod.skill.SkillId skillId) {
+        return -1;
+    }
     // -----------------------------
     // プレイヤー状態をEntityにコピー（サーバー用）
     // -----------------------------
