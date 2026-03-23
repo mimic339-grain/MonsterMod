@@ -4,6 +4,7 @@ import com.mimic.monstermod.Math.MathMain;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_SpawnSkillLeadPacket;
 import com.mimic.monstermod.skill.*;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -33,41 +34,37 @@ public class C2S_SkillCastRequestPacket {
             ServerPlayer player = context.getSender();
             if (player == null) return;
 
-            player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
                 var identity = trans.getIdentity();
                 if (identity == null) return;
 
-                // 1. インデックス特定とCD判定（見つかった場合のみ厳密にチェック）
                 int skillIndex = identity.findSkillIndex(msg.skillId);
+
+                // クールダウンチェック
                 if (skillIndex != -1) {
-                    int currentCD = identity.getCooldown(skillIndex);
-                    if (currentCD > COOLDOWN_BUFFER) {
-                        System.out.println("[Packet] Rejected: Still in Cooldown (" + currentCD + " ticks left)");
-                        return;
-                    }
-                    // サーバー側の Identity 状態を更新
-                    identity.handleAbility(player, skillIndex);
+                    if (identity.getCooldown(skillIndex) > COOLDOWN_BUFFER) return;
                 }
 
-                // 2. スキルデータの取得（Registryから直接取得することで Index 依存を回避）
                 SkillLead lead = SkillLeadRegistry.getNullable(msg.skillId);
-                if (lead == null) {
-                    System.out.println("[Packet] Rejected: Unknown Skill ID " + msg.skillId);
-                    return;
-                }
+                if (lead == null) return;
 
                 MathMain math = SkillLeadUtil.buildMath(lead, player.position());
 
-                // 3. 他プレイヤーへのプレビュー同期
-                ModMessages.INSTANCE.send(
-                        PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
-                        new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
-                );
+                // サーバー側での実行承認
+                if (SkillUtil.tryExecute(player.serverLevel(), player, lead, math)) {
 
-                // 4. サーバー側のダメージ・停止ロジック (SkillUtil) へ流す
-                SkillUtil.execute(player.serverLevel(), player, lead, math);
+                    // 周囲のプレイヤーに予兆を表示
+                    ModMessages.INSTANCE.send(
+                            PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
+                            new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
+                    );
 
-                System.out.println("[Packet] Successfully executed: " + msg.skillId);
+                    // ★ 重要: Identity側のhandleAbilityを「サーバー側」として実行
+                    // これにより、Identity側で AttackSpec.apply() が呼ばれるようになります
+                    if (skillIndex != -1) {
+                        identity.handleAbility(player, skillIndex);
+                    }
+                }
             });
         });
         context.setPacketHandled(true);

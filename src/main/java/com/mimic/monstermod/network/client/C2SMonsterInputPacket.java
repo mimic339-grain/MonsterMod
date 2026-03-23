@@ -2,6 +2,7 @@ package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -9,81 +10,62 @@ import java.util.function.Supplier;
 
 /**
  * クライアント → サーバー
- * プレイヤー入力（スキル / メニュー / 回避）を送信
- * Monster / Hunter 両方対応
+ * プレイヤー入力（スキル / メニュー）を送信
  */
 public class C2SMonsterInputPacket {
 
-    private final boolean useKey;      // スキルキー
-    private final boolean menuKey;     // メニューキー
-    private final boolean dodgeKey;    // 回避キー
-    private final int skillIndex;      // スキル番号
+    private final boolean useKey;
+    private final boolean menuKey;
+    private final int skillIndex;
 
-    public C2SMonsterInputPacket(boolean useKey, boolean menuKey, boolean dodgeKey, int skillIndex) {
+    // コンストラクタから dodgeKey を削除
+    public C2SMonsterInputPacket(boolean useKey, boolean menuKey, int skillIndex) {
         this.useKey = useKey;
         this.menuKey = menuKey;
-        this.dodgeKey = dodgeKey;
         this.skillIndex = skillIndex;
     }
 
-    // ===== エンコード / デコード =====
-    public static void encode(C2SMonsterInputPacket pkt, net.minecraft.network.FriendlyByteBuf buf) {
+    // ===== エンコード (書き込み) =====
+    public static void encode(C2SMonsterInputPacket pkt, FriendlyByteBuf buf) {
         buf.writeBoolean(pkt.useKey);
         buf.writeBoolean(pkt.menuKey);
-        buf.writeBoolean(pkt.dodgeKey);
         buf.writeInt(pkt.skillIndex);
     }
 
-    public static C2SMonsterInputPacket decode(net.minecraft.network.FriendlyByteBuf buf) {
+    // ===== デコード (読み込み) =====
+    public static C2SMonsterInputPacket decode(FriendlyByteBuf buf) {
+        // 書き込んだ順番・個数と完全に一致させる
         return new C2SMonsterInputPacket(
-                buf.readBoolean(),
-                buf.readBoolean(),
-                buf.readBoolean(),
-                buf.readInt()
+                buf.readBoolean(), // useKey
+                buf.readBoolean(), // menuKey
+                buf.readInt()      // skillIndex
         );
     }
 
-    // ===== サーバ側処理 =====
-    public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            ServerPlayer player = ctx.get().getSender();
-            if (player == null) {
-                System.out.println("[C2SPlayerInputPacket] player is null");
-                return;
-            }
+    // ===== サーバー側処理 =====
+    public static void handle(C2SMonsterInputPacket msg, Supplier<NetworkEvent.Context> ctx) {
+        NetworkEvent.Context context = ctx.get();
+        context.enqueueWork(() -> {
+            ServerPlayer player = context.getSender();
+            if (player == null) return;
 
-            // ★ 受信確認ログ ★
-            System.out.println("[C2SPlayerInputPacket] Packet received from player: " + player.getName().getString() +
-                    " | useKey=" + useKey + " menuKey=" + menuKey + " dodgeKey=" + dodgeKey + " skillIndex=" + skillIndex);
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                BaseMonsterIdentity identity = trans.getIdentity();
+                if (identity == null) return;
 
-            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                    .ifPresent(trans -> {
-                        BaseMonsterIdentity identity = trans.getIdentity(); // 変数名 trans に合わせる
-                        if (identity == null) {
-                            System.out.println("[C2SPlayerInputPacket] identity is null for player: " + player.getName().getString());
-                            return;
-                        }
+                // 1. メニュー処理
+                if (msg.menuKey) {
+                    System.out.println("[Packet/Server] handleMenu実行: " + player.getName().getString());
+                    identity.handleMenu(player);
+                }
 
-                        // メニュー処理
-                        if (menuKey) {
-                            System.out.println("[C2SPlayerInputPacket] handleMenu called");
-                            identity.handleMenu(player);
-                        }
-
-                        // スキル処理
-                        if (useKey && skillIndex >= 0) {
-                            System.out.println("[C2SPlayerInputPacket] handleAbility called for skill " + skillIndex);
-                            identity.handleAbility(player, skillIndex);
-                        }
-
-                        // 回避処理
-                        if (dodgeKey) {
-                            System.out.println("[C2SPlayerInputPacket] handleDodge called");
-                            identity.handleDodge(player);
-                        }
-                    });
+                // 2. スキル処理 (回避も handleAbility 内で判定される)
+                if (msg.useKey && msg.skillIndex >= 0) {
+                    System.out.println("[Packet/Server] handleAbility実行 Index: " + msg.skillIndex + " (" + player.getName().getString() + ")");
+                    identity.handleAbility(player, msg.skillIndex);
+                }
+            });
         });
-
-        ctx.get().setPacketHandled(true);
+        context.setPacketHandled(true);
     }
 }

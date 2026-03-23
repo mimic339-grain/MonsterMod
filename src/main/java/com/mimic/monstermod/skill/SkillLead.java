@@ -22,7 +22,7 @@ public final class SkillLead {
     public final float depth;
 
     /* ===== 挙動制御 (新規追加: 上書き・コンボ・キャンセル) ===== */
-    public final AttackType.Category category;
+    public final SkillType.Category category;
     public final boolean canBeCanceled;
 
     /* ===== 挙動 ===== */
@@ -31,8 +31,9 @@ public final class SkillLead {
     public final boolean autoRoot;
     public final int rootTickBeforeDamage;
     public final int totalPreviewTicks;
-    public final AttackType attackType;
-
+    public final SkillType skillType;
+    public final int attackTicks;
+    public final int skillTicks; // 合計時間
     /* ===== 描画フラグ (これらが無いとエラーになるため維持) ===== */
     public final boolean render2D;
     public final boolean render2DOverlay;
@@ -66,7 +67,9 @@ public final class SkillLead {
         this.autoRoot = b.autoRoot;
         this.rootTickBeforeDamage = b.rootTickBeforeDamage;
         this.totalPreviewTicks = b.totalPreviewTicks;
-        this.attackType = b.attackType;
+        this.skillType = b.skillType;
+        this.attackTicks = b.attackTicks;
+        this.skillTicks = b.totalPreviewTicks + b.attackTicks;
 
         this.render2D = b.render2D;
         this.render2DOverlay = b.render2DOverlay;
@@ -94,7 +97,7 @@ public final class SkillLead {
         private float depth = 0f;
 
         // 挙動制御の初期値
-        private AttackType.Category category = AttackType.Category.NORMAL;
+        private SkillType.Category category = SkillType.Category.NORMAL;
         private boolean canBeCanceled = false;//緊急回避用
 
         private boolean autoRoot = true;//硬直あるかどうか
@@ -102,7 +105,9 @@ public final class SkillLead {
         private int totalPreviewTicks = 60;//デフォルト３秒間プレビュー　プレビューそう時間
         private boolean followCaster = false;//
         private boolean yAnchorToGround = false;
-        private AttackType attackType = AttackType.NONE;
+        private SkillType skillType = SkillType.NONE;
+        private int attackTicks = 1;
+
 
         private boolean render2D = false;
         private boolean render2DOverlay = false;
@@ -121,7 +126,7 @@ public final class SkillLead {
         public Builder transform(MathMain.Transform t) { this.transform = t; return this; }
 
         /* ===== 挙動制御設定 ===== */
-        public Builder category(AttackType.Category category) {
+        public Builder category(SkillType.Category category) {
             this.category = category;
             return this;
         }
@@ -166,11 +171,11 @@ public final class SkillLead {
         /* ===== 挙動設定 ===== */
         public Builder followCaster(boolean v) { this.followCaster = v; return this; }
         public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }
-        public Builder attackType(AttackType t) { this.attackType = t; return this; }
+        public Builder attackType(SkillType t) { this.skillType = t; return this; }
         public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
         public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
         public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
-
+        public Builder attackTicks(int t) { this.attackTicks = t; return this; }
         /* ===== 描画フラグ (エラー回避のために復活) ===== */
         public Builder render2D() { this.render2D = true; return this; }
         public Builder render2DOverlay() { this.render2DOverlay = true; return this; }
@@ -182,7 +187,7 @@ public final class SkillLead {
         public SkillLead build() {
             // 1. 形状が必要なタイプなのに Shape が無い場合だけエラーにする
             if (shape == null) {
-                if (this.attackType == AttackType.STRIKE || this.attackType == AttackType.TOUCH) {
+                if (this.skillType == SkillType.STRIKE || this.skillType == SkillType.TOUCH) {
                     throw new IllegalStateException("攻撃・接触スキルには shape 設定が必要です: " + id);
                 }
 
@@ -198,8 +203,9 @@ public final class SkillLead {
             }
 
             // 2. 回避・移動スキルなら「溜め」と「硬直」を自動で消す
-            if (this.attackType == AttackType.MOVEMENT) {
+            if (this.skillType == SkillType.MOVEMENT) {
                 this.totalPreviewTicks = 0;
+                this.attackTicks = 0;
                 this.autoRoot = false;
                 this.render2D = false;
                 this.renderBlock2D = false;

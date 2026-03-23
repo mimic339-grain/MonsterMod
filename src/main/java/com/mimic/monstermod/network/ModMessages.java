@@ -47,7 +47,6 @@ public class ModMessages {
         registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SpawnSkillLeadPacket.class, S2C_SpawnSkillLeadPacket::encode, S2C_SpawnSkillLeadPacket::decode, S2C_SpawnSkillLeadPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2CMimicDodgePacket.class, S2CMimicDodgePacket::toBytes, S2CMimicDodgePacket::new, S2CMimicDodgePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayAnimationPacket.class, S2CPlayAnimationPacket::encode, S2CPlayAnimationPacket::decode, S2CPlayAnimationPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CMonsterCapSyncPacket.class, S2CMonsterCapSyncPacket::toBytes, S2CMonsterCapSyncPacket::new, S2CMonsterCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CTransformSyncPacket.class, S2CTransformSyncPacket::encode, S2CTransformSyncPacket::decode, S2CTransformSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);

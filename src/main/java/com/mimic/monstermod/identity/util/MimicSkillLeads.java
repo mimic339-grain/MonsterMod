@@ -1,7 +1,7 @@
 package com.mimic.monstermod.identity.util;
 
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.skill.AttackType;
+import com.mimic.monstermod.skill.SkillType;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
 import com.mimic.monstermod.skill.SkillLeadRegistry;
@@ -26,10 +26,10 @@ public final class MimicSkillLeads {
     private static void register2D() {
         SkillLead lead = new SkillLead.Builder(TEST_2D)
                 .shape(MathMain.Shape.CYLINDER)
-                .category(AttackType.Category.NORMAL)
+                .category(SkillType.Category.NORMAL)
                 .cylinder(8.0f, 2.0f)
                 .followCaster(true)
-                .attackType(AttackType.STRIKE)
+                .attackType(SkillType.STRIKE)
                 .render2D()
                 .build();
         SkillLeadRegistry.register(lead);
@@ -38,10 +38,10 @@ public final class MimicSkillLeads {
     private static void registerBlock() {
         SkillLead lead = new SkillLead.Builder(TEST_BLOCK)
                 .shape(MathMain.Shape.SPHERE)
-                .category(AttackType.Category.NORMAL)
+                .category(SkillType.Category.NORMAL)
                 .sphere(8.0f)
                 .followCaster(true)
-                .attackType(AttackType.STRIKE)
+                .attackType(SkillType.STRIKE)
                 .renderBlock2D()
                 .build();
         SkillLeadRegistry.register(lead);
@@ -50,19 +50,19 @@ public final class MimicSkillLeads {
     private static void register3D() {
         SkillLead lead = new SkillLead.Builder(TEST_3D)
                 .shape(MathMain.Shape.SPHERE)
-                .category(AttackType.Category.COMBO)
+                .category(SkillType.Category.COMBO)
                 .sphere(10.0f)
                 .followCaster(true)
-                .attackType(AttackType.STRIKE)
+                .attackType(SkillType.STRIKE)
                 .render3DPreview()
                 .build();
         SkillLeadRegistry.register(lead);
     }
     private static void registerEmergency() {
         SkillLead lead = new SkillLead.Builder(TEST_EMERGENCY)
-                .category(AttackType.Category.EMERGENCY)
+                .category(SkillType.Category.EMERGENCY)
                 .canBeCanceled(true)
-                .attackType(AttackType.MOVEMENT)
+                .attackType(SkillType.MOVEMENT)
                 .build();
         SkillLeadRegistry.register(lead);
     }

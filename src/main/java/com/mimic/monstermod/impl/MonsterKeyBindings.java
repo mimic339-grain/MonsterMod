@@ -15,12 +15,9 @@ public class MonsterKeyBindings {
 
     public static KeyMapping[] SKILL_KEYS = new KeyMapping[12];
     public static KeyMapping MENU_KEY;
-    public static KeyMapping DODGE_KEY; // ← 追加
-
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
 
-        // 好きなキーを割り当て
         int[] keyCodes = new int[]{
                 GLFW.GLFW_KEY_R, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_Y, GLFW.GLFW_KEY_U,
                 GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_O, GLFW.GLFW_KEY_P, GLFW.GLFW_KEY_Z,
@@ -44,13 +41,5 @@ public class MonsterKeyBindings {
                 KEY_CATEGORY_MONSTERMOD
         );
         event.register(MENU_KEY);
-
-        DODGE_KEY = new KeyMapping(
-                "key." + MonsterMod.MOD_ID + ".dodge",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_L, // ← 好きなキーに変更可
-                KEY_CATEGORY_MONSTERMOD
-        );
-        event.register(DODGE_KEY);
     }
 }

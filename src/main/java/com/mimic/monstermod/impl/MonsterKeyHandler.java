@@ -20,11 +20,14 @@ public class MonsterKeyHandler {
     // ======================================
     @SubscribeEvent
     public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
-        for (var key : MonsterKeyBindings.SKILL_KEYS)
-            event.register(key);
-
-        event.register(MonsterKeyBindings.MENU_KEY);
-        event.register(MonsterKeyBindings.DODGE_KEY);
+        // MonsterKeyBindingsで定義したスキルキーを全て登録
+        for (var key : MonsterKeyBindings.SKILL_KEYS) {
+            if (key != null) event.register(key);
+        }
+        // メニューキーを登録
+        if (MonsterKeyBindings.MENU_KEY != null) {
+            event.register(MonsterKeyBindings.MENU_KEY);
+        }
     }
 
     // ======================================
@@ -32,6 +35,7 @@ public class MonsterKeyHandler {
     // ======================================
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
+        // Tickの終了タイミングで処理（重複防止）
         if (event.phase != TickEvent.Phase.END) return;
 
         Minecraft mc = Minecraft.getInstance();
@@ -47,40 +51,31 @@ public class MonsterKeyHandler {
                     BaseMonsterIdentity identity = trans.getIdentity();
                     if (identity == null) return;
 
-                    boolean dodgePressed = MonsterKeyBindings.DODGE_KEY.consumeClick();
-
-                    // ---------- スキルキー処理 ----------
+                    // ---------- スキルキー処理 (R, T, Y, U...) ----------
                     for (int i = 0; i < MonsterKeyBindings.SKILL_KEYS.length; i++) {
                         if (MonsterKeyBindings.SKILL_KEYS[i].consumeClick()) {
 
-                            // クライアント側アクション
+                            // クライアント側での先行処理（予兆表示など）
                             identity.handleClientInput(player, true, false, i);
 
-                            // サーバーへ送信
+                            // サーバーへパケット送信
+                            // 修正：Dodgeフラグを削除した新しいコンストラクタに対応
                             ModMessages.INSTANCE.sendToServer(
-                                    new C2SMonsterInputPacket(true, false, dodgePressed, i)
+                                    new C2SMonsterInputPacket(true, false, i)
                             );
                         }
                     }
 
-                    // ---------- メニューキー処理 ----------
+                    // ---------- メニューキー処理 (M) ----------
                     if (MonsterKeyBindings.MENU_KEY.consumeClick()) {
 
                         identity.handleClientInput(player, false, true, -1);
 
+                        // サーバーへパケット送信
                         ModMessages.INSTANCE.sendToServer(
-                                new C2SMonsterInputPacket(false, true, dodgePressed, -1)
-                        );
-                    }
-
-                    // ---------- 回避キー単独処理 ----------
-                    if (dodgePressed) {
-                        identity.handleDodge(player);
-                        ModMessages.INSTANCE.sendToServer(
-                                new C2SMonsterInputPacket(false, false, true, -1)
+                                new C2SMonsterInputPacket(false, true, -1)
                         );
                     }
                 });
-
     }
 }

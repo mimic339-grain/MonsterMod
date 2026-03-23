@@ -2,22 +2,60 @@ package com.mimic.monstermod.skill;
 
 import com.mimic.monstermod.Math.AttackExecutor;
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.identity.impl.MimicIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_PlayerRootPacket;
-import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class SkillUtil {
-    // 複数のスキル（コンボ）を同時に扱えるよう List で管理
     private static final Map<LivingEntity, List<ActiveSkill>> CURRENT_ACTIVE = new ConcurrentHashMap<>();
+
+    /**
+     * スキル実行を試行する。条件に合わない場合は false を返す。
+     */
+
+    public static boolean tryExecute(ServerLevel level, ServerPlayer player, SkillLead lead, MathMain math) {
+        List<ActiveSkill> activeList = CURRENT_ACTIVE.computeIfAbsent(player, k -> new CopyOnWriteArrayList<>());
+
+        // NORMALカテゴリのスキルが動作中（skillTicksが残っている）かチェック
+        boolean isDoingNormal = activeList.stream()
+                .anyMatch(a -> a.lead.category == SkillType.Category.NORMAL && a.ticksLeft > 0);
+
+        // --- 条件判定 ---
+
+        // 1. EMERGENCY: 既存スキルを全てクリアして強制実行
+        if (lead.category == SkillType.Category.EMERGENCY) {
+            System.out.println("[SkillUtil] EMERGENCYキャンセル実行: " + lead.id + " (既存スキル " + activeList.size() + " 件を破棄)");
+            activeList.clear();
+            rootCaster(player, false, 0);
+        }
+
+        // 2. NORMAL: 他のNORMALが動いているなら拒否
+        else if (lead.category == SkillType.Category.NORMAL && isDoingNormal) {
+            System.out.println("[SkillUtil] 実行拒否: 他の NORMAL スキルが動作中: " + lead.id);
+            return false;
+        }
+
+        // 3. COMBO: isDoingNormal に関係なくここを通過する
+
+        // --- 実行登録 ---
+        int duration = lead.skillTicks;
+        SkillEffectSpec spec = SkillEffectRegistry.getStrict(lead.skillId());
+
+        ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
+        activeList.add(active);
+
+        System.out.println("[SkillUtil] スキル登録成功: " + lead.id + " (Category: " + lead.category + ", Ticks: " + duration + ")");
+        return true;
+    }
 
     public static void tick(ServerLevel level) {
         if (CURRENT_ACTIVE.isEmpty()) return;
@@ -30,7 +68,6 @@ public final class SkillUtil {
 
             if (caster.level() != level) continue;
 
-            // 各スキルのカウントダウン
             activeList.removeIf(active -> {
                 active.ticksLeft--;
 
@@ -39,12 +76,14 @@ public final class SkillUtil {
                     rootCaster(caster, true, active.lead.rootTickBeforeDamage);
                 }
 
-                // スキル完了（攻撃実行）
                 if (active.ticksLeft <= 0) {
-                    System.out.println("[SkillUtil] 最終攻撃実行: " + active.lead.id);
-                    executeOnce(level, caster, active);
+                    System.out.println("[SkillUtil/Debug] 予兆完了。エフェクト実行: " + active.lead.id);
+                    executeFinalEffect(level, caster, active);
+
                     if (active.lead.autoRoot) rootCaster(caster, false, 0);
-                    return true; // リストから削除
+
+                    // ★ [修正] ここで identity.startActualCooldown を呼ぶ必要がなくなりました
+                    return true;
                 }
                 return false;
             });
@@ -53,58 +92,23 @@ public final class SkillUtil {
         }
     }
 
-    public static void execute(ServerLevel level, ServerPlayer player, SkillLead lead, MathMain math) {
-        List<ActiveSkill> activeList = CURRENT_ACTIVE.computeIfAbsent(player, k -> new CopyOnWriteArrayList<>());
-
-        // 1. 緊急回避スキルの場合：現在の全スキルを強制終了
-        if (lead.category == AttackType.Category.EMERGENCY) {
-            System.out.println("[SkillUtil] 緊急キャンセル発動: " + lead.id);
-            activeList.clear();
-            rootCaster(player, false, 0);
-            // キャンセル後、即座に自身のスキル（回避移動など）を開始
-        }
-        // 2. 実行中のスキルがある場合
-        else if (!activeList.isEmpty()) {
-            // コンボスキルの場合：既存のスキルを消さずに追加（同時発動を許可）
-            if (lead.category == AttackType.Category.COMBO) {
-                System.out.println("[SkillUtil] コンボ接続: " + lead.id);
-                // そのまま下で add される
-            } else {
-                // 通常スキルの場合：上書き禁止！
-                System.out.println("[SkillUtil] 通常スキル実行中のため無視: " + lead.id);
-                return;
-            }
-        }
-
-        int duration = Math.max(1, lead.totalPreviewTicks);
-        SkillAttackSpec spec = SkillAttackRegistry.getStrict(lead.skillId());
-        ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
-
-        activeList.add(active);
-    }
-
-    private static void executeOnce(ServerLevel level, LivingEntity caster, ActiveSkill active) {
-        // ★ 修正: 攻撃タイプが STRIKE (旧ENTITY_AOE) か TOUCH の時だけ範囲判定を行う
-        if (active.lead.attackType == AttackType.STRIKE || active.lead.attackType == AttackType.TOUCH) {
+    private static void executeFinalEffect(ServerLevel level, LivingEntity caster, ActiveSkill active) {
+        // 1. 攻撃系 (STRIKE / TOUCH) の処理
+        if (active.lead.skillType == SkillType.STRIKE || active.lead.skillType == SkillType.TOUCH) {
             Collection<LivingEntity> targets = AttackExecutor.collect(level, active.lead, active.math, caster);
-            System.out.println("=== 攻撃判定実行: " + active.lead.id + " | ヒット数: " + targets.size() + " ===");
+            System.out.println("[SkillUtil/Debug] 攻撃判定: " + active.lead.id + " | ヒット数: " + targets.size());
             for (LivingEntity target : targets) {
                 if (target == caster) continue;
                 active.spec.apply(caster, target);
             }
-        } else {
-            // 攻撃以外のスキル（DODGE, MOVEMENT等）は何もしない
-            System.out.println("[SkillUtil] 非攻撃スキルの完了処理: " + active.lead.id);
         }
 
-        // クールダウン開始の共通処理
-        if (caster instanceof Player player) {
-            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                if (trans.getIdentity() instanceof MimicIdentity mimic) {
-                    int index = mimic.findSkillIndex(active.lead.skillId());
-                    if (index != -1) mimic.startActualCooldown(index);
-                }
-            });
+        // ★ 2. 移動・特殊系 (MOVEMENT) の処理を追加！
+        // これがないと、回避ワープが実行されません。
+        else if (active.lead.skillType == SkillType.MOVEMENT) {
+            System.out.println("[SkillUtil/Debug] 特殊効果(MOVEMENT)実行: " + active.lead.id);
+            // ターゲットなし(null)で実行することで、applyToCaster が呼ばれる
+            active.spec.apply(caster, null);
         }
     }
 
@@ -117,9 +121,9 @@ public final class SkillUtil {
     private static final class ActiveSkill {
         final SkillLead lead;
         final MathMain math;
-        final SkillAttackSpec spec;
+        final SkillEffectSpec spec;
         int ticksLeft;
-        ActiveSkill(SkillLead lead, MathMain math, SkillAttackSpec spec, int ticksLeft) {
+        ActiveSkill(SkillLead lead, MathMain math, SkillEffectSpec spec, int ticksLeft) {
             this.lead = lead; this.math = math; this.spec = spec; this.ticksLeft = ticksLeft;
         }
     }

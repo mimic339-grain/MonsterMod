@@ -1,6 +1,8 @@
 package com.mimic.monstermod.identity;
 
+import com.mimic.monstermod.Math.MathMain;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.skill.*;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -24,6 +26,8 @@ public class BaseMonsterIdentity {
     @Nullable
     protected final BaseMonsterEntity entity;
     protected int[] abilityCooldowns;
+    protected com.mimic.monstermod.skill.SkillId[] skillIds = new com.mimic.monstermod.skill.SkillId[0];
+    protected int[] defaultCooldowns = new int[0];
 
     public BaseMonsterIdentity(@Nullable BaseMonsterEntity entity, int abilityCount) {
         this.entity = entity;
@@ -38,23 +42,52 @@ public class BaseMonsterIdentity {
     // サーバー Tick: クールダウンのみ
     // -----------------------------
     public void tickServer(Player player) {
-        updateCooldowns();
+        updateCooldowns(player, "サーバー");
+        copyFromPlayerServer(player); // 座標・装備の同期を自動実行
     }
-    // サーバー・クライアント共通のTick処理
-    public void updateCooldowns() {
+
+    public void tickClient(Player player) {
+        updateCooldowns(player, "クライアント");
+        copyFromPlayerClient(player); // アニメーション・スプリント状態の同期を自動実行
+    }
+
+    public void updateCooldowns(Player player, String side) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
             if (abilityCooldowns[i] > 0) {
                 abilityCooldowns[i]--;
+                // ちょうど0になった瞬間だけログを出す
+                if (abilityCooldowns[i] == 0) {
+                    SkillId id = (i < skillIds.length) ? skillIds[i] : null;
+                    System.out.println("[" + side + "] スキル使用可能: " + (id != null ? id : "Index " + i) + " (" + player.getName().getString() + ")");
+                }
             }
         }
     }
+    /**
+     * NORMALカテゴリのスキルが動作中（予兆中）かチェックする共通メソッド
+     */
+    protected boolean isAnyNormalSkillActive() {
+        for (int i = 0; i < skillIds.length; i++) {
+            SkillLead lead = SkillLeadRegistry.getNullable(skillIds[i]);
+            if (lead != null && lead.category == SkillType.Category.NORMAL) {
+                // 残りCDがデフォルト値より大きい = 予兆中
+                if (abilityCooldowns[i] > defaultCooldowns[i]) return true;
+            }
+        }
+        return false;
+    }
+    public int findSkillIndex(com.mimic.monstermod.skill.SkillId skillId) {
+        if (skillId == null) return -1;
+        for (int i = 0; i < skillIds.length; i++) {
+            // .toString() ではなく equals で直接比較する
+            if (skillIds[i].equals(skillId)) return i;
+        }
+        return -1;
+    }
+
     public int getCooldown(int index) {
         if (index < 0 || index >= abilityCooldowns.length) return 0;
         return abilityCooldowns[index];
-    }
-    // 共通で使えるように空のメソッドを定義（MimicIdentityでオーバーライドする）
-    public int findSkillIndex(com.mimic.monstermod.skill.SkillId skillId) {
-        return -1;
     }
     // -----------------------------
     // プレイヤー状態をEntityにコピー（サーバー用）
@@ -135,43 +168,69 @@ public class BaseMonsterIdentity {
     public void handleClientInput(Player player, boolean useKey, boolean menuKey, int skillIndex) {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
-        if (player.isShiftKeyDown()) handleDodge(player); // 例えば Shift で回避（クライアント側）
     }
 
     public void handleAbility(Player player, int skillIndex) {
-        if (abilityCooldowns[skillIndex] > 0) return;
-        // サーバーでスキル処理
+        if (skillIndex < 0 || skillIndex >= skillIds.length) return;
+        SkillId skillId = skillIds[skillIndex];
+        SkillLead lead = SkillLeadRegistry.getNullable(skillId);
+        if (lead == null) return;
+
+        // EMERGENCYなら他スキルの硬直をキャンセル (ここは共通)
+        if (lead.category == SkillType.Category.EMERGENCY) {
+            System.out.println("[Identity/Debug] EMERGENCY発動: 硬直をリセットします (" + skillId + ")");
+            for (int i = 0; i < abilityCooldowns.length; i++) {
+                if (i < defaultCooldowns.length && abilityCooldowns[i] > defaultCooldowns[i]) {
+                    abilityCooldowns[i] = defaultCooldowns[i];
+                }
+            }
+        }
+
+        if (player.level().isClientSide()) {
+            // クライアント側処理
+            if (getCooldown(skillIndex) > 0) return;
+            if (lead.category == SkillType.Category.NORMAL && isAnyNormalSkillActive()) return;
+
+            this.abilityCooldowns[skillIndex] = lead.skillTicks + defaultCooldowns[skillIndex];
+            MathMain math = SkillLeadUtil.buildMath(lead, player.position());
+            com.mimic.monstermod.events.PreviewEvents.spawnLocal(player, lead, math);
+            com.mimic.monstermod.network.ModMessages.INSTANCE.sendToServer(new com.mimic.monstermod.network.client.C2S_SkillCastRequestPacket(skillId));
+        } else {
+            // ★ サーバー側処理: ここが抜けていたポイント！
+            this.abilityCooldowns[skillIndex] = lead.skillTicks + defaultCooldowns[skillIndex];
+
+            // EMERGENCYなどの「即時実行」スキルの場合、ここでAttackSpecを適用する
+            // NORMALスキルはSkillUtil側のタイマーで後から呼ばれますが、
+            // EMERGENCY(Ticks:0) は今すぐ実行する必要があります。
+            if (lead.category == SkillType.Category.EMERGENCY) {
+                SkillEffectSpec spec = SkillEffectRegistry.getNullable(skillId);
+                if (spec != null) {
+                    System.out.println("[Server/Identity] 即時スキル(回避等)を実行します: " + skillId);
+                    spec.apply(player, null);
+                }
+            }
+        }
     }
 
     public void handleMenu(Player player) {}
 
-    /**
-     * 共通回避処理（Monster / Hunter 共通）
-     * 各 Identity はオーバーライドして固有挙動を実装
-     */
-    public void handleDodge(Player player) {
-        if (entity == null) return;
-        // デフォルトは横に小さく移動する簡易回避
-        double dx = Math.sin(Math.toRadians(player.getYRot()));
-        double dz = -Math.cos(Math.toRadians(player.getYRot()));
-        entity.setDeltaMovement(entity.getDeltaMovement().add(dx, 0, dz));
-    }
 
     // -----------------------------
-    // NBT 保存 / 復元
+    // NBT共通処理 (int配列の保存を共通化)
     // -----------------------------
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
-        for (int i = 0; i < abilityCooldowns.length; i++) {
-            tag.putInt("cd_" + i, abilityCooldowns[i]);
-        }
+        tag.putIntArray("cooldowns", abilityCooldowns);
         return tag;
     }
 
     public void deserializeNBT(CompoundTag tag) {
-        for (int i = 0; i < abilityCooldowns.length; i++) {
-            if (tag.contains("cd_" + i)) abilityCooldowns[i] = tag.getInt("cd_" + i);
+        if (tag.contains("cooldowns")) {
+            int[] saved = tag.getIntArray("cooldowns");
+            for (int i = 0; i < abilityCooldowns.length && i < saved.length; i++) {
+                abilityCooldowns[i] = saved[i];
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 package com.mimic.monstermod.network.server;
 
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.overlay.ClientEvents;
+import com.mimic.monstermod.events.PreviewEvents;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
 import com.mimic.monstermod.skill.SkillLeadRegistry;
@@ -97,7 +97,7 @@ public final class S2C_SpawnSkillLeadPacket {
 
             System.out.println("[SkillPreview] Spawning preview for " + caster.getName().getString());
 
-            ClientEvents.spawnFromServer(caster, lead, msg.math);
+            PreviewEvents.spawnFromServer(caster, lead, msg.math);
         });
 
         context.setPacketHandled(true);
