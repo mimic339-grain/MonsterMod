@@ -32,7 +32,7 @@ public final class SkillLead {
     public final int rootTickBeforeDamage;
     public final int totalPreviewTicks;
     public final SkillType skillType;
-    public final int attackTicks;
+    public final int effectTicks;
     public final int skillTicks; // 合計時間
     /* ===== 描画フラグ (これらが無いとエラーになるため維持) ===== */
     public final boolean render2D;
@@ -68,8 +68,8 @@ public final class SkillLead {
         this.rootTickBeforeDamage = b.rootTickBeforeDamage;
         this.totalPreviewTicks = b.totalPreviewTicks;
         this.skillType = b.skillType;
-        this.attackTicks = b.attackTicks;
-        this.skillTicks = b.totalPreviewTicks + b.attackTicks;
+        this.effectTicks = b.effectTicks;
+        this.skillTicks = b.totalPreviewTicks + b.effectTicks;
 
         this.render2D = b.render2D;
         this.render2DOverlay = b.render2DOverlay;
@@ -106,7 +106,7 @@ public final class SkillLead {
         private boolean followCaster = false;//
         private boolean yAnchorToGround = false;
         private SkillType skillType = SkillType.NONE;
-        private int attackTicks = 1;
+        private int effectTicks = 1;
 
 
         private boolean render2D = false;
@@ -175,7 +175,7 @@ public final class SkillLead {
         public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
         public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
         public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
-        public Builder attackTicks(int t) { this.attackTicks = t; return this; }
+        public Builder effectTicks(int t) { this.effectTicks = t; return this; }
         /* ===== 描画フラグ (エラー回避のために復活) ===== */
         public Builder render2D() { this.render2D = true; return this; }
         public Builder render2DOverlay() { this.render2DOverlay = true; return this; }
@@ -205,7 +205,7 @@ public final class SkillLead {
             // 2. 回避・移動スキルなら「溜め」と「硬直」を自動で消す
             if (this.skillType == SkillType.MOVEMENT) {
                 this.totalPreviewTicks = 0;
-                this.attackTicks = 0;
+                this.effectTicks = 0;
                 this.autoRoot = false;
                 this.render2D = false;
                 this.renderBlock2D = false;

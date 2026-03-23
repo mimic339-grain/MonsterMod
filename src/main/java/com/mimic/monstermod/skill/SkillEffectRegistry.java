@@ -17,7 +17,7 @@ public final class SkillEffectRegistry {
         // ② test_3d: 魔法ダメージ + 毒 + STRIKE挙動
         register(SkillId.of("monstermod", "test_3d"), new SkillEffectSpec(
                 2.0f, DamageType.MAGIC, SkillType.STRIKE, List.of(
-                new StatusEffectSpec(MobEffects.POISON, 200, 1)
+                new PotionEffectSpec(MobEffects.POISON, 200, 1)
         )
         ));
 

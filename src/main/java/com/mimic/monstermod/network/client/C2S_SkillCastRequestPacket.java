@@ -14,7 +14,6 @@ import java.util.function.Supplier;
 
 public class C2S_SkillCastRequestPacket {
     private final SkillId skillId;
-    private static final int COOLDOWN_BUFFER = 5;
 
     public C2S_SkillCastRequestPacket(SkillId skillId) {
         this.skillId = skillId;
@@ -39,10 +38,9 @@ public class C2S_SkillCastRequestPacket {
                 if (identity == null) return;
 
                 int skillIndex = identity.findSkillIndex(msg.skillId);
-
-                // クールダウンチェック
                 if (skillIndex != -1) {
-                    if (identity.getCooldown(skillIndex) > COOLDOWN_BUFFER) return;
+                    // クールダウン中、または予兆ロック中なら無視
+                    if (identity.getCooldown(skillIndex) > 0 || identity.isLocking(skillIndex)) return;
                 }
 
                 SkillLead lead = SkillLeadRegistry.getNullable(msg.skillId);
@@ -50,17 +48,12 @@ public class C2S_SkillCastRequestPacket {
 
                 MathMain math = SkillLeadUtil.buildMath(lead, player.position());
 
-                // サーバー側での実行承認
                 if (SkillUtil.tryExecute(player.serverLevel(), player, lead, math)) {
-
-                    // 周囲のプレイヤーに予兆を表示
                     ModMessages.INSTANCE.send(
                             PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
                             new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
                     );
 
-                    // ★ 重要: Identity側のhandleAbilityを「サーバー側」として実行
-                    // これにより、Identity側で AttackSpec.apply() が呼ばれるようになります
                     if (skillIndex != -1) {
                         identity.handleAbility(player, skillIndex);
                     }

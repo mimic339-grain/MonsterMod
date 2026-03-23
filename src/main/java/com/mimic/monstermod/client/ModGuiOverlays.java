@@ -1,6 +1,7 @@
 package com.mimic.monstermod.client;
 
 import com.mimic.monstermod.gui.MonsterHpOverlay;
+import com.mimic.monstermod.gui.SkillOverlay;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
@@ -15,7 +16,8 @@ public class ModGuiOverlays {
     @SubscribeEvent
     public static void onRegisterGuiOverlays(RegisterGuiOverlaysEvent event) {
 
-//        event.registerAbove(VanillaGuiOverlay.HOTBAR.id(), "skill_hud", SkillOverlay.HUD_SKILLS);
+
+        event.registerAbove(VanillaGuiOverlay.HOTBAR.id(), "skill_hud", SkillOverlay.HUD_SKILLS);
         event.registerAbove(VanillaGuiOverlay.PLAYER_HEALTH.id(), "monster_hp", MonsterHpOverlay.MONSTER_HP_OVERLAY);
     }
 }

@@ -11,7 +11,7 @@ public class SkillEffectSpec {
     public final float damage;
     public final DamageType damageType; // 属性 (PHYSICALなど)
     public final SkillType skillType; // 挙動 (MOVEMENTなど)
-    public final List<StatusEffectSpec> effects;
+    public final List<PotionEffectSpec> effects;
 
     // デフォルトコンストラクタ
     public SkillEffectSpec() {
@@ -22,7 +22,7 @@ public class SkillEffectSpec {
     }
 
     // ★ 修正: コンストラクタの引数を整理
-    public SkillEffectSpec(float damage, DamageType damageType, SkillType skillType, List<StatusEffectSpec> effects) {
+    public SkillEffectSpec(float damage, DamageType damageType, SkillType skillType, List<PotionEffectSpec> effects) {
         this.damage = damage;
         this.damageType = damageType;
         this.skillType = skillType;
@@ -76,7 +76,7 @@ public class SkillEffectSpec {
         }
 
         // ステータス異常付与
-        for (StatusEffectSpec effect : effects) {
+        for (PotionEffectSpec effect : effects) {
             effect.apply(target);
         }
     }

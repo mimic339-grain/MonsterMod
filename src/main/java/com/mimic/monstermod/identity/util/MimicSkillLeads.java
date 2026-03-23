@@ -60,7 +60,7 @@ public final class MimicSkillLeads {
     }
     private static void registerEmergency() {
         SkillLead lead = new SkillLead.Builder(TEST_EMERGENCY)
-                .category(SkillType.Category.EMERGENCY)
+                .category(SkillType.Category.CANCEL)
                 .canBeCanceled(true)
                 .attackType(SkillType.MOVEMENT)
                 .build();

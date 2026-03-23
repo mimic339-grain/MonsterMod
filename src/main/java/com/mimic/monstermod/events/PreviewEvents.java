@@ -39,7 +39,7 @@ public final class PreviewEvents {
 
     private static void handlePreviewSpawning(Entity caster, SkillLead lead, MathMain math, String logPrefix) {
         // 【強化】EMERGENCY の場合、その術者(caster)に関連するプレビューを即座に全削除
-        if (lead.category == SkillType.Category.EMERGENCY) {
+        if (lead.category == SkillType.Category.CANCEL) {
             PREVIEWS.removeIf(p -> p.caster.getUUID().equals(caster.getUUID()));
             System.out.println(logPrefix + "EMERGENCYにより既存プレビューをクリア");
         }

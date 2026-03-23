@@ -20,9 +20,11 @@ public class MimicIdentity extends BaseMonsterIdentity {
     private static final int[] COOLDOWNS = {120, 140, 180, 210};
 
     public MimicIdentity(@Nullable BaseMonsterEntity entity) {
+        // 親クラスで SKILLS.length 分の abilityCooldowns と lockCooldowns が new される
         super(entity, SKILLS.length);
         this.skillIds = SKILLS;
         this.defaultCooldowns = COOLDOWNS;
+        // ここで this.abilityCooldowns = new int[...] をしてはいけない（親の結果を消してしまうため）
     }
 
     @Override

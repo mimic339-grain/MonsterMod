@@ -22,29 +22,35 @@ public final class SkillUtil {
      * スキル実行を試行する。条件に合わない場合は false を返す。
      */
 
+    /**
+     * スキル実行を試行する。条件に合わない場合は false を返す。
+     * カテゴリに関わらず、EMERGENCY 以外は動作中の割り込みを一切禁止します。
+     */
+    /**
+     * スキル実行を試行する。条件に合わない場合は false を返す。
+     * NORMALカテゴリは動作中の割り込み不可だが、COMBOとEMERGENCYは許可する。
+     */
     public static boolean tryExecute(ServerLevel level, ServerPlayer player, SkillLead lead, MathMain math) {
         List<ActiveSkill> activeList = CURRENT_ACTIVE.computeIfAbsent(player, k -> new CopyOnWriteArrayList<>());
 
-        // NORMALカテゴリのスキルが動作中（skillTicksが残っている）かチェック
-        boolean isDoingNormal = activeList.stream()
-                .anyMatch(a -> a.lead.category == SkillType.Category.NORMAL && a.ticksLeft > 0);
+        // 現在カウントダウン中（予兆中）のスキルが1つでもあれば true
+        boolean isAnyActive = activeList.stream().anyMatch(a -> a.ticksLeft > 0);
 
         // --- 条件判定 ---
 
-        // 1. EMERGENCY: 既存スキルを全てクリアして強制実行
-        if (lead.category == SkillType.Category.EMERGENCY) {
+        // 1. CANCEL: 既存スキルを全てクリアして強制実行
+        if (lead.category == SkillType.Category.CANCEL) {
             System.out.println("[SkillUtil] EMERGENCYキャンセル実行: " + lead.id + " (既存スキル " + activeList.size() + " 件を破棄)");
             activeList.clear();
             rootCaster(player, false, 0);
         }
-
-        // 2. NORMAL: 他のNORMALが動いているなら拒否
-        else if (lead.category == SkillType.Category.NORMAL && isDoingNormal) {
-            System.out.println("[SkillUtil] 実行拒否: 他の NORMAL スキルが動作中: " + lead.id);
+        // 2. NORMAL: すでに何かが動いているなら「割り込み不可」
+        else if (lead.category == SkillType.Category.NORMAL && isAnyActive) {
+            System.out.println("[SkillUtil] 実行拒否: スキル動作中につきNORMALスキルの割り込み不可: " + lead.id);
             return false;
         }
 
-        // 3. COMBO: isDoingNormal に関係なくここを通過する
+        // 3. COMBO: isAnyActive が true でもここを通過する（割り込み許可）
 
         // --- 実行登録 ---
         int duration = lead.skillTicks;

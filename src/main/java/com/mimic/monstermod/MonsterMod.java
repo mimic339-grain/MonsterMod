@@ -1,5 +1,6 @@
 package com.mimic.monstermod;
 
+import com.mimic.monstermod.effect.ModEffects;
 import com.mimic.monstermod.entity.ModEntitieType;
 import com.mimic.monstermod.entity.ModEntityAttributes;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
@@ -33,7 +34,7 @@ public class MonsterMod {
         ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
         ModMessages.register(); // ここで CHANNEL を初期化
-
+        ModEffects.MOB_EFFECTS.register(FMLJavaModLoadingContext.get().getModEventBus());
         // イベント登録
         modEventBus.register(ModEntityAttributes.class);
         modEventBus.register(BaseMonsterIdentityRegistry.class);
