@@ -21,25 +21,4 @@ public class ModEntityAttributes {
 
 
     }
-
-    // ★追加: プレイヤーの変身中にMimicの攻撃力などを適用する例
-    // このイベントハンドラは、LivingEntityMixinやPlayerMixinで属性を動的に変更する代わりに、
-    // 攻撃イベントが発生した際にのみMimicの攻撃力を適用する例です。
-    /*
-    @SubscribeEvent
-    public static void onLivingAttack(LivingAttackEvent event) {
-        if (event.getEntity() instanceof Player player) {
-            player.getCapability(PlayerTransformationProvider.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-                if (transformation.isTransformed()) {
-                    IPlayerIdentity currentIdentity = transformation.getTransformedIdentity();
-                    if (currentIdentity != null && currentIdentity.equals(PlayerIdentityRegistry.MIMIC_IDENTITY.get())) {
-                        // Mimicの攻撃力を適用
-                        float mimicAttackDamage = (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE); // Mimicの属性値を取得
-                        event.setAmount(mimicAttackDamage); // イベントのダメージ量をMimicのものに設定
-                    }
-                }
-            });
-        }
-    }
-    */
 }

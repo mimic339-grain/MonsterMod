@@ -5,7 +5,6 @@ import com.mimic.monstermod.mixin.accessor.EntityAccessor;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -24,17 +23,11 @@ public abstract class PlayerMixin {
     @Inject(method = "getDimensions", at = @At("HEAD"), cancellable = true)
     private void onGetDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
         Player self = (Player) (Object) this;
-
         self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            // クライアント側は描画用 Entity / Identity を初期化
-            if (self.level().isClientSide) {
-                trans.onLoad(self);
-            }
-
-            BaseMonsterEntity transformed = trans.getEntity();
-            if (trans.isTransformed() && transformed != null) {
-                // サーバー側もクライアント側も transformedEntity が存在すれば適用
-                cir.setReturnValue(transformed.getDimensions(pose));
+            // [修正] ここで onLoad を呼ばない！
+            // すでに実体がある場合のみサイズを適用する
+            if (trans.isTransformed() && trans.getEntity() != null) {
+                cir.setReturnValue(trans.getEntity().getDimensions(pose));
             }
         });
     }
@@ -59,22 +52,17 @@ public abstract class PlayerMixin {
     // =================================
     // 目線高さ変更（クライアント側）
     // =================================
-    @Inject(method = "getStandingEyeHeight(Lnet/minecraft/world/entity/Pose;Lnet/minecraft/world/entity/EntityDimensions;)F", at = @At("HEAD"), cancellable = true)
-    private void onGetStandingEyeHeight(Pose pose, EntityDimensions dims, CallbackInfoReturnable<Float> cir) {
-        LivingEntity self = (LivingEntity) (Object) this;
 
+    @Inject(method = "getStandingEyeHeight", at = @At("HEAD"), cancellable = true)
+    private void onGetStandingEyeHeight(Pose pose, EntityDimensions dims, CallbackInfoReturnable<Float> cir) {
+        Player self = (Player) (Object) this;
         self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            // クライアント側のみ初期化
-            if (self.level().isClientSide) {
-                trans.onLoad((Player) self);
-            }
-            BaseMonsterEntity transformed = trans.getEntity();
-            if (trans.isTransformed() && transformed != null) {
-                cir.setReturnValue(transformed.getEyeHeight(pose));
+            // [修正] ここでも onLoad を呼ばない！
+            if (trans.isTransformed() && trans.getEntity() != null) {
+                cir.setReturnValue(trans.getEntity().getEyeHeight(pose));
             }
         });
     }
-
     @Inject(method = "travel", at = @At("HEAD"))
     private void onTravel(Vec3 movementInput, CallbackInfo ci) {
         Player player = (Player) (Object) this;

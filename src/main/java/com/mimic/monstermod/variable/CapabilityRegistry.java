@@ -9,6 +9,7 @@ import com.mimic.monstermod.variable.entity.IMonsterData;
 import com.mimic.monstermod.variable.entity.IPlayerData;
 import com.mimic.monstermod.variable.entity.MonsterData;
 import com.mimic.monstermod.variable.entity.PlayerCap;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -151,11 +152,12 @@ public class CapabilityRegistry {
 
         oldPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(newCap -> {
-                    newCap.deserializeNBT(oldCap.serializeNBT());
-                    newCap.onLoad(newPlayer);
+                    // 全てのフラグ（isTransformed, keepTransform, resetHp）をコピー
+                    CompoundTag tag = oldCap.serializeNBT();
+                    newCap.deserializeNBT(tag);
+
                 })
         );
-
         oldPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(oldCap ->
                 newPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(newCap -> {
                     newCap.deserializeNBT(oldCap.serializeNBT());
