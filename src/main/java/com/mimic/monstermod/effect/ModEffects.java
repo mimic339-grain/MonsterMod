@@ -11,7 +11,8 @@ public class ModEffects {
 
     public static final RegistryObject<MobEffect> HOUKAI =
             MOB_EFFECTS.register("houkai", HoukaiEffect::new);
-
+    public static final RegistryObject<MobEffect> BIND =
+            MOB_EFFECTS.register("bind", BindEffect::new);
     // === 【Effectにするもの：一定時間状態が続くデバフ・バフ】 ===
     //bind　自分が作成したgeomodelで描画　動けないwasdが機能しないが攻撃は触れるし移動スキルも使える
     //stun　動けない　skill使えない

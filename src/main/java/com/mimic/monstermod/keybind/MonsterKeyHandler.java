@@ -1,4 +1,4 @@
-package com.mimic.monstermod.impl;
+package com.mimic.monstermod.keybind;
 
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
 import com.mimic.monstermod.network.ModMessages;

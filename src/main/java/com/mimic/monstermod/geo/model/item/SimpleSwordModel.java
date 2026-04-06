@@ -1,4 +1,4 @@
-package com.mimic.monstermod.client.model.item;
+package com.mimic.monstermod.geo.model.item;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.item.weapon.SimpleSwordItem;

@@ -1,4 +1,4 @@
-package com.mimic.monstermod.impl;
+package com.mimic.monstermod.keybind;
 
 import com.mimic.monstermod.MonsterMod;
 import net.minecraft.client.KeyMapping;

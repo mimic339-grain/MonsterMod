@@ -1,7 +1,7 @@
-package com.mimic.monstermod.client.renderer.item;
+package com.mimic.monstermod.geo.renderer.item;
 
 
-import com.mimic.monstermod.client.model.item.SimpleSwordModel;
+import com.mimic.monstermod.geo.model.item.SimpleSwordModel;
 import com.mimic.monstermod.item.weapon.SimpleSwordItem;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 

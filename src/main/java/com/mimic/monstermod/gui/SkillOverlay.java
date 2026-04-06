@@ -1,7 +1,7 @@
 package com.mimic.monstermod.gui;
 
 import com.mimic.monstermod.identity.BaseMonsterIdentity;
-import com.mimic.monstermod.impl.MonsterKeyBindings;
+import com.mimic.monstermod.keybind.MonsterKeyBindings;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
 import com.mimic.monstermod.skill.SkillLeadRegistry;
@@ -58,26 +58,44 @@ public class SkillOverlay {
 
         int currentCd = identity.getCooldown(index);
         int defaultCd = identity.getDefaultCooldown(index);
+
         // --- 1. 枠色の決定 ---
         int frameColor;
-        if (currentCd > defaultCd) {
-            frameColor = 0xFF00AAFF; // 青: アクティブ
-        } else if (currentCd > 0) {
-            frameColor = 0xFFFF0000; // 赤: クールダウン
-        } else {
-            if (lead.category == SkillType.Category.NORMAL && identity.isAnyNormalSkillActive()) {
-                frameColor = 0xFF555555; // 灰: ロック
-            } else {
-                frameColor = 0xFF00FF00; // 緑: OK
+
+        // 【最優先】クールダウン中はカテゴリに関わらず「赤」
+        if (currentCd > 0) {
+            frameColor = 0xFFFF0000;
+        }
+        // 2. CANCELカテゴリ：CD中でなければ「常に緑」
+        else if (lead.category == SkillType.Category.CANCEL) {
+            frameColor = 0xFF00FF00;
+        }
+        // 3. COMBOカテゴリ：コンボ受付中なら「緑」、それ以外は「灰色」
+        else if (lead.category == SkillType.Category.COMBO) {
+            frameColor = identity.isComboWindowActive() ? 0xFF00FF00 : 0xFF444444;
+        }
+        // 4. NORMALカテゴリ：何もしてない or DASH派生受付中なら「緑」、それ以外は「灰色」
+        else if (lead.category == SkillType.Category.NORMAL) {
+            boolean isDashing = false;
+            for (int i = 0; i < skills.length; i++) {
+                SkillLead l = SkillLeadRegistry.getNullable(skills[i]);
+                if (l != null && l.category == SkillType.Category.DASH && identity.getComboWindow(i) > 0) {
+                    isDashing = true;
+                    break;
+                }
             }
+            frameColor = (!identity.isAnySkillActive() || isDashing) ? 0xFF00FF00 : 0xFF555555;
+        }
+        // 5. DASH, UNIQUE, その他：何か一つでもスキルが動いていたら「灰色」、暇なら「緑」
+        else {
+            frameColor = identity.isAnySkillActive() ? 0xFF555555 : 0xFF00FF00;
         }
 
-        // --- 2. 描画 (枠線と背景を独立して描画) ---
-
-        // ★背景を先に描画 (18x18)。半透明グレーでも下に色がないので濁りません
+        // --- 2. 描画処理 (背景・枠・ゲージ) ---
+        // 背景
         gui.fill(x + 1, y + 1, x + 19, y + 19, 0x90101010);
 
-        // ★枠線を「4本の線」として描画。これで背景部分には一切 frameColor が入り込みません
+        // 決定した frameColor で枠を描画
         gui.fill(x, y, x + 20, y + 1, frameColor);             // 上
         gui.fill(x, y + 19, x + 20, y + 20, frameColor);       // 下
         gui.fill(x, y + 1, x + 1, y + 19, frameColor);         // 左
@@ -85,29 +103,20 @@ public class SkillOverlay {
 
         // クールダウンゲージ
         if (currentCd > 0) {
-            // maxTotal を defaultCd (設定された最大リロード時間) のみにする
-            // これで「リロード開始 = ゲージ満タン」から綺麗に減っていくようになります
             float ratio = (float) currentCd / Math.max(1, defaultCd);
             int fillHeight = (int) (18 * ratio);
             gui.fill(x + 1, y + 19 - fillHeight, x + 19, y + 19, 0x44FFFFFF);
         }
 
-        // --- 3. キーラベル ---
+        // --- 3. ラベルと名前 (既存のまま) ---
         String keyLabel = getBindingLabel(index);
         gui.drawCenteredString(font, keyLabel, x + 10, y + 6, 0xFFFFFFFF);
 
-        // --- 4. スキル名の動的スケール ---
         String name = skillId.location().getPath().replace("test_", "").toUpperCase();
         gui.pose().pushPose();
-
-        // 文字数によるスケール判定
         float finalScale = (name.length() >= 6) ? 0.4f : 0.6f;
-
         gui.pose().scale(finalScale, finalScale, finalScale);
-        float nameX = (x + 10) / finalScale;
-        float nameY = (y - 6) / finalScale;
-
-        gui.drawCenteredString(font, name, (int) nameX, (int) nameY, 0xFFCCCCCC);
+        gui.drawCenteredString(font, name, (int)((x + 10) / finalScale), (int)((y - 6) / finalScale), 0xFFCCCCCC);
         gui.pose().popPose();
     }
 

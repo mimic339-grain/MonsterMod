@@ -1,6 +1,7 @@
 package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.effect.EffectRenderManager;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.skill.*;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -20,6 +21,7 @@ public class BaseMonsterIdentity {
     protected final BaseMonsterEntity entity;
     protected int[] abilityCooldowns;
     protected int[] lockCooldowns; // 予兆中フラグ兼タイマー
+    protected int[] comboWindows; // コンボ受付タイマー
     protected com.mimic.monstermod.skill.SkillId[] skillIds = new com.mimic.monstermod.skill.SkillId[0];
     protected int[] defaultCooldowns = new int[0];
 
@@ -27,6 +29,7 @@ public class BaseMonsterIdentity {
         this.entity = entity;
         this.abilityCooldowns = new int[abilityCount];
         this.lockCooldowns = new int[abilityCount];
+        this.comboWindows = new int[abilityCount];
         this.id = entity != null ? entity.getType().toString() : "unknown";
     }
 
@@ -62,6 +65,10 @@ public class BaseMonsterIdentity {
                 lockCooldowns[i]--;
                 continue; // ロック中はリロードを進めない
             }
+            // 2. コンボ受付時間の減算 (新規)
+            if (comboWindows[i] > 0) {
+                comboWindows[i]--;
+            }
 
             // 2. リロード減算
             if (abilityCooldowns[i] > 0) {
@@ -74,15 +81,6 @@ public class BaseMonsterIdentity {
         }
     }
 
-    public boolean isAnyNormalSkillActive() {
-        for (int i = 0; i < skillIds.length; i++) {
-            SkillLead lead = SkillLeadRegistry.getNullable(skillIds[i]);
-            if (lead != null && lead.category == SkillType.Category.NORMAL) {
-                if (lockCooldowns[i] > 0) return true;
-            }
-        }
-        return false;
-    }
 
     public boolean isAnySkillActive() {
         for (int i = 0; i < lockCooldowns.length; i++) {
@@ -90,11 +88,25 @@ public class BaseMonsterIdentity {
         }
         return false;
     }
+// BaseMonsterIdentity クラス内に追加
 
     /**
-     * スキル発動処理の完全版。
-     * EMERGENCY 以外は、他のスキルが動作している間は発動をガードします。
+     * いずれかのスキルのコンボ受付タイマーが動いているか（コンボ可能か）を返す
      */
+    public boolean isComboWindowActive() {
+        for (int window : comboWindows) {
+            if (window > 0) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 特定のインデックスのコンボタイマーを取得（HUD用）
+     */
+    public int getComboWindow(int index) {
+        if (index < 0 || index >= comboWindows.length) return 0;
+        return comboWindows[index];
+    }
     /**
      * スキル発動処理の完全版。
      * NORMALカテゴリのみ、他のスキルが動作している間は発動をガードします。
@@ -106,29 +118,60 @@ public class BaseMonsterIdentity {
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
         if (lead == null) return;
 
-        // CANCELなら他スキルの予兆を強制キャンセル
+        // --- 【修正】 クールダウン中は全スキル（CANCEL含む）発動不可 ---
+        // すべてのスキルの当たり前：CD中はパケットを送らない
+        if (abilityCooldowns[skillIndex] > 0) return;
+        // CANCELなら他スキルの予兆を強制キャンセル//todo そのまま もちろんcooldown中はcancelデモは都度できないからそもそもcooldownならreturnを最優先だろ
+// --- 【修正】 カテゴリ別の発動チェック ---
+        boolean canCast = false;
+
         if (lead.category == SkillType.Category.CANCEL) {
-            for (int i = 0; i < lockCooldowns.length; i++) {
-                lockCooldowns[i] = 0;
-                if (i < defaultCooldowns.length && abilityCooldowns[i] > defaultCooldowns[i]) {
-                    abilityCooldowns[i] = defaultCooldowns[i];
-                }
+            // CANCELは特別：何かが動いていても、予兆中でも(CD中でなければ)発動可能
+            canCast = true;
+        }
+
+        // 2. NORMALスキルのみの制限:dash中なら発動可能　それ以外は重ねるのが不可能　dash中のcombowindowticksのときだけ可能にする６０とかから0になって行くから0の時じゃないなら発動可能でいいのでは　dash→normalは重ねれるようにしたいから　combo→normalは不可能
+
+        //comboの制限　combowindowticksのときだけ発動可能　重ねる感じだからキャンセルではない
+        else if (lead.category == SkillType.Category.COMBO) {
+            // COMBO：いずれかのスキルのcomboWindowが有効な時だけ発動可能
+            for (int window : comboWindows) {
+                if (window > 0) { canCast = true; break; }
             }
         }
-
-        // --- 二重発動・割り込み防止 ---
-        // 1. 自身のスキルが既に実行待ち（クールダウン中、または自分自身の予兆中）なら無視
-        if (lockCooldowns[skillIndex] > 0 || abilityCooldowns[skillIndex] > 0) return;
-
-        // 2. NORMALスキルのみの制限: 他のスキルが何かしら動いているなら、発動を拒否
-        if (lead.category == SkillType.Category.NORMAL && isAnySkillActive()) {
-            return;
+        else if (lead.category == SkillType.Category.NORMAL) {
+            // NORMAL：何も動いていない時、またはDASHのcomboWindow中の時だけ
+            boolean isDashing = false;
+            for (int i = 0; i < skillIds.length; i++) {
+                SkillLead l = SkillLeadRegistry.getNullable(skillIds[i]);
+                if (l != null && l.category == SkillType.Category.DASH && comboWindows[i] > 0) {
+                    isDashing = true;
+                    break;
+                }
+            }
+            // 何も動いていない(isAnySkillActive=false) or DASHからの派生
+            if (!isAnySkillActive() || isDashing) canCast = true;
+        }
+        else {
+            // DASH, UNIQUE：他のスキル発動中は不可
+            if (!isAnySkillActive()) canCast = true;
         }
 
+        if (!canCast) return;
+        // --- 発動確定後の処理 ---
+        // CANCELなら既存のロックをすべて解除（Identity側のロックも消す）
+        if (lead.category == SkillType.Category.CANCEL) {
+            for (int i = 0; i < lockCooldowns.length; i++) lockCooldowns[i] = 0;
+        }
+        //dashもuniqueも重ねて発動が不可能　normal→dash or unique　とかはしてほしくない重ねるのがだめでskillが終わったら発動可能
+        //ここにいれるべきかわからないけどskillが発動ができた場合に限りcombowindowをセットするとかをするのかな
         // --- タイマーセット ---
-        this.lockCooldowns[skillIndex] = lead.totalPreviewTicks;
+        this.lockCooldowns[skillIndex] = lead.skillTicks;
         this.abilityCooldowns[skillIndex] = (skillIndex < defaultCooldowns.length) ? defaultCooldowns[skillIndex] : 60;
+// 【重要】DASHやNORMALが発動した際、コンボ受付時間をセットする
+        this.comboWindows[skillIndex] = lead.comboWindowTicks;
 
+        // パケット送信
         if (player.level().isClientSide()) {
             MathMain math = SkillLeadUtil.buildMath(lead, player.position());
             com.mimic.monstermod.events.PreviewEvents.spawnLocal(player, lead, math);
@@ -194,6 +237,7 @@ public class BaseMonsterIdentity {
         float bodyYaw = Mth.lerp(partialTicks, entity.yBodyRotO, entity.yBodyRot);
         poseStack.pushPose();
         Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(entity).render(entity, bodyYaw, partialTicks, poseStack, buffer, light);
+        EffectRenderManager.renderAll(player, poseStack, buffer, light, partialTicks);//ここにidentity変身したlayerの追加　todo hunter用のidentityに必要
         poseStack.popPose();
     }
 
@@ -208,6 +252,7 @@ public class BaseMonsterIdentity {
         tag.putString("id", id);
         tag.putIntArray("cooldowns", abilityCooldowns);
         tag.putIntArray("lock_cooldowns", lockCooldowns);
+        tag.putIntArray("combo_windows", comboWindows);
         return tag;
     }
 
@@ -219,6 +264,10 @@ public class BaseMonsterIdentity {
         if (tag.contains("lock_cooldowns")) {
             int[] saved = tag.getIntArray("lock_cooldowns");
             for (int i = 0; i < lockCooldowns.length && i < saved.length; i++) lockCooldowns[i] = saved[i];
+        }
+        if (tag.contains("combo_windows")) {
+            int[] saved = tag.getIntArray("combo_windows");
+            for (int i = 0; i < comboWindows.length && i < saved.length; i++) comboWindows[i] = saved[i];
         }
     }
 }
