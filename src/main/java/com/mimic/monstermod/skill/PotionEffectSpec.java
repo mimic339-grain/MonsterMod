@@ -9,9 +9,18 @@ public record PotionEffectSpec(
         int duration,
         int amplifier
 ) {
+
     // 指定対象にポーション効果をパッと付与する
     public void apply(LivingEntity target) {
         if (target == null) return;
-        target.addEffect(new MobEffectInstance(effect, duration, amplifier));
+
+        target.addEffect(new MobEffectInstance(
+                effect,
+                duration,
+                amplifier,
+                false, // ambient
+                false, // visible: これでパーティクルが消える
+                true  // showIcon: これでアイコンが消える
+        ));
     }
 }

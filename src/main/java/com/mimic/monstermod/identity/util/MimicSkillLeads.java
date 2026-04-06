@@ -26,7 +26,7 @@ public final class MimicSkillLeads {
     private static void register2D() {
         SkillLead lead = new SkillLead.Builder(TEST_2D)
                 .shape(MathMain.Shape.CYLINDER)
-                .category(SkillType.Category.NORMAL)
+                .category(SkillType.Category.UNIQUE)
                 .cylinder(8.0f, 2.0f)
                 .followCaster(true)
                 .attackType(SkillType.STRIKE)
@@ -38,7 +38,7 @@ public final class MimicSkillLeads {
     private static void registerBlock() {
         SkillLead lead = new SkillLead.Builder(TEST_BLOCK)
                 .shape(MathMain.Shape.SPHERE)
-                .category(SkillType.Category.NORMAL)
+                .category(SkillType.Category.CANCEL)
                 .sphere(8.0f)
                 .followCaster(true)
                 .attackType(SkillType.STRIKE)
@@ -50,7 +50,7 @@ public final class MimicSkillLeads {
     private static void register3D() {
         SkillLead lead = new SkillLead.Builder(TEST_3D)
                 .shape(MathMain.Shape.SPHERE)
-                .category(SkillType.Category.COMBO)
+                .category(SkillType.Category.NORMAL)
                 .sphere(10.0f)
                 .followCaster(true)
                 .attackType(SkillType.STRIKE)
@@ -60,7 +60,7 @@ public final class MimicSkillLeads {
     }
     private static void registerEmergency() {
         SkillLead lead = new SkillLead.Builder(TEST_EMERGENCY)
-                .category(SkillType.Category.CANCEL)
+                .category(SkillType.Category.COMBO)
                 .canBeCanceled(true)
                 .attackType(SkillType.MOVEMENT)
                 .build();

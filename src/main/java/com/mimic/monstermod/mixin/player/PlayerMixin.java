@@ -3,7 +3,6 @@ package com.mimic.monstermod.mixin.player;
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.mixin.accessor.EntityAccessor;
 import com.mimic.monstermod.variable.CapabilityRegistry;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
@@ -32,22 +31,6 @@ public abstract class PlayerMixin {
         });
     }
 
-    // =================================
-    // 炎エフェクト消去（クライアント側・変身中のみ）
-    // =================================
-    @Inject(method = "tick", at = @At("HEAD"))
-    private void hideFireEffect(CallbackInfo ci) {
-        Entity self = (Entity) (Object) this;
-
-        // クライアント専用処理
-        if (!self.level().isClientSide()) return;
-
-        self.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            if (trans.isTransformed() && self.isOnFire()) {
-                ((EntityAccessor) self).callSetSharedFlag(0, false);
-            }
-        });
-    }
 
     // =================================
     // 目線高さ変更（クライアント側）

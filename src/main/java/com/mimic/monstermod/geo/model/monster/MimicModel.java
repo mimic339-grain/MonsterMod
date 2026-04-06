@@ -1,4 +1,4 @@
-package com.mimic.monstermod.client.model;
+package com.mimic.monstermod.geo.model.monster;
 
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;

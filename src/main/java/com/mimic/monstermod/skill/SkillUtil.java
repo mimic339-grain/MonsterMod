@@ -18,39 +18,40 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class SkillUtil {
     private static final Map<LivingEntity, List<ActiveSkill>> CURRENT_ACTIVE = new ConcurrentHashMap<>();
 
-    /**
-     * スキル実行を試行する。条件に合わない場合は false を返す。
-     */
 
-    /**
-     * スキル実行を試行する。条件に合わない場合は false を返す。
-     * カテゴリに関わらず、EMERGENCY 以外は動作中の割り込みを一切禁止します。
-     */
-    /**
-     * スキル実行を試行する。条件に合わない場合は false を返す。
-     * NORMALカテゴリは動作中の割り込み不可だが、COMBOとEMERGENCYは許可する。
-     */
     public static boolean tryExecute(ServerLevel level, ServerPlayer player, SkillLead lead, MathMain math) {
         List<ActiveSkill> activeList = CURRENT_ACTIVE.computeIfAbsent(player, k -> new CopyOnWriteArrayList<>());
 
-        // 現在カウントダウン中（予兆中）のスキルが1つでもあれば true
-        boolean isAnyActive = activeList.stream().anyMatch(a -> a.ticksLeft > 0);
+        // 現在 UNIQUE スキルが実行中か？
+        boolean isUniqueRunning = activeList.stream().anyMatch(a -> a.lead.category == SkillType.Category.UNIQUE);
+        // 現在「コンボ受付中」のスキルがあるか？
+        boolean hasComboWindow = activeList.stream().anyMatch(a -> a.comboWindowTicks > 0);
 
-        // --- 条件判定 ---
+        boolean canExecute = false;
 
-        // 1. CANCEL: 既存スキルを全てクリアして強制実行
         if (lead.category == SkillType.Category.CANCEL) {
-            System.out.println("[SkillUtil] EMERGENCYキャンセル実行: " + lead.id + " (既存スキル " + activeList.size() + " 件を破棄)");
             activeList.clear();
             rootCaster(player, false, 0);
+            canExecute = true;
         }
-        // 2. NORMAL: すでに何かが動いているなら「割り込み不可」
-        else if (lead.category == SkillType.Category.NORMAL && isAnyActive) {
-            System.out.println("[SkillUtil] 実行拒否: スキル動作中につきNORMALスキルの割り込み不可: " + lead.id);
-            return false;
+        else if (lead.category == SkillType.Category.COMBO) {
+            if (hasComboWindow) {
+                canExecute = true;
+                // 前のスキルの硬直を解除
+                activeList.forEach(a -> a.rootDisabled = true);
+                rootCaster(player, false, 0);
+            }
+        }
+        else if (lead.category == SkillType.Category.NORMAL) {
+            // UNIQUE中ではなく、かつ (何もしていない OR DASH中)
+            boolean isOnlyDashing = activeList.isEmpty() || activeList.stream().allMatch(a -> a.lead.category == SkillType.Category.DASH);
+            if (!isUniqueRunning && isOnlyDashing) canExecute = true;
+        }
+        else { // UNIQUE, DASH
+            if (activeList.isEmpty()) canExecute = true;
         }
 
-        // 3. COMBO: isAnyActive が true でもここを通過する（割り込み許可）
+        if (!canExecute) return false;
 
         // --- 実行登録 ---
         int duration = lead.skillTicks;
@@ -62,7 +63,6 @@ public final class SkillUtil {
         System.out.println("[SkillUtil] スキル登録成功: " + lead.id + " (Category: " + lead.category + ", Ticks: " + duration + ")");
         return true;
     }
-
     public static void tick(ServerLevel level) {
         if (CURRENT_ACTIVE.isEmpty()) return;
 
@@ -76,19 +76,43 @@ public final class SkillUtil {
 
             activeList.removeIf(active -> {
                 active.ticksLeft--;
+                if (active.comboWindowTicks > 0) active.comboWindowTicks--;
 
-                // Root(移動不能)の制御
-                if (active.lead.autoRoot && active.ticksLeft == active.lead.rootTickBeforeDamage) {
-                    rootCaster(caster, true, active.lead.rootTickBeforeDamage);
+                int recoveryStart = active.lead.recoveryTicks;
+                int effectStart = recoveryStart + active.lead.effectTicks;
+                int preRootStart = effectStart + active.lead.beforeRecoverTicks;
+
+                // --- Root制御: !active.rootDisabled が立っている場合のみ rootCaster を呼ぶ ---
+
+                // 1. 前硬直
+                if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == preRootStart) {
+                    rootCaster(caster, true, active.lead.beforeRecoverTicks);
                 }
 
+                // 2. 攻撃開始
+                if (active.ticksLeft == effectStart) {
+                    executeFinalEffect(level, caster, active); // 攻撃はフラグに関係なく必ず出す
+
+                    if (!active.rootDisabled && active.lead.autoRoot) {
+                        if (!active.lead.canMoveDuringEffect) {
+                            rootCaster(caster, true, active.lead.effectTicks);
+                        } else {
+                            rootCaster(caster, false, 0);
+                        }
+                    }
+                }
+
+                // 3. 後隙開始
+                if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == recoveryStart) {
+                    if (active.lead.recoveryTicks > 0) {
+                        rootCaster(caster, true, active.lead.recoveryTicks);
+                    }
+                }
+
+                // 4. 終了
                 if (active.ticksLeft <= 0) {
-                    System.out.println("[SkillUtil/Debug] 予兆完了。エフェクト実行: " + active.lead.id);
-                    executeFinalEffect(level, caster, active);
-
-                    if (active.lead.autoRoot) rootCaster(caster, false, 0);
-
-                    // ★ [修正] ここで identity.startActualCooldown を呼ぶ必要がなくなりました
+                    // コンボされていなければ（通常終了）、最後にRootを解除
+                    if (!active.rootDisabled && active.lead.autoRoot) rootCaster(caster, false, 0);
                     return true;
                 }
                 return false;
@@ -97,7 +121,22 @@ public final class SkillUtil {
             if (activeList.isEmpty()) it.remove();
         }
     }
+    private static final class ActiveSkill {
+        final SkillLead lead;
+        final MathMain math;
+        final SkillEffectSpec spec;
+        int ticksLeft;
+        int comboWindowTicks;
+        boolean rootDisabled = false; // コンボ発動時に true に書き換えられる
 
+        ActiveSkill(SkillLead lead, MathMain math, SkillEffectSpec spec, int ticksLeft) {
+            this.lead = lead;
+            this.math = math;
+            this.spec = spec;
+            this.ticksLeft = ticksLeft;
+            this.comboWindowTicks = lead.comboWindowTicks;
+        }
+    }
     private static void executeFinalEffect(ServerLevel level, LivingEntity caster, ActiveSkill active) {
         // 1. 攻撃系 (STRIKE / TOUCH) の処理
         if (active.lead.skillType == SkillType.STRIKE || active.lead.skillType == SkillType.TOUCH) {
@@ -124,13 +163,4 @@ public final class SkillUtil {
         }
     }
 
-    private static final class ActiveSkill {
-        final SkillLead lead;
-        final MathMain math;
-        final SkillEffectSpec spec;
-        int ticksLeft;
-        ActiveSkill(SkillLead lead, MathMain math, SkillEffectSpec spec, int ticksLeft) {
-            this.lead = lead; this.math = math; this.spec = spec; this.ticksLeft = ticksLeft;
-        }
-    }
 }

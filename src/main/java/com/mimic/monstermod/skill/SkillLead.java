@@ -26,14 +26,17 @@ public final class SkillLead {
     public final boolean canBeCanceled;
 
     /* ===== 挙動 ===== */
-    public final boolean followCaster;
+    public final boolean followCaster;//プレビューがついてくるかどうか
     public final boolean yAnchorToGround;
     public final boolean autoRoot;
-    public final int rootTickBeforeDamage;
+    public final int beforeRecoverTicks;
     public final int totalPreviewTicks;
     public final SkillType skillType;
     public final int effectTicks;
     public final int skillTicks; // 合計時間
+    public final int recoveryTicks;      // 攻撃後の硬直時間
+    public final int comboWindowTicks;   // DASH/NORMAL後にコンボを受け付ける時間 (デフォルト60t = 3s)
+    public final boolean canMoveDuringEffect; // 攻撃発生中に動けるか
     /* ===== 描画フラグ (これらが無いとエラーになるため維持) ===== */
     public final boolean render2D;
     public final boolean render2DOverlay;
@@ -41,7 +44,7 @@ public final class SkillLead {
     public final boolean render3DPreview;
     public final ResourceLocation previewTexture;
 
-    private SkillLead(Builder b) {
+    private SkillLead(Builder b, int total) {
         this.id = b.id;
         this.shape = b.shape;
         this.transform = b.transform;
@@ -65,11 +68,14 @@ public final class SkillLead {
         this.followCaster = b.followCaster;
         this.yAnchorToGround = b.yAnchorToGround;
         this.autoRoot = b.autoRoot;
-        this.rootTickBeforeDamage = b.rootTickBeforeDamage;
+        this.beforeRecoverTicks = b.beforeRecoverTicks;
         this.totalPreviewTicks = b.totalPreviewTicks;
         this.skillType = b.skillType;
         this.effectTicks = b.effectTicks;
-        this.skillTicks = b.totalPreviewTicks + b.effectTicks;
+        this.skillTicks = total;
+        this.recoveryTicks = b.recoveryTicks;
+        this.comboWindowTicks = b.comboWindowTicks;
+        this.canMoveDuringEffect = b.canMoveDuringEffect;
 
         this.render2D = b.render2D;
         this.render2DOverlay = b.render2DOverlay;
@@ -101,13 +107,15 @@ public final class SkillLead {
         private boolean canBeCanceled = false;//緊急回避用
 
         private boolean autoRoot = true;//硬直あるかどうか
-        private int rootTickBeforeDamage = 10;//硬直時間
+        private int beforeRecoverTicks = 10;//硬直時間
         private int totalPreviewTicks = 60;//デフォルト３秒間プレビュー　プレビューそう時間
         private boolean followCaster = false;//
         private boolean yAnchorToGround = false;
         private SkillType skillType = SkillType.NONE;
         private int effectTicks = 1;
-
+        private int recoveryTicks =30; // デフォルト1.5秒
+        private int comboWindowTicks = 60;//コンボ猶予時間 3秒
+        private boolean canMoveDuringEffect = false; // デフォルトは動けない
 
         private boolean render2D = false;
         private boolean render2DOverlay = false;
@@ -173,9 +181,13 @@ public final class SkillLead {
         public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }
         public Builder attackType(SkillType t) { this.skillType = t; return this; }
         public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
-        public Builder rootTickBeforeDamage(int t) { this.rootTickBeforeDamage = t; return this; }
+        public Builder rootTickBeforeDamage(int t) { this.beforeRecoverTicks = t; return this; }
         public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
         public Builder effectTicks(int t) { this.effectTicks = t; return this; }
+        public Builder recoveryTicks(int t) { this.recoveryTicks = t; return this; }
+        public Builder comboWindowTicks(int t) { this.comboWindowTicks = t; return this; }
+        public Builder canMoveDuringEffect(boolean v) {this.canMoveDuringEffect = v;return this;}
+
         /* ===== 描画フラグ (エラー回避のために復活) ===== */
         public Builder render2D() { this.render2D = true; return this; }
         public Builder render2DOverlay() { this.render2DOverlay = true; return this; }
@@ -201,19 +213,41 @@ public final class SkillLead {
                 this.renderBlock2D = false;
                 this.render3DPreview = false;
             }
-
-            // 2. 回避・移動スキルなら「溜め」と「硬直」を自動で消す
-            if (this.skillType == SkillType.MOVEMENT) {
+            // 自動設定ロジック
+            if (this.effectTicks <= 1) {
+                this.canMoveDuringEffect = false; // 1tickなら動く暇がないので強制false
+            }
+            //dashは仕様として移動専用なのでプレビュはない
+            if (this.category == SkillType.Category.DASH) {
                 this.totalPreviewTicks = 0;
-                this.effectTicks = 0;
-                this.autoRoot = false;
+            }
+            //comboは前硬直はない
+            if (this.category == SkillType.Category.COMBO) {
+                this.beforeRecoverTicks = 0; // 攻撃前硬直なし（即座に発動）
+            }
+            //uniqueはcombowindowticksはない
+            if (this.category == SkillType.Category.UNIQUE) {
+                this.comboWindowTicks= 0;
+            }
+            //cancelはコンボを繋げないし
+            if (this.category == SkillType.Category.CANCEL) {
+                this.comboWindowTicks= 0;
+                this.canBeCanceled = false; // キャンセルスキルをさらにキャンセルはできない
                 this.render2D = false;
                 this.renderBlock2D = false;
                 this.render3DPreview = false;
             }
-
+            // 2. 合計時間を計算
+            int total = this.totalPreviewTicks + this.effectTicks + this.recoveryTicks;
+            // 3. 合計時間に基づいた設定 (NORMALのコンボ猶予など)
+            if (this.category == SkillType.Category.NORMAL) {
+                this.comboWindowTicks = total;
+            }
+            if (this.category == SkillType.Category.COMBO) {
+                this.comboWindowTicks = total;
+            }
             mathBuilder.origin(net.minecraft.world.phys.Vec3.ZERO);
-            return new SkillLead(this);
+            return new SkillLead(this, total);
         }
     }
 }

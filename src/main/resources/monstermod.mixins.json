@@ -14,6 +14,7 @@
     "player.HeldItemLayerHunterMixin",
     "player.InventoryMenuMixin",
     "player.PlayerAttackMixin",
+    "player.EntityMixin",
     "player.AttackIndicatorMixin",
     "accessor.EntityAccessor",
     "accessor.AbstractContainerMenuAccessor"

@@ -1,6 +1,6 @@
 package com.mimic.monstermod.item.weapon;
 
-import com.mimic.monstermod.client.renderer.item.SimpleSwordRenderer;
+import com.mimic.monstermod.geo.renderer.item.SimpleSwordRenderer;
 import com.mimic.monstermod.weapon.WeaponCategory;
 import net.minecraft.world.item.Item;
 import software.bernie.geckolib.renderer.GeoItemRenderer;

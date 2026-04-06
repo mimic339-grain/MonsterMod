@@ -1,7 +1,7 @@
-package com.mimic.monstermod.client.renderer;
+package com.mimic.monstermod.geo.renderer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mimic.monstermod.client.model.MimicModel;
+import com.mimic.monstermod.geo.model.monster.MimicModel;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;

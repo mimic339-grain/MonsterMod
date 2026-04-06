@@ -1,4 +1,4 @@
-package com.mimic.monstermod.identity.impl;
+package com.mimic.monstermod.identity.monster;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;

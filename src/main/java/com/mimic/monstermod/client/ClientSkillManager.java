@@ -1,6 +1,7 @@
 package com.mimic.monstermod.client;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.effect.EffectClientVariables;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -31,13 +32,17 @@ public final class ClientSkillManager {
         }
     }
 
+    // ClientSkillManager.java の onInputUpdate を修正
     @SubscribeEvent
     public static void onInputUpdate(MovementInputUpdateEvent event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // ROOT_MAPにデータが存在する間は入力をキャンセルし続ける
-        if (ROOT_MAP.containsKey(mc.player.getUUID())) {
+        // スキル硬直(ROOT) または デバフ(BIND) のどちらかがあれば入力を遮断
+        boolean isRooted = ROOT_MAP.containsKey(mc.player.getUUID());
+        boolean isBinded = EffectClientVariables.isBinded;
+
+        if (isRooted || isBinded) {
             var input = event.getInput();
             input.leftImpulse = 0;
             input.forwardImpulse = 0;
@@ -46,16 +51,20 @@ public final class ClientSkillManager {
         }
     }
 
+    // onClientTick も同様に修正
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.START) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || ROOT_MAP.isEmpty()) return;
+        if (mc.player == null) return;
 
-        if (ROOT_MAP.containsKey(mc.player.getUUID())) {
-            // Y軸（重力）は維持しつつ、XZ軸の慣性だけを完全に殺す
+        boolean isRooted = ROOT_MAP.containsKey(mc.player.getUUID());
+        boolean isBinded = EffectClientVariables.isBinded;
+
+        if (isRooted || isBinded) {
             Vec3 current = mc.player.getDeltaMovement();
+            // 慣性を殺してその場に固定（重力yは維持）
             mc.player.setDeltaMovement(0, current.y, 0);
         }
     }

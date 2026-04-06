@@ -2,7 +2,7 @@ package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.entity.BaseMonsterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
-import com.mimic.monstermod.identity.impl.MimicIdentity;
+import com.mimic.monstermod.identity.monster.MimicIdentity;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
