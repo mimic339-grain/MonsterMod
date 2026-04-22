@@ -2,7 +2,7 @@ package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.Math.MathMain;
 import com.mimic.monstermod.effect.EffectRenderManager;
-import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.entity.BaseEntity;
 import com.mimic.monstermod.skill.*;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -14,27 +14,33 @@ import net.minecraft.world.entity.player.Player;
 
 import javax.annotation.Nullable;
 
-public class BaseMonsterIdentity {
-
+public class BaseIdentity {
     protected final String id;
     @Nullable
-    protected final BaseMonsterEntity entity;
-    protected int[] abilityCooldowns;
-    protected int[] lockCooldowns; // 予兆中フラグ兼タイマー
-    protected int[] comboWindows; // コンボ受付タイマー
-    protected com.mimic.monstermod.skill.SkillId[] skillIds = new com.mimic.monstermod.skill.SkillId[0];
-    protected int[] defaultCooldowns = new int[0];
+    protected final BaseEntity entity;
 
-    public BaseMonsterIdentity(@Nullable BaseMonsterEntity entity, int abilityCount) {
+    // フィールドでの "= new ...[0]" をすべて削除し、宣言のみにする
+    protected int[] abilityCooldowns;
+    protected int[] lockCooldowns;
+    protected int[] comboWindows;
+    protected com.mimic.monstermod.skill.SkillId[] skillIds;
+    protected int[] defaultCooldowns;
+
+    public BaseIdentity(@Nullable BaseEntity entity, int abilityCount) {
         this.entity = entity;
+        this.id = entity != null ? entity.getType().toString() : "unknown";
+
+        // 全ての配列をここで確実に abilityCount の数だけ確保する
         this.abilityCooldowns = new int[abilityCount];
         this.lockCooldowns = new int[abilityCount];
         this.comboWindows = new int[abilityCount];
-        this.id = entity != null ? entity.getType().toString() : "unknown";
+        this.skillIds = new com.mimic.monstermod.skill.SkillId[abilityCount];
+        this.defaultCooldowns = new int[abilityCount];
     }
 
+
     public String getId() { return id; }
-    @Nullable public BaseMonsterEntity getEntity() { return entity; }
+    @Nullable public BaseEntity getEntity() { return entity; }
     public SkillId[] getSkillIds() { return this.skillIds; }
 
     /**
@@ -44,7 +50,39 @@ public class BaseMonsterIdentity {
         if (index < 0 || index >= lockCooldowns.length) return false;
         return lockCooldowns[index] > 0;
     }
+    public int getLockTime(int index) {
+        if (index < 0 || index >= lockCooldowns.length) return 0;
+        return lockCooldowns[index];
+    }
+    //HUD用のeffecttick中の青色枠表示 todo あっていない　スキル発動中のeffecttick期間中のみ青色にみせるようにするもの　この計算ではあっていない　またeffecttickが1だと青色にする処理をなくす1tickだけ青色とかわからなすぎるからいらない
+    public boolean isEffectActive(int index) {
+        if (index < 0 || index >= this.skillIds.length) return false;
 
+        int lockTime = lockCooldowns[index]; // 現在の残り時間
+        if (lockTime <= 0) return false;
+
+        SkillId skillId = this.skillIds[index];
+        if (skillId == null) return false;
+
+        SkillLead lead = SkillLeadRegistry.getNullable(skillId);
+        if (lead == null) return false;
+
+        // 1tickだけのスキルは青枠にしない
+        if (lead.effectTicks <= 1) return false;
+
+        // --- タイムラインの再計算 ---
+        // lockTime は total(全時間) から始まって 0 に向かって減っていく。
+        // [全時間] = [予兆(totalPreviewTicks)] + [効果(effectTicks)] + [後隙(recoveryTicks)] + 1
+
+        // 青く光らせたいのは「予兆が終わった瞬間」から「後隙が始まるまで」
+        int effectEnd = lead.recoveryTicks + 1;              // ここまで減ったら青終わり
+        int effectStart = effectEnd + lead.effectTicks;      // ここから青開始
+
+        // 例：予兆60t, 効果20t, 後隙30t の場合
+        // 111t(開始) -> 51t(予兆終了・効果開始) -> 31t(効果終了・後隙開始) -> 0
+        // この場合、51 >= lockTime > 31 の間だけ true になる
+        return lockTime <= effectStart && lockTime > effectEnd;
+    }
     public void tickServer(Player player) {
         updateCooldowns(player, "サーバー");
         copyFromPlayerServer(player);
@@ -88,8 +126,6 @@ public class BaseMonsterIdentity {
         }
         return false;
     }
-// BaseMonsterIdentity クラス内に追加
-
     /**
      * いずれかのスキルのコンボ受付タイマーが動いているか（コンボ可能か）を返す
      */
@@ -107,11 +143,7 @@ public class BaseMonsterIdentity {
         if (index < 0 || index >= comboWindows.length) return 0;
         return comboWindows[index];
     }
-    /**
-     * スキル発動処理の完全版。
-     * NORMALカテゴリのみ、他のスキルが動作している間は発動をガードします。
-     * COMBO と CANCELは動作中でも発動可能です。
-     */
+
     public void handleAbility(Player player, int skillIndex) {
         if (skillIndex < 0 || skillIndex >= skillIds.length) return;
         SkillId skillId = skillIds[skillIndex];
@@ -121,24 +153,19 @@ public class BaseMonsterIdentity {
         // --- 【修正】 クールダウン中は全スキル（CANCEL含む）発動不可 ---
         // すべてのスキルの当たり前：CD中はパケットを送らない
         if (abilityCooldowns[skillIndex] > 0) return;
-        // CANCELなら他スキルの予兆を強制キャンセル//todo そのまま もちろんcooldown中はcancelデモは都度できないからそもそもcooldownならreturnを最優先だろ
-// --- 【修正】 カテゴリ別の発動チェック ---
+
         boolean canCast = false;
 
         if (lead.category == SkillType.Category.CANCEL) {
-            // CANCELは特別：何かが動いていても、予兆中でも(CD中でなければ)発動可能
             canCast = true;
         }
 
-        // 2. NORMALスキルのみの制限:dash中なら発動可能　それ以外は重ねるのが不可能　dash中のcombowindowticksのときだけ可能にする６０とかから0になって行くから0の時じゃないなら発動可能でいいのでは　dash→normalは重ねれるようにしたいから　combo→normalは不可能
-
-        //comboの制限　combowindowticksのときだけ発動可能　重ねる感じだからキャンセルではない
         else if (lead.category == SkillType.Category.COMBO) {
-            // COMBO：いずれかのスキルのcomboWindowが有効な時だけ発動可能
             for (int window : comboWindows) {
                 if (window > 0) { canCast = true; break; }
             }
         }
+
         else if (lead.category == SkillType.Category.NORMAL) {
             // NORMAL：何も動いていない時、またはDASHのcomboWindow中の時だけ
             boolean isDashing = false;

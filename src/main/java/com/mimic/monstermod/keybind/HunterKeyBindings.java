@@ -1,7 +1,6 @@
 package com.mimic.monstermod.keybind;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -11,62 +10,42 @@ import org.lwjgl.glfw.GLFW;
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class HunterKeyBindings {
 
-    public static final String KEY_CATEGORY_HUNTER =
-            "key.category." + MonsterMod.MOD_ID + ".hunter";
+    public static final String KEY_CATEGORY_HUNTER = "key.category." + MonsterMod.MOD_ID + ".hunter";
 
-    // ===========================
-    // Skill1 / Skill2 / Skill3
-    // ===========================
     public static final KeyMapping[] SKILL_KEYS = new KeyMapping[3];
-
-    // ===========================
-    // Dodge / Sheath
-    // ===========================
     public static KeyMapping DODGE_KEY;
     public static KeyMapping SHEATH_KEY;
 
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        // --- Skill Keys ---
+        // デフォルトをあえて UNKNOWN にすれば「最初は何も設定されていない」状態にできます
+        // マウスのサイドボタンは GLFW.GLFW_MOUSE_BUTTON_4 や 5 です
 
-        // ---------------------------
-        // Skill keys
-        // ---------------------------
-        int[] skillKeyCodes = {
-                GLFW.GLFW_KEY_R, // Skill1
-                GLFW.GLFW_KEY_T, // Skill2
-                GLFW.GLFW_KEY_Y  // Skill3
-        };
+        SKILL_KEYS[0] = createKey("hunter_skill_1", GLFW.GLFW_KEY_R);
+        SKILL_KEYS[1] = createKey("hunter_skill_2", GLFW.GLFW_KEY_T);
+        SKILL_KEYS[2] = createKey("hunter_skill_3", GLFW.GLFW_KEY_Y);
 
-        for (int i = 0; i < 3; i++) {
-            SKILL_KEYS[i] = new KeyMapping(
-                    "key." + MonsterMod.MOD_ID + ".hunter_skill_" + (i + 1),
-                    InputConstants.Type.KEYSYM,
-                    skillKeyCodes[i],
-                    KEY_CATEGORY_HUNTER
-            );
-            event.register(SKILL_KEYS[i]);
-        }
+        // --- Dodge ---
+        DODGE_KEY = createKey("hunter_dodge", GLFW.GLFW_KEY_L);
 
-        // ---------------------------
-        // Dodge
-        // ---------------------------
-        DODGE_KEY = new KeyMapping(
-                "key." + MonsterMod.MOD_ID + ".hunter_dodge",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_L,
-                KEY_CATEGORY_HUNTER
-        );
+        // --- Sheath ---
+        SHEATH_KEY = createKey("hunter_sheath", GLFW.GLFW_KEY_Q);
+
+        // まとめて登録
+        for (KeyMapping key : SKILL_KEYS) event.register(key);
         event.register(DODGE_KEY);
+        event.register(SHEATH_KEY);
+    }
 
-        // ---------------------------
-        // Sheath
-        // ---------------------------
-        SHEATH_KEY = new KeyMapping(
-                "key." + MonsterMod.MOD_ID + ".hunter_sheath",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_Q,
+    private static KeyMapping createKey(String name, int defaultKey) {
+        // InputConstants.Type.MOUSE ならマウス専用になりますが、
+        // バニラの KeyMapping は賢いので、デフォルトがキーボードでも
+        // 設定画面でマウスボタンを押せば自動的にマウスボタンとして保存されます。
+        return new KeyMapping(
+                "key." + MonsterMod.MOD_ID + "." + name,
+                defaultKey, // 初期キー
                 KEY_CATEGORY_HUNTER
         );
-        event.register(SHEATH_KEY);
     }
 }

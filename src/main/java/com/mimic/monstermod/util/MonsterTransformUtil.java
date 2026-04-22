@@ -2,9 +2,9 @@ package com.mimic.monstermod.util;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.capability.MonsterTransformation;
-import com.mimic.monstermod.entity.BaseMonsterEntity;
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
-import com.mimic.monstermod.identity.IdentityType;
+import com.mimic.monstermod.entity.BaseEntity;
+import com.mimic.monstermod.identity.BaseIdentity;
+import com.mimic.monstermod.init.IdentityType;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
@@ -60,7 +60,7 @@ public class MonsterTransformUtil {
     public static double getIdentityMaxHP(Player player) {
         MonsterTransformation transformation = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
         if (transformation != null && transformation.getEntity() != null) {
-            BaseMonsterEntity entity = transformation.getEntity();
+            BaseEntity entity = transformation.getEntity();
             if (entity.getAttribute(Attributes.MAX_HEALTH) != null) {
                 return entity.getAttributeValue(Attributes.MAX_HEALTH);
             }
@@ -71,7 +71,7 @@ public class MonsterTransformUtil {
     // ================================
     // Attribute コピー / リセット
     // ================================
-    public static void copyAttributesToDEV(LivingEntity dev, BaseMonsterEntity identityEntity) {
+    public static void copyAttributesToDEV(LivingEntity dev, BaseEntity identityEntity) {
         if (identityEntity == null || dev == null) return;
 
         setAttribute(dev, Attributes.MAX_HEALTH, identityEntity.getAttributeValue(Attributes.MAX_HEALTH));
@@ -159,9 +159,9 @@ public class MonsterTransformUtil {
         // IdentityType の全 ID をループ
         for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
             // Entity は null でも生成可能
-            BaseMonsterIdentity identity = IdentityType.createIdentity(id, null);
+            BaseIdentity identity = IdentityType.createIdentity(id, null);
             if (identity != null) {
-                BaseMonsterEntity entity = identity.getEntity();
+                BaseEntity entity = identity.getEntity();
                 if (entity != null && entity.getAttribute(Attributes.MAX_HEALTH) != null) {
                     double maxHP = entity.getAttributeValue(Attributes.MAX_HEALTH);
                     updatedMap.put(id.toString(), maxHP);
@@ -181,7 +181,7 @@ public class MonsterTransformUtil {
 
         // 変身中 → Identity 属性を保存
         if (transformation != null && transformation.isTransformed() && transformation.getEntity() != null) {
-            BaseMonsterEntity id = transformation.getEntity();
+            BaseEntity id = transformation.getEntity();
 
             tag.putDouble("attr_max_health", id.getAttributeValue(Attributes.MAX_HEALTH));
             tag.putDouble("attr_attack", id.getAttributeValue(Attributes.ATTACK_DAMAGE));

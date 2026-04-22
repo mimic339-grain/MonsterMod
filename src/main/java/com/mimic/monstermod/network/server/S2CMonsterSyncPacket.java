@@ -1,7 +1,6 @@
 package com.mimic.monstermod.network.server;
 
-import com.mimic.monstermod.entity.BaseMonsterEntity;
-import com.mimic.monstermod.network.ModMessages;
+import com.mimic.monstermod.entity.BaseEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
@@ -44,21 +43,19 @@ public class S2CMonsterSyncPacket {
             if (mc.level == null) return;
 
             Entity entity = mc.level.getEntity(msg.entityId);
-            if (!(entity instanceof BaseMonsterEntity monster)) return;
+            // IMonsterData ではなく、新しくなった BaseEntity にキャスト
+            if (!(entity instanceof BaseEntity monster)) return;
 
+            // アニメーションの同期
             if (msg.animation != null && !msg.animation.isEmpty()) {
                 monster.setCurrentAnimation(msg.animation);
             }
 
-            if (msg.skill != null && !msg.skill.isEmpty() && monster.getMonsterData() != null) {
-                monster.getMonsterData().setSkill(msg.skill);
-            }
+            // スキルの同期 (IMonsterDataを使わず BaseEntity のメソッドを直接呼ぶ)
+            // msg.skill が空文字や null の場合も考慮して、そのままセットしてOK
+            monster.setCurrentSkill(msg.skill);
         });
 
         ctx.get().setPacketHandled(true);
-    }
-
-    public void sendToPlayer(net.minecraft.server.level.ServerPlayer player) {
-        ModMessages.sendToPlayer(this, player);
     }
 }

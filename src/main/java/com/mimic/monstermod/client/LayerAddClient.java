@@ -1,8 +1,7 @@
-package com.mimic.monstermod.entity;
+package com.mimic.monstermod.client;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.layer.VanillaChainLayer;
-import com.mimic.monstermod.geo.renderer.MimicRenderer;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.world.entity.LivingEntity;
@@ -12,12 +11,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public class ClientRenderRegister {
-
-    @SubscribeEvent
-    public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(ModEntitieType.MIMIC.get(), MimicRenderer::new);
-    }
+public class LayerAddClient {
 
     @SubscribeEvent
     public static void addLayers(EntityRenderersEvent.AddLayers event) {

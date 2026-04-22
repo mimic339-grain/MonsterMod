@@ -12,10 +12,10 @@
     "player.EntityRenderDispatcherMixin",
     "player.ForgeGuiMixin",
     "player.HeldItemLayerHunterMixin",
-    "player.InventoryMenuMixin",
-    "player.PlayerAttackMixin",
+    "player.AbstractContainerScreenMixin",
     "player.EntityMixin",
     "player.AttackIndicatorMixin",
+    "player.MixinFoodData",
     "accessor.EntityAccessor",
     "accessor.AbstractContainerMenuAccessor"
   ],

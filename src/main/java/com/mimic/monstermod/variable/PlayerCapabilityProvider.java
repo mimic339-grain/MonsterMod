@@ -1,6 +1,5 @@
 package com.mimic.monstermod.variable;
 
-import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.variable.entity.IPlayerData;
 import com.mimic.monstermod.variable.entity.PlayerCap;
 import net.minecraft.core.Direction;
@@ -8,12 +7,14 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.util.LazyOptional;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-public class PlayerCapabilityProvider implements ICapabilityProvider {
+public class PlayerCapabilityProvider implements ICapabilitySerializable<CompoundTag> {
 
-    public static final ResourceLocation ID = new ResourceLocation(MonsterMod.MOD_ID, "player_cap");
+    public static final ResourceLocation ID = new ResourceLocation("monstermod", "player_cap");
 
     private final PlayerCap backend;
     private final LazyOptional<IPlayerData> optional;
@@ -24,21 +25,17 @@ public class PlayerCapabilityProvider implements ICapabilityProvider {
     }
 
     @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> cap, Direction side) {
-        if (cap == null) return LazyOptional.empty();
+    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side) {
         return cap == CapabilityRegistry.PLAYER_CAPABILITY ? optional.cast() : LazyOptional.empty();
     }
 
+    @Override
     public CompoundTag serializeNBT() {
         return backend.serializeNBT();
     }
 
+    @Override
     public void deserializeNBT(CompoundTag nbt) {
         backend.deserializeNBT(nbt);
-    }
-
-    /** 安全に破棄 */
-    public void invalidate() {
-        optional.invalidate();
     }
 }

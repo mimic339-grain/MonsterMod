@@ -44,11 +44,12 @@ public class ModMessages {
         registerMessage(C2S_SkillCastRequestPacket.class, C2S_SkillCastRequestPacket::encode, C2S_SkillCastRequestPacket::decode,C2S_SkillCastRequestPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SMonsterInputPacket.class, C2SMonsterInputPacket::encode, C2SMonsterInputPacket::decode, C2SMonsterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
-        registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
+        registerMessage( C2S_SetHunterSkillPacket.class,  C2S_SetHunterSkillPacket::toBytes,  C2S_SetHunterSkillPacket::new,  C2S_SetHunterSkillPacket::handle,NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(C2SMonsterInputPacket.class, C2SMonsterInputPacket::encode, C2SMonsterInputPacket::decode, C2SMonsterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SpawnSkillLeadPacket.class, S2C_SpawnSkillLeadPacket::encode, S2C_SpawnSkillLeadPacket::decode, S2C_SpawnSkillLeadPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayAnimationPacket.class, S2CPlayAnimationPacket::encode, S2CPlayAnimationPacket::decode, S2CPlayAnimationPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2CMonsterCapSyncPacket.class, S2CMonsterCapSyncPacket::toBytes, S2CMonsterCapSyncPacket::new, S2CMonsterCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+
         registerMessage(S2CTransformSyncPacket.class, S2CTransformSyncPacket::encode, S2CTransformSyncPacket::decode, S2CTransformSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CHunterSyncPacket.class, S2CHunterSyncPacket::encode, S2CHunterSyncPacket::decode, S2CHunterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
@@ -57,6 +58,8 @@ public class ModMessages {
         registerMessage(S2C_PlayerRootPacket.class, S2C_PlayerRootPacket::encode, S2C_PlayerRootPacket::decode, S2C_PlayerRootPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SetEntityBindPacket.class, S2C_SetEntityBindPacket::encode, S2C_SetEntityBindPacket::decode, S2C_SetEntityBindPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
+
+
     // ----------------------------
     // 共通メソッドで1行登録
     // ----------------------------

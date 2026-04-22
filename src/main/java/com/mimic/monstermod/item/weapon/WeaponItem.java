@@ -67,16 +67,14 @@ public abstract class WeaponItem extends Item implements GeoItem {
     }
 
     @Override
-    public InteractionResultHolder<ItemStack> use(
-            Level level,
-            Player player,
-            InteractionHand hand
-    ) {
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack held = player.getItemInHand(hand);
-        if (held.isEmpty()) return InteractionResultHolder.pass(held);
 
-        if (!level.isClientSide) {
-            ModMessages.sendToServer(new C2S_SetWeaponSlotPacket(held));
+        // サーバー側では「手に持っている武器」を直接参照するので、
+        // パケットの引数から (held) を削除します。
+        if (level.isClientSide) {
+            // ★ 引数を削除して空にします
+            ModMessages.sendToServer(new C2S_SetWeaponSlotPacket());
         }
 
         return InteractionResultHolder.sidedSuccess(held, level.isClientSide());

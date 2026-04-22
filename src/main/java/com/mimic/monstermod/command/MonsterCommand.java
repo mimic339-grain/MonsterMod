@@ -1,7 +1,7 @@
 package com.mimic.monstermod.command;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.identity.IdentityType;
+import com.mimic.monstermod.init.IdentityType;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.CommandSourceStack;
@@ -49,6 +49,7 @@ public class MonsterCommand {
                         )
         );
     }
+
 
     private static int transformPlayer(CommandSourceStack source,
                                        ServerPlayer targetPlayer,

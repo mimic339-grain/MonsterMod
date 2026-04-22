@@ -1,4 +1,4 @@
-package com.mimic.monstermod.item;
+package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.item.weapon.SimpleSwordItem;

@@ -1,6 +1,5 @@
 package com.mimic.monstermod.skill;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,13 +24,6 @@ public final class SkillLeadRegistry {
         REGISTRY.put(id, lead);
     }
 
-    /* Server 用取得（未登録は例外） */
-    public static SkillLead getStrict(SkillId id) {
-        SkillLead lead = REGISTRY.get(id);
-        if (lead == null) throw new IllegalStateException("SkillLead not registered: " + id);
-        return lead;
-    }
-
     /* Client 用取得（未登録は null） */
     public static SkillLead getNullable(SkillId id) {
         return REGISTRY.get(id);
@@ -39,15 +31,5 @@ public final class SkillLeadRegistry {
 
     public static boolean contains(SkillId id) {
         return REGISTRY.containsKey(id);
-    }
-
-    public static Map<SkillId, SkillLead> getAll() {
-        return Collections.unmodifiableMap(REGISTRY);
-    }
-
-    public static void validateNotEmpty() {
-        if (REGISTRY.isEmpty()) throw new IllegalStateException(
-                "SkillLeadRegistry is empty. Did you forget to register SkillLeads?"
-        );
     }
 }

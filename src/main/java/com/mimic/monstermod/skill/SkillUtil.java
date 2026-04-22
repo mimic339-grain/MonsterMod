@@ -75,43 +75,60 @@ public final class SkillUtil {
             if (caster.level() != level) continue;
 
             activeList.removeIf(active -> {
+                // --- タイムラインの考え方 ---
+                // [登録時(skillTicks)] -> [プレビュー] -> [前硬直開始] -> [効果発生(effectStart)] -> [後隙開始(recoveryStart)] -> [終了(0)]
+
+                // 1 tick 減算
+                // 重要: プレビュー 0 の場合、登録時の ticksLeft は (0 + effect + recovery) となる。
+                // 登録直後の最初の tick でここを通ると、ticksLeft は (effect + recovery) と一致し、即座に executeFinalEffect が呼ばれる。
                 active.ticksLeft--;
-                if (active.comboWindowTicks > 0) active.comboWindowTicks--;
 
                 int recoveryStart = active.lead.recoveryTicks;
                 int effectStart = recoveryStart + active.lead.effectTicks;
-                int preRootStart = effectStart + active.lead.beforeRecoverTicks;
+                int beforeRootStart = effectStart + active.lead.beforeRecoverTicks;
 
-                // --- Root制御: !active.rootDisabled が立っている場合のみ rootCaster を呼ぶ ---
-
-                // 1. 前硬直
-                if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == preRootStart) {
+                // 1. 前硬直 (予兆の終盤に差し掛かったタイミング)
+                // beforeRecoverTicks が 10 なら、効果発生の 10tick 前に root をかける
+                if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == beforeRootStart) {
                     rootCaster(caster, true, active.lead.beforeRecoverTicks);
                 }
 
-                // 2. 攻撃開始
+                // 2. 攻撃・効果発生 (プレビュー期間が終了した瞬間)
+                // プレビュー 0 のスキルは、この判定を「登録から 1tick 目」で通過する
                 if (active.ticksLeft == effectStart) {
-                    executeFinalEffect(level, caster, active); // 攻撃はフラグに関係なく必ず出す
+                    executeFinalEffect(level, caster, active);
 
                     if (!active.rootDisabled && active.lead.autoRoot) {
+                        // 効果時間中(effectTicks)の移動可否を判定
                         if (!active.lead.canMoveDuringEffect) {
                             rootCaster(caster, true, active.lead.effectTicks);
                         } else {
+                            // 動ける場合は root を解除（上書き）
                             rootCaster(caster, false, 0);
                         }
                     }
                 }
-
-                // 3. 後隙開始
+// 2.5 【追加】効果時間の終了判定 (ActiveTicks が終わった瞬間)
+                // recoveryStart (後隙開始) と同じタイミングが「効果終了」の瞬間です
+                if (active.ticksLeft == recoveryStart) {
+                    if (caster instanceof ServerPlayer sp) {
+                        com.mimic.monstermod.skill.hunter.HunterSkill hunterSkill =
+                                com.mimic.monstermod.skill.hunter.HunterSkillRegistry.get(active.lead.skillId());
+                        if (hunterSkill != null) {
+                            hunterSkill.onEffectEnd(sp); // ここで飛行解除や無敵解除を行う
+                            System.out.println("[SkillUtil/Debug] 効果終了(onEffectEnd): " + active.lead.id);
+                        }
+                    }
+                }
+                // 3. 後隙開始 (効果時間が終了し、recovery 期間に入る瞬間)
                 if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == recoveryStart) {
                     if (active.lead.recoveryTicks > 0) {
                         rootCaster(caster, true, active.lead.recoveryTicks);
                     }
                 }
 
-                // 4. 終了
+                // 4. 全行程終了
                 if (active.ticksLeft <= 0) {
-                    // コンボされていなければ（通常終了）、最後にRootを解除
                     if (!active.rootDisabled && active.lead.autoRoot) rootCaster(caster, false, 0);
                     return true;
                 }
@@ -148,12 +165,20 @@ public final class SkillUtil {
             }
         }
 
-        // ★ 2. 移動・特殊系 (MOVEMENT) の処理を追加！
-        // これがないと、回避ワープが実行されません。
+        // 2. 移動・特殊系 (MOVEMENT) の処理
         else if (active.lead.skillType == SkillType.MOVEMENT) {
             System.out.println("[SkillUtil/Debug] 特殊効果(MOVEMENT)実行: " + active.lead.id);
-            // ターゲットなし(null)で実行することで、applyToCaster が呼ばれる
+            // JSON側のEffectSpecを実行
             active.spec.apply(caster, null);
+
+            // ★【追加】HunterSkill クラスの applyEffect (Javaコード側) を実行
+            if (caster instanceof ServerPlayer sp) {
+                com.mimic.monstermod.skill.hunter.HunterSkill hunterSkill =
+                        com.mimic.monstermod.skill.hunter.HunterSkillRegistry.get(active.lead.skillId());
+                if (hunterSkill != null) {
+                    hunterSkill.applyEffect(sp);
+                }
+            }
         }
     }
 

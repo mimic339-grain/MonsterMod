@@ -13,20 +13,23 @@ public final class CommonTickEvents {
 
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        // ENDフェーズで処理（移動などが確定した後）
         if (event.phase != TickEvent.Phase.END) return;
-
         Player player = event.player;
 
-        // Capability経由でIdentityを取得してTickを回す
+        // --- 1. クールダウン・IdentityのTick (既存の山口さんのコード) ---
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
             var identity = trans.getIdentity();
             if (identity != null) {
-                if (player.level().isClientSide()) {
-                    identity.tickClient(player); // クールダウン減算 + アニメラップ
-                } else {
-                    identity.tickServer(player); // クールダウン減算 + 同期
-                }
+                if (player.level().isClientSide()) identity.tickClient(player);
+                else identity.tickServer(player);
+            }
+        });
+
+        player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(trans -> {
+            var identity = trans.getIdentity();
+            if (identity != null) {
+                if (player.level().isClientSide()) identity.tickClient(player);
+                else identity.tickServer(player);
             }
         });
     }
@@ -43,4 +46,5 @@ public final class CommonTickEvents {
             SkillUtil.tick(level);
         }
     }
+
 }

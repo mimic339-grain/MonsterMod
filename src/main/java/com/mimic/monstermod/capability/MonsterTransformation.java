@@ -1,10 +1,10 @@
 package com.mimic.monstermod.capability;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.entity.BaseMonsterEntity;
-import com.mimic.monstermod.entity.ModEntitieType;
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
-import com.mimic.monstermod.identity.IdentityType;
+import com.mimic.monstermod.entity.BaseEntity;
+import com.mimic.monstermod.init.ModEntitieType;
+import com.mimic.monstermod.identity.BaseIdentity;
+import com.mimic.monstermod.init.IdentityType;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import com.mimic.monstermod.util.MonsterTransformUtil;
@@ -20,12 +20,12 @@ public class MonsterTransformation {
 
     private boolean isTransformed = false;
     @Nullable private ResourceLocation transformedMobId = null;
-    @Nullable private BaseMonsterEntity transformedEntity = null;
-    @Nullable private BaseMonsterIdentity identity = null;
+    @Nullable private BaseEntity transformedEntity = null;
+    @Nullable private BaseIdentity identity = null;
 
     public boolean isTransformed() { return isTransformed; }
     public ResourceLocation getMobId() { return transformedMobId; }
-    public @Nullable BaseMonsterIdentity getIdentity() { return identity; }
+    public @Nullable BaseIdentity getIdentity() { return identity; }
 
 // =====================================================================
 // 【仕組み：変身中のHP関係】
@@ -108,7 +108,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         }
     }
 
-    private BaseMonsterIdentity ensureIdentity(Level level, BaseMonsterEntity ent, Player player) {
+    private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
         if (identity != null) return identity;
 
         if (transformedMobId != null && ent != null) {
@@ -120,7 +120,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
 
         // フォールバック（デバッグ・未登録モンスター用）
         if (identity == null && ent != null) {
-            identity = new BaseMonsterIdentity(ent, 3);
+            identity = new BaseIdentity(ent, 3);
         }
 
         if (!level.isClientSide && player != null && identity != null) {
@@ -131,14 +131,14 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     }
 
 
-    private BaseMonsterEntity ensureEntity(Level level) {
+    private BaseEntity ensureEntity(Level level) {
         if (transformedEntity != null) return transformedEntity;
         if (transformedMobId == null) return null;
 
         var type = ModEntitieType.getEntityType(transformedMobId);
         if (type == null) return null;
 
-        transformedEntity = (BaseMonsterEntity) type.create(level);
+        transformedEntity = (BaseEntity) type.create(level);
         return transformedEntity;
     }
     public void syncToAllClients(Player player) {
@@ -193,7 +193,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         if (!player.level().isClientSide) player.refreshDimensions();
     }
     // 修正版 getEntity: null ならその場で生成を試みる (クライアント/サーバー共通)
-    public BaseMonsterEntity getEntity(Level level) {
+    public BaseEntity getEntity(Level level) {
         if (transformedEntity == null && isTransformed && transformedMobId != null) {
             transformedEntity = ensureEntity(level);
         }
@@ -201,7 +201,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     }
 
     // 既存の getEntity() も念のため残すが、基本は上の level 引数付きを使う
-    public @Nullable BaseMonsterEntity getEntity() {
+    public @Nullable BaseEntity getEntity() {
         return transformedEntity;
     }
 

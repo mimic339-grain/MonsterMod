@@ -20,7 +20,7 @@ import javax.annotation.Nullable;
 public class HunterCombatStateProvider implements ICapabilitySerializable<CompoundTag> {
 
     public static final ResourceLocation KEY =
-            new ResourceLocation("monstermod", "hunter_combat_state");
+            ResourceLocation.fromNamespaceAndPath("monstermod", "hunter_combat_state");
 
     /** 内部に保持する実データ */
     private final HunterCombatState instance = new HunterCombatState();

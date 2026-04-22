@@ -1,7 +1,7 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.identity.IdentityType;
+import com.mimic.monstermod.init.IdentityType;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;

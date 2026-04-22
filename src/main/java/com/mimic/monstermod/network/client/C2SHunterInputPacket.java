@@ -1,6 +1,5 @@
 package com.mimic.monstermod.network.client;
 
-import com.mimic.monstermod.animation.Animate;
 import com.mimic.monstermod.capability.HunterTransformation;
 import com.mimic.monstermod.util.HunterUtil;
 import net.minecraft.network.FriendlyByteBuf;
@@ -13,7 +12,7 @@ import java.util.function.Supplier;
 
 /**
  * Client → Server
- * Hunter入力パケット（入力解釈＋アニメ再生）
+ * Hunter入力パケット（入力解釈＋スキル発動）
  */
 public class C2SHunterInputPacket {
 
@@ -24,9 +23,6 @@ public class C2SHunterInputPacket {
     private final boolean dodge;
     private final boolean sheathToggle;
 
-    // ------------------------------------------------
-    // Ctor
-    // ------------------------------------------------
     public C2SHunterInputPacket(int skillIndex, boolean dodge, boolean sheathToggle) {
         this.skillIndex = skillIndex;
         this.dodge = dodge;
@@ -45,9 +41,6 @@ public class C2SHunterInputPacket {
         buf.writeBoolean(sheathToggle);
     }
 
-    // ------------------------------------------------
-    // Server Handle
-    // ------------------------------------------------
     public void handle(Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
 
@@ -56,55 +49,18 @@ public class C2SHunterInputPacket {
             if (player == null) return;
 
             HunterTransformation ht = HunterUtil.getHunter(player);
-            if (ht == null) return;
+            if (ht == null || !ht.isActive()) return;
 
-            // ----------------------------
-            // 納刀 / 抜刀（常に処理）
-            // ----------------------------
+            // 納刀/抜刀
             if (sheathToggle) {
-                boolean before = ht.isSheathed();
-                ht.setSheathed(player, !before);
-
-                String anim = ht.isSheathed()
-                        ? ht.getSheathAnimationName()
-                        : ht.getDrawAnimationName();
-
-                if (anim != null)
-                    Animate.play(player, anim);
-
-                LOGGER.info(
-                        "[Sheath] {} : {} -> {}",
-                        player.getName().getString(),
-                        before,
-                        ht.isSheathed()
-                );
+                ht.setSheathed(player, !ht.isSheathed());
             }
 
-            // ----------------------------
-            // Skill / Dodge（Active時のみ）
-            // ----------------------------
-            if (!ht.isActive()) return;
-
-            if (skillIndex > 0) {
-                String anim = switch (skillIndex) {
-                    case 1 -> ht.getSkill1AnimationName();
-                    case 2 -> ht.getSkill2AnimationName();
-                    case 3 -> ht.getSkill3AnimationName();
-                    default -> null;
-                };
-
-                if (anim != null) {
-                    Animate.play(player, anim);
-                    LOGGER.info("[Skill] {} -> {}", skillIndex, anim);
-                }
-            }
-
-            if (dodge) {
-                String anim = ht.getDodgeAnimationName();
-                if (anim != null) {
-                    Animate.play(player, anim);
-                    LOGGER.info("[Dodge] {}", anim);
-                }
+            // スキル実行 (IdentityのhandleAbilityを呼ぶ)
+            if (skillIndex >= 0 && skillIndex <= 3) {
+                // identity.handleAbility を呼ぶことで、Identity内部のCDチェックと
+                // その中からの SkillUtil.tryExecute 呼び出しが連鎖します
+                ht.getIdentity().handleAbility(player, skillIndex);
             }
         });
 

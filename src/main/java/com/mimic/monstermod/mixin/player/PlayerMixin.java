@@ -1,6 +1,6 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.entity.BaseEntity;
 import com.mimic.monstermod.mixin.accessor.EntityAccessor;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.world.entity.EntityDimensions;
@@ -51,7 +51,7 @@ public abstract class PlayerMixin {
         Player player = (Player) (Object) this;
 
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transform -> {
-            BaseMonsterEntity transformed = transform.getEntity();
+            BaseEntity transformed = transform.getEntity();
             if (transform.isTransformed() && transformed != null) {
                 ((EntityAccessor) player).setMaxUpStep(transformed.getStepHeightValue());
             } else {

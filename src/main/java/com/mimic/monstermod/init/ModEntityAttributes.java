@@ -1,6 +1,7 @@
-package com.mimic.monstermod.entity;
+package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.entity.HunterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -16,7 +17,7 @@ public class ModEntityAttributes {
     @SubscribeEvent
     public static void entityAttributeEvent(EntityAttributeCreationEvent event) {
         event.put(ModEntitieType.MIMIC.get(), MimicEntity.createAttributes().build());
-
+        event.put(ModEntitieType.HUNTER.get(), HunterEntity.createAttributes().build());
 
 
 

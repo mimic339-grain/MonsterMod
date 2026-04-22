@@ -1,8 +1,8 @@
 package com.mimic.monstermod.skill;
 
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -33,30 +33,16 @@ public class SkillEffectSpec {
      * スキルの最終実行（SkillUtilから呼ばれる）
      */
     public void apply(LivingEntity attacker, @Nullable LivingEntity target) {
-        // 1. まず自分自身への効果を判定 (targetの有無に関わらず実行)
         applyToCaster(attacker);
-
-        // 2. ターゲットがいる場合のみ、相手への効果を実行
         if (target != null && target.isAlive()) {
             applyToTarget(attacker, target);
         }
     }
 
-    private void applyToCaster(LivingEntity attacker) {
-        // AttackTypeがMOVEMENTの場合、ワープ処理を実行
-        if (this.skillType == SkillType.MOVEMENT) {
-            float yaw = attacker.getYRot();
-            double rad = Math.toRadians(yaw);
-            // 真後ろへ15ブロック移動
-            Vec3 targetPos = attacker.position().add(-Math.sin(rad) * 15.0, 0, Math.cos(rad) * 15.0);
-
-            // サーバー側での位置更新
-            attacker.teleportTo(targetPos.x, targetPos.y, targetPos.z);
-            attacker.setDeltaMovement(Vec3.ZERO);
-
-            System.out.println("[Skill/Debug] MOVEMENT(回避)実行: " + attacker.getName().getString());
-        }
+    protected void applyToCaster(LivingEntity attacker) {
+        // ★ ここに書いてあった「真後ろに15ブロックワープ」の処理を削除またはコメントアウト！
     }
+
 
     private void applyToTarget(LivingEntity attacker, LivingEntity target) {
         if (this.damage < 0) {

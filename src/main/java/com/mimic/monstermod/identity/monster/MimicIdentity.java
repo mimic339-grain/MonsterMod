@@ -1,14 +1,14 @@
 package com.mimic.monstermod.identity.monster;
 
-import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.entity.BaseEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.identity.util.MimicSkillLeads;
 import com.mimic.monstermod.skill.SkillId;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
-public class MimicIdentity extends BaseMonsterIdentity {
+public class MimicIdentity extends BaseIdentity {
 
     private static final SkillId[] SKILLS = {
             MimicSkillLeads.TEST_2D,
@@ -19,7 +19,7 @@ public class MimicIdentity extends BaseMonsterIdentity {
 
     private static final int[] COOLDOWNS = {120, 140, 180, 210};
 
-    public MimicIdentity(@Nullable BaseMonsterEntity entity) {
+    public MimicIdentity(@Nullable BaseEntity entity) {
         // 親クラスで SKILLS.length 分の abilityCooldowns と lockCooldowns が new される
         super(entity, SKILLS.length);
         this.skillIds = SKILLS;

@@ -1,6 +1,6 @@
 package com.mimic.monstermod.mixin.player;
 
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import com.mimic.monstermod.weapon.WeaponItemInHandLayer;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -26,23 +26,37 @@ public class PlayerRendererMixin {
                                 int packedLight,
                                 CallbackInfo ci) {
 
-        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            // ★ ClientPlayer が入場したときに onLoad を呼んで identity を生成
-            if (player.level().isClientSide) {
-                transformation.onLoad(player);
-            }
-
-            BaseMonsterIdentity identity = transformation.getIdentity();
-
+        // 1. モンスター変身のチェック
+        var monsterXform = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
+        if (monsterXform != null && monsterXform.isTransformed()) {
+            BaseIdentity identity = monsterXform.getIdentity();
             if (identity != null) {
-                // クライアント側同期
-                identity.copyFromPlayerClient(player);
-                // Identity に描画を委譲
-                identity.render(player, partialTicks, poseStack, buffer, packedLight);
-                // Player 描画はキャンセル
-                ci.cancel();
+                renderAndCancel(identity, player, partialTicks, poseStack, buffer, packedLight, ci);
+                return;
             }
-        });
+        }
+
+        // 2. ハンター抜刀状態のチェック（モンスター変身していない時のみ）
+        var hunterXform = player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).orElse(null);
+        if (hunterXform != null && hunterXform.isActive() && !hunterXform.isSheathed()) {
+            // ★ HunterTransformation が持っている Identity を直接使う
+            BaseIdentity hunterId = hunterXform.getIdentity();
+
+            if (hunterId != null) {
+                // スキン情報を同期
+                if (hunterId.getEntity() instanceof com.mimic.monstermod.entity.HunterEntity hunterEnt) {
+                    hunterEnt.setPlayerInfo(player.getUUID(), player.getModelName().equals("slim"));
+                }
+                renderAndCancel(hunterId, player, partialTicks, poseStack, buffer, packedLight, ci);
+            }
+        }
+    }
+    // 共通描画メソッドでコードをスッキリさせる
+    private void renderAndCancel(BaseIdentity identity, AbstractClientPlayer player, float partialTicks,
+                                 PoseStack poseStack, MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
+        identity.copyFromPlayerClient(player);
+        identity.render(player, partialTicks, poseStack, buffer, packedLight);
+        ci.cancel();
     }
     @Inject(method = "<init>", at = @At("TAIL"))
     private void monstermod$addWeaponLayer(CallbackInfo ci) {

@@ -1,6 +1,7 @@
 package com.mimic.monstermod.item;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.init.ModItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;

@@ -1,13 +1,11 @@
 package com.mimic.monstermod.entity.monster;
 
-import com.mimic.monstermod.entity.BaseMonsterEntity;
-import com.mimic.monstermod.variable.entity.IMonsterData;
+import com.mimic.monstermod.entity.BaseEntity;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -15,7 +13,7 @@ import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInst
 import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
 
-public class MimicEntity extends BaseMonsterEntity {
+public class MimicEntity extends BaseEntity {
 
     private static final EntityDataAccessor<Boolean> OPEN =
             SynchedEntityData.defineId(MimicEntity.class, EntityDataSerializers.BOOLEAN);
@@ -26,17 +24,13 @@ public class MimicEntity extends BaseMonsterEntity {
     // 現在再生中のスキルアニメ名を保持
     private String currentSkillAnim = null;
 
-    public MimicEntity(EntityType<? extends BaseMonsterEntity> type, Level level) {
+    public MimicEntity(EntityType<? extends BaseEntity> type, Level level) {
         super(type, level);
+        // BaseEntity側で寸法を設定している場合はここでの再設定は不要ですが、Mimic専用に上書き
+        this.monsterDimensions = EntityDimensions.fixed(4.6f, 4.7f);
+        this.monsterEyeHeight = 0.52f;
     }
-    @Override
-    public float getEyeHeight(Pose pose) {
-        return 0.52f; // 低い目線の Mimic
-    }
-    @Override
-    public EntityDimensions getDimensions(Pose pose) {
-        return EntityDimensions.fixed(4.6f, 4.7f); // Mimic のサイズ
-    }
+
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
@@ -57,18 +51,19 @@ public class MimicEntity extends BaseMonsterEntity {
 
     private PlayState mainPredicate(AnimationState<MimicEntity> event) {
         AnimationController<MimicEntity> controller = event.getController();
-        IMonsterData data = getMonsterData();
 
-        // skill 再生中
-        if (data != null && data.getSkill() != null && !data.getSkill().isEmpty()) {
-            String skillAnim = switch (data.getSkill()) {
+        // IMonsterData の代わりに BaseEntity の getCurrentSkill() を使用
+        String currentSkill = getCurrentSkill();
+
+        // skill 再生中判定
+        if (currentSkill != null && !currentSkill.isEmpty()) {
+            String skillAnim = switch (currentSkill) {
                 case "switch" -> isOpen() ? "animation.mimic.close" : "animation.mimic.open";
                 case "bite" -> "animation.mimic.bite";
                 default -> null;
             };
 
             if (skillAnim != null) {
-                // 再生中アニメと異なる場合のみ setAnimation
                 if (!skillAnim.equals(currentSkillAnim)) {
                     System.out.println("[MimicEntity] Play skill animation: " + skillAnim);
                     controller.setAnimation(RawAnimation.begin().then(skillAnim, Animation.LoopType.PLAY_ONCE));
@@ -78,16 +73,23 @@ public class MimicEntity extends BaseMonsterEntity {
 
             // skill アニメ終了判定
             if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                System.out.println("[MimicEntity] Skill animation finished: " + data.getSkill());
-                if ("switch".equals(data.getSkill())) setOpen(!isOpen());
-                data.setSkill(null);
+                System.out.println("[MimicEntity] Skill animation finished: " + currentSkill);
+
+                // サーバー側で状態を確定させる
+                if (!level().isClientSide) {
+                    if ("switch".equals(currentSkill)) {
+                        setOpen(!isOpen());
+                    }
+                    // IMonsterData.setSkill(null) の代わりに親クラスのメソッドを使用
+                    setCurrentSkill(null);
+                }
                 currentSkillAnim = null; // リセット
             }
 
             return PlayState.CONTINUE;
         }
 
-        // 移動/idle
+        // 移動/idle (通常状態)
         String anim = event.isMoving()
                 ? (isOpen() ? "animation.mimic.open_walk" : "animation.mimic.close_walk")
                 : (isOpen() ? "animation.mimic.open_idle" : "animation.mimic.idle");
@@ -98,12 +100,12 @@ public class MimicEntity extends BaseMonsterEntity {
     }
 
     public static AttributeSupplier.Builder createAttributes() {
-        return BaseMonsterEntity.createDefaultAttributes(
-                100.0D,
-                0.25D,
-                100.0D,
-                1.2D,
-                2.0D
+        return BaseEntity.createDefaultAttributes(
+                100.0D, // HP
+                0.25D,  // Speed
+                100.0D, // Damage
+                1.2D,   // Knockback Resistance
+                2.0D    // Armor
         );
     }
 }

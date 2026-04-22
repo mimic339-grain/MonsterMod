@@ -1,6 +1,6 @@
 package com.mimic.monstermod.gui;
 
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.keybind.MonsterKeyBindings;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
@@ -14,7 +14,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 
-public class SkillOverlay {
+public class MonsterSkillOverlay {
 
     public static final IGuiOverlay HUD_SKILLS = (ForgeGui gui, GuiGraphics guiGraphics, float partialTick, int width, int height) -> {
         Minecraft mc = Minecraft.getInstance();
@@ -24,7 +24,7 @@ public class SkillOverlay {
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
             if (!trans.isTransformed()) return;
 
-            BaseMonsterIdentity identity = trans.getIdentity();
+            BaseIdentity identity = trans.getIdentity();
             if (identity == null) return;
 
             SkillId[] skills = identity.getSkillIds();
@@ -48,7 +48,7 @@ public class SkillOverlay {
         });
     };
 
-    private static void renderSlot(GuiGraphics gui, int x, int y, int index, BaseMonsterIdentity identity, Font font) {
+    private static void renderSlot(GuiGraphics gui, int x, int y, int index, BaseIdentity identity, Font font) {
         SkillId[] skills = identity.getSkillIds();
         if (index >= skills.length) return;
 

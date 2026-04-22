@@ -6,57 +6,46 @@ import com.mimic.monstermod.network.client.C2SHunterInputPacket;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-/**
- * HunterKeyHandler
- * クライアント側でのキー押下検知およびサーバー送信
- * 重要：
- * - メニューキーは存在しない
- * - インベントリ（Eキー）＝ Hunterメニュー
- */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class HunterKeyHandler {
 
-    private static final Minecraft mc = Minecraft.getInstance();
+    @SubscribeEvent
+    public static void onKeyInput(InputEvent.Key event) {
+        handleInput();
+    }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+    public static void onMouseInput(InputEvent.MouseButton event) {
+        handleInput();
+    }
 
-        if (mc.player == null) return;
-        if (mc.screen != null) return;
+    private static void handleInput() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null) return;
 
-        mc.player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
-                .ifPresent(hunter -> {
+        mc.player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
+            if (!hunter.isActive()) return;
 
-                    // ★ Hunter状態でなければ一切処理しない
-                    if (!hunter.isActive()) return;
+            // スキル 1-3
+            for (int i = 0; i < HunterKeyBindings.SKILL_KEYS.length; i++) {
+                if (HunterKeyBindings.SKILL_KEYS[i].consumeClick()) {
+                    ModMessages.sendToServer(new C2SHunterInputPacket(i, false, false));
+                }
+            }
 
-                    // Skill1 / 2 / 3
-                    for (int i = 0; i < HunterKeyBindings.SKILL_KEYS.length; i++) {
-                        if (HunterKeyBindings.SKILL_KEYS[i].consumeClick()) {
-                            ModMessages.sendToServer(
-                                    new C2SHunterInputPacket(i + 1, false, false)
-                            );
-                        }
-                    }
+            // 回避
+            if (HunterKeyBindings.DODGE_KEY.consumeClick()) {
+                ModMessages.sendToServer(new C2SHunterInputPacket(3, true, false));
+            }
 
-                    // Dodge
-                    if (HunterKeyBindings.DODGE_KEY.consumeClick()) {
-                        ModMessages.sendToServer(
-                                new C2SHunterInputPacket(0, true, false)
-                        );
-                    }
-
-                    // Sheath（Hunter状態なら常に許可）
-                    if (HunterKeyBindings.SHEATH_KEY.consumeClick()) {
-                        ModMessages.sendToServer(
-                                new C2SHunterInputPacket(0, false, true)
-                        );
-                    }
-                });
+            // 納刀
+            if (HunterKeyBindings.SHEATH_KEY.consumeClick()) {
+                ModMessages.sendToServer(new C2SHunterInputPacket(-1, false, true));
+            }
+        });
     }
 }

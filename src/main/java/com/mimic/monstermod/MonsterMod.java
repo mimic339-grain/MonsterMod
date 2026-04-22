@@ -1,11 +1,10 @@
 package com.mimic.monstermod;
 
 import com.mimic.monstermod.effect.ModEffects;
-import com.mimic.monstermod.entity.ModEntitieType;
-import com.mimic.monstermod.entity.ModEntityAttributes;
 import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
-import com.mimic.monstermod.identity.util.MimicSkillLeads;
-import com.mimic.monstermod.item.ModItems;
+import com.mimic.monstermod.init.ModEntitieType;
+import com.mimic.monstermod.init.ModEntityAttributes;
+import com.mimic.monstermod.init.ModItems;
 import com.mimic.monstermod.network.ModMessages;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -30,19 +29,26 @@ public class MonsterMod {
     public MonsterMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // エンティティ・アイテム・メッセージ登録
+        // 1. 各種レジストリの登録（これはコンストラクタでOK）
         ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
-        ModMessages.register(); // ここで CHANNEL を初期化
-        ModEffects.MOB_EFFECTS.register(FMLJavaModLoadingContext.get().getModEventBus());
-        // イベント登録
+        ModMessages.register();
+        ModEffects.MOB_EFFECTS.register(modEventBus);
+
         modEventBus.register(ModEntityAttributes.class);
         modEventBus.register(BaseMonsterIdentityRegistry.class);
 
-        /* =========================
-           Skill 登録
-        ========================= */
+        // 2. 「セットアップ完了後」にスキルを初期化するよう予約
+        modEventBus.addListener(this::commonSetup);
+    }
 
-        MimicSkillLeads.registerAll();
+    private void commonSetup(final net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent event) {
+        // enqueueWork を使うことで、マルチスレッド環境でも安全に初期化できます
+        event.enqueueWork(() -> {
+            // すべての RegistryObject が get() 可能になった状態で初期化
+            com.mimic.monstermod.skill.hunter.HunterSkillRegistry.init();
+            com.mimic.monstermod.identity.util.MimicSkillLeads.registerAll();
+            LOGGER.info("MonsterMod: Skills and Leads have been initialized.");
+        });
     }
 }

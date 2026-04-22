@@ -1,7 +1,8 @@
 package com.mimic.monstermod.identity;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.entity.BaseMonsterEntity;
+import com.mimic.monstermod.entity.BaseEntity;
+import com.mimic.monstermod.init.IdentityType;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -22,7 +23,7 @@ public final class BaseMonsterIdentityRegistry {
     /**
      * Entity 用 Identity を生成
      */
-    public static BaseMonsterIdentity create(ResourceLocation id, BaseMonsterEntity entity) {
+    public static BaseIdentity create(ResourceLocation id, BaseEntity entity) {
         if (entity == null) {
             throw new IllegalStateException("Identity は entity なしで生成してはいけません: " + id);
         }

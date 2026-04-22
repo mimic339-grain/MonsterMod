@@ -181,7 +181,7 @@ public final class SkillLead {
         public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }
         public Builder attackType(SkillType t) { this.skillType = t; return this; }
         public Builder autoRoot(boolean v) { this.autoRoot = v; return this; }
-        public Builder rootTickBeforeDamage(int t) { this.beforeRecoverTicks = t; return this; }
+        public Builder beforeRecoverTicks(int t) { this.beforeRecoverTicks = t; return this; }
         public Builder totalPreviewTicks(int t) { this.totalPreviewTicks = t; return this; }
         public Builder effectTicks(int t) { this.effectTicks = t; return this; }
         public Builder recoveryTicks(int t) { this.recoveryTicks = t; return this; }
@@ -217,6 +217,13 @@ public final class SkillLead {
             if (this.effectTicks <= 1) {
                 this.canMoveDuringEffect = false; // 1tickなら動く暇がないので強制false
             }
+            if (this.totalPreviewTicks <= 0) {
+                this.render2D = false;
+                this.render2DOverlay = false;
+                this.renderBlock2D = false;
+                this.render3DPreview = false;
+            }
+
             //dashは仕様として移動専用なのでプレビュはない
             if (this.category == SkillType.Category.DASH) {
                 this.totalPreviewTicks = 0;
@@ -238,7 +245,7 @@ public final class SkillLead {
                 this.render3DPreview = false;
             }
             // 2. 合計時間を計算
-            int total = this.totalPreviewTicks + this.effectTicks + this.recoveryTicks;
+            int total = this.totalPreviewTicks + this.effectTicks + this.recoveryTicks+ 1;
             // 3. 合計時間に基づいた設定 (NORMALのコンボ猶予など)
             if (this.category == SkillType.Category.NORMAL) {
                 this.comboWindowTicks = total;

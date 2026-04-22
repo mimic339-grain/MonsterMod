@@ -68,4 +68,5 @@ public final class ClientSkillManager {
             mc.player.setDeltaMovement(0, current.y, 0);
         }
     }
+
 }

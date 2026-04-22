@@ -3,17 +3,12 @@ package com.mimic.monstermod.variable;
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.capability.*;
 import com.mimic.monstermod.network.ModMessages;
-import com.mimic.monstermod.network.server.S2CMonsterCapSyncPacket;
 import com.mimic.monstermod.network.server.S2CPlayerCapSyncPacket;
-import com.mimic.monstermod.variable.entity.IMonsterData;
 import com.mimic.monstermod.variable.entity.IPlayerData;
-import com.mimic.monstermod.variable.entity.MonsterData;
-import com.mimic.monstermod.variable.entity.PlayerCap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
@@ -34,13 +29,6 @@ public class CapabilityRegistry {
     // ==========================================================
     // CAPABILITIES
     // ==========================================================
-
-    public static final Capability<IPlayerData> PLAYER_CAPABILITY =
-            CapabilityManager.get(new CapabilityToken<>() {});
-
-    public static final Capability<IMonsterData> MONSTER_CAPABILITY =
-            CapabilityManager.get(new CapabilityToken<>() {});
-
     public static final Capability<MonsterTransformation> PLAYER_TRANSFORMATION =
             CapabilityManager.get(new CapabilityToken<>() {});
 
@@ -51,27 +39,12 @@ public class CapabilityRegistry {
     public static final Capability<HunterCombatState> HUNTER_COMBAT_STATE =
             CapabilityManager.get(new CapabilityToken<>() {});
 
+    public static final Capability<IPlayerData> PLAYER_CAPABILITY =
+            CapabilityManager.get(new CapabilityToken<>() {});
 
     // ==========================================================
     // GETTERS
     // ==========================================================
-
-    public static IPlayerData getPlayerData(LivingEntity entity) {
-        return entity.getCapability(PLAYER_CAPABILITY).orElseGet(() -> new PlayerCap(entity));
-    }
-
-    public static IMonsterData getMonsterData(LivingEntity entity) {
-        return entity.getCapability(MONSTER_CAPABILITY).orElseGet(() -> new MonsterData(entity));
-    }
-
-    public static LazyOptional<IPlayerData> getPlayerLazy(LivingEntity entity) {
-        return entity.getCapability(PLAYER_CAPABILITY);
-    }
-
-    public static LazyOptional<IMonsterData> getMonsterLazy(LivingEntity entity) {
-        return entity.getCapability(MONSTER_CAPABILITY);
-    }
-
     public static LazyOptional<MonsterTransformation> getPlayerTransformation(Player player) {
         return player.getCapability(PLAYER_TRANSFORMATION);
     }
@@ -84,18 +57,19 @@ public class CapabilityRegistry {
     public static LazyOptional<HunterCombatState> getHunterCombatState(Player player) {
         return player.getCapability(HUNTER_COMBAT_STATE);
     }
-
+    public static LazyOptional<IPlayerData> getPlayerData(Player player) {
+        return player.getCapability(PLAYER_CAPABILITY);
+    }
 
     // ==========================================================
     // REGISTER CAPABILITIES
     // ==========================================================
     @SubscribeEvent
     public static void registerCaps(RegisterCapabilitiesEvent event) {
-        event.register(IPlayerData.class);
-        event.register(IMonsterData.class);
         event.register(MonsterTransformation.class);
         event.register(HunterTransformation.class);
-        event.register(HunterCombatState.class); // ★ 戦闘状態登録
+        event.register(IPlayerData.class);
+        event.register(HunterCombatState.class);
     }
 
 
@@ -108,8 +82,6 @@ public class CapabilityRegistry {
         Entity entity = event.getObject();
 
         if (entity instanceof Player player) {
-
-            event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
 
             event.addCapability(
                     new ResourceLocation(MonsterMod.MOD_ID, "player_transformation"),
@@ -126,9 +98,7 @@ public class CapabilityRegistry {
                     new ResourceLocation(MonsterMod.MOD_ID, "hunter_combat_state"),
                     new HunterCombatStateProvider()
             );
-
-        } else if (entity instanceof LivingEntity living) {
-            event.addCapability(MonsterCapabilityProvider.ID, new MonsterCapabilityProvider(living));
+            event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
         }
     }
 
@@ -137,18 +107,6 @@ public class CapabilityRegistry {
     // COPY CAPABILITIES（リスポ / 次元移動）
     // ==========================================================
     public static void copyCaps(Player oldPlayer, Player newPlayer) {
-
-        oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                )
-        );
-
-        oldPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(oldCap ->
-                newPlayer.getCapability(MONSTER_CAPABILITY).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                )
-        );
 
         oldPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_TRANSFORMATION).ifPresent(newCap -> {
@@ -171,6 +129,11 @@ public class CapabilityRegistry {
                         newCap.deserializeNBT(oldCap.serializeNBT())
                 )
         );
+        oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
+                newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
+                        newCap.deserializeNBT(oldCap.serializeNBT())
+                )
+        );
     }
 
 
@@ -180,17 +143,12 @@ public class CapabilityRegistry {
     public static void syncToClient(Player player) {
 
         if (!(player instanceof ServerPlayer sp)) return;
-
-        // -------- base caps --------
-        ModMessages.sendToPlayer(
-                new S2CPlayerCapSyncPacket(getPlayerData(player).serializeNBT()),
-                sp
-        );
-
-        ModMessages.sendToPlayer(
-                new S2CMonsterCapSyncPacket(getMonsterData(player).serializeNBT()),
-                sp
-        );
+        getPlayerData(player).ifPresent(cap -> {
+            ModMessages.sendToPlayer(
+                    new S2CPlayerCapSyncPacket(cap.serializeNBT()),
+                    sp
+            );
+        });
 
         // -------- transformation --------
         getPlayerTransformation(player).ifPresent(trans -> trans.syncToClient(sp));

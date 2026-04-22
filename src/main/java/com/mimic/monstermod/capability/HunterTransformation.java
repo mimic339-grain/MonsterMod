@@ -1,18 +1,29 @@
 package com.mimic.monstermod.capability;
 
-import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.entity.BaseEntity;
+import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.item.weapon.WeaponItem;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CHunterSyncPacket;
+import com.mimic.monstermod.skill.SkillId;
+import com.mimic.monstermod.skill.hunter.HunterSkill;
+import com.mimic.monstermod.skill.hunter.HunterSkillRegistry;
 import com.mimic.monstermod.util.HunterUtil;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class HunterTransformation {
-
+    @Nullable
+    private BaseIdentity identity = null;
+    @Nullable
+    public BaseIdentity getIdentity() { return identity; }
     // ================================================================
     // 基本状態
     // ================================================================
@@ -24,7 +35,10 @@ public class HunterTransformation {
     private boolean isActive = false;
 
     private float moveSpeedPenalty = 0.0f;
-
+    // HunterTransformation.java に追加
+    public SkillId getEquippedSkill(HunterSkill.HunterSkillSlot slot) {
+        return equippedSkills.get(slot);
+    }
     // 攻撃関連
     private int comboCount = 0;
     private float attackStiffness = 0f;
@@ -39,7 +53,6 @@ public class HunterTransformation {
     public boolean isActive() { return isActive; }
     public int getComboCount() { return comboCount; }
     public float getAttackStiffness() { return attackStiffness; }
-    public float getPenalty() { return moveSpeedPenalty; }
 
     public static boolean isHunter(Player player) {
         if (player == null) return false;
@@ -48,26 +61,46 @@ public class HunterTransformation {
                 .orElse(false);
     }
 
+    private final Map<HunterSkill.HunterSkillSlot, SkillId> equippedSkills = new HashMap<>();
+
+    public void setSkill(HunterSkill.HunterSkillSlot slot, SkillId skillId, Player player) {
+        this.equippedSkills.put(slot, skillId);
+
+        // サーバー側ならクライアントへ同期
+        if (player instanceof ServerPlayer sp) {
+            syncToClient(sp);
+        }
+    }
+
+
     // ================================================================
     // WeaponSlot（Inventory外）
     // ================================================================
     public void setWeaponSlotServer(ItemStack stack, ServerPlayer player) {
         if (!canAcceptWeapon(stack)) return;
-        if (player.connection == null) return;
+
+        // 以前の武器カテゴリを保持（比較用）
+        String oldType = this.weaponType;
 
         this.weaponSlot = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
         this.weaponSlot.setCount(1);
 
-        MonsterMod.LOGGER.info(
-                "[WeaponSlot][SERVER] {} x{} ({})",
-                weaponSlot.isEmpty() ? "EMPTY" : weaponSlot.getItem(),
-                weaponSlot.getCount(),
-                player.getGameProfile().getName()
-        );
+        // ★ 武器種（String）を自動更新（WeaponCategoryUtilを使用）
+        this.weaponType = com.mimic.monstermod.weapon.WeaponCategoryUtil.getCategory(this.weaponSlot).getId();
+
+        // 武器が変わったならコンボをリセット
+        if (!this.weaponType.equals(oldType)) {
+            this.resetCombo();
+        }
 
         syncToClient(player);
     }
-
+    public HunterSkill getEquippedHunterSkill(HunterSkill.HunterSkillSlot slot) {
+        SkillId id = equippedSkills.get(slot);
+        if (id == null) return null;
+        // RegistryなどからSkillIdに対応するHunterSkillインスタンスを返す
+        return HunterSkillRegistry.get(id);
+    }
     public boolean canAcceptWeapon(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return true;
         return stack.getItem() instanceof WeaponItem;
@@ -88,14 +121,21 @@ public class HunterTransformation {
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
-
-    // ================================================================
-    // Hunter 開始 / 終了
-    // ================================================================
+    // HunterTransformation.java
     public void startHunter(Player player) {
         isActive = true;
-        if (player instanceof ServerPlayer sp)
-            syncToClient(sp);
+
+        if (this.identity == null) {
+            BaseEntity renderEnt = null;
+            if (player.level().isClientSide) {
+                renderEnt = com.mimic.monstermod.init.ModEntitieType.HUNTER.get().create(player.level());
+            }
+
+            // 第2引数は必ず 4 (SKILL1,2,3 + DODGE)
+            this.identity = new com.mimic.monstermod.identity.HunterIdentity(renderEnt, 4);
+        }
+
+        if (player instanceof ServerPlayer sp) syncToClient(sp);
     }
 
     public void stopHunter(Player player) {
@@ -110,9 +150,7 @@ public class HunterTransformation {
             syncToClient(sp);
     }
 
-    // ================================================================
     // 武器変更
-    // ================================================================
     public void equipWeapon(Player player, ItemStack stack, String type) {
         this.equippedWeapon = stack.copy();
         this.weaponType = type;
@@ -123,9 +161,7 @@ public class HunterTransformation {
             syncToClient(sp);
     }
 
-    // ================================================================
     // 納刀 / 抜刀
-    // ================================================================
     public void setSheathed(Player player, boolean state) {
         this.isSheathed = state;
 
@@ -160,28 +196,23 @@ public class HunterTransformation {
         );
     }
 
-    // ================================================================
-    // アニメーション名
-    // ================================================================
-    public String getDodgeAnimationName() { return "sword_simple_idle"; }
-    public String getSheathAnimationName() { return "hammer_idle2"; }
-    public String getDrawAnimationName() { return "sword_simple_attack1"; }
-    public String getSkill1AnimationName() { return "sword_simple_attack2"; }
-    public String getSkill2AnimationName() { return "sword_simple_sheathed"; }
-    public String getSkill3AnimationName() { return "hammer_idle6"; }
-
-    // ================================================================
     // NBT
-    // ================================================================
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
 
         tag.putBoolean("Sheathed", isSheathed);
         tag.putBoolean("IsActive", isActive);
         tag.putString("WeaponType", weaponType);
-        tag.putFloat("MovePenalty", moveSpeedPenalty);
         tag.putInt("ComboCount", comboCount);
         tag.putFloat("AttackStiffness", attackStiffness);
+        if (this.identity != null) {
+            tag.put("IdentityData", this.identity.serializeNBT());
+        }
+        CompoundTag skillsTag = new CompoundTag();
+        equippedSkills.forEach((slot, id) -> {
+            skillsTag.putString(slot.name(), id.toString()); // "monstermod:test_skill" 形式
+        });
+        tag.put("EquippedSkills", skillsTag);
 
         CompoundTag eq = new CompoundTag();
         equippedWeapon.save(eq);
@@ -196,11 +227,17 @@ public class HunterTransformation {
 
     public void deserializeNBT(CompoundTag tag) {
         if (tag == null) return;
-
+// ★修正ポイント：identity が null なら作成してからデータを読み込む
+        if (tag.contains("IdentityData")) {
+            if (this.identity == null) {
+                // クライアント側でも Identity インスタンスが必要
+                this.identity = new com.mimic.monstermod.identity.HunterIdentity(null, 4);
+            }
+            this.identity.deserializeNBT(tag.getCompound("IdentityData"));
+        }
         isSheathed = tag.getBoolean("Sheathed");
         isActive = tag.getBoolean("IsActive");
         weaponType = tag.getString("WeaponType");
-        moveSpeedPenalty = tag.getFloat("MovePenalty");
         comboCount = tag.getInt("ComboCount");
         attackStiffness = tag.getFloat("AttackStiffness");
 
@@ -211,6 +248,16 @@ public class HunterTransformation {
         weaponSlot = tag.contains("WeaponSlot")
                 ? ItemStack.of(tag.getCompound("WeaponSlot"))
                 : ItemStack.EMPTY;
+        if (tag.contains("EquippedSkills")) {
+            CompoundTag skillsTag = tag.getCompound("EquippedSkills");
+            for (String key : skillsTag.getAllKeys()) {
+                try {
+                    HunterSkill.HunterSkillSlot slot = HunterSkill.HunterSkillSlot.valueOf(key);
+                    String[] split = skillsTag.getString(key).split(":");
+                    equippedSkills.put(slot, SkillId.of(split[0], split[1]));
+                } catch (Exception e) { /* エラー処理 */ }
+            }
+        }
     }
 
     // ================================================================
@@ -219,7 +266,6 @@ public class HunterTransformation {
     public void onLoad(Player player) {
         if (!isSheathed && isActive) {
             HunterUtil.disableHotbarRender(player);
-            HunterUtil.applyMovePenalty(player, moveSpeedPenalty);
         } else {
             HunterUtil.enableHotbarRender(player);
             HunterUtil.removeMovePenalty(player);

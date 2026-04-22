@@ -1,6 +1,6 @@
 package com.mimic.monstermod.network.client;
 
-import com.mimic.monstermod.identity.BaseMonsterIdentity;
+import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -50,7 +50,7 @@ public class C2SMonsterInputPacket {
             if (player == null) return;
 
             player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                BaseMonsterIdentity identity = trans.getIdentity();
+                BaseIdentity identity = trans.getIdentity();
                 if (identity == null) return;
 
                 // 1. メニュー処理
