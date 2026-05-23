@@ -5,6 +5,7 @@ import com.mimic.monstermod.identity.BaseMonsterIdentityRegistry;
 import com.mimic.monstermod.init.ModEntitieType;
 import com.mimic.monstermod.init.ModEntityAttributes;
 import com.mimic.monstermod.init.ModItems;
+import com.mimic.monstermod.init.ModParticles;
 import com.mimic.monstermod.network.ModMessages;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -29,12 +30,15 @@ public class MonsterMod {
     public MonsterMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
+
         // 1. 各種レジストリの登録（これはコンストラクタでOK）
         ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
         ModMessages.register();
         ModEffects.MOB_EFFECTS.register(modEventBus);
 
+
+        ModParticles.PARTICLE_TYPES.register(modEventBus);
         modEventBus.register(ModEntityAttributes.class);
         modEventBus.register(BaseMonsterIdentityRegistry.class);
 
@@ -46,6 +50,7 @@ public class MonsterMod {
         // enqueueWork を使うことで、マルチスレッド環境でも安全に初期化できます
         event.enqueueWork(() -> {
             // すべての RegistryObject が get() 可能になった状態で初期化
+            com.mimic.monstermod.identity.monster.YatagarasuIdentity.initSkillRegistry();
             com.mimic.monstermod.skill.hunter.HunterSkillRegistry.init();
             com.mimic.monstermod.identity.util.MimicSkillLeads.registerAll();
             LOGGER.info("MonsterMod: Skills and Leads have been initialized.");

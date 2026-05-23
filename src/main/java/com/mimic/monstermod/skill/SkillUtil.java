@@ -2,6 +2,7 @@ package com.mimic.monstermod.skill;
 
 import com.mimic.monstermod.Math.AttackExecutor;
 import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.init.SkillEffectRegistry;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_PlayerRootPacket;
 import net.minecraft.server.level.ServerLevel;
@@ -18,51 +19,52 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class SkillUtil {
     private static final Map<LivingEntity, List<ActiveSkill>> CURRENT_ACTIVE = new ConcurrentHashMap<>();
 
-
     public static boolean tryExecute(ServerLevel level, ServerPlayer player, SkillLead lead, MathMain math) {
         List<ActiveSkill> activeList = CURRENT_ACTIVE.computeIfAbsent(player, k -> new CopyOnWriteArrayList<>());
 
-        // 現在 UNIQUE スキルが実行中か？
-        boolean isUniqueRunning = activeList.stream().anyMatch(a -> a.lead.category == SkillType.Category.UNIQUE);
-        // 現在「コンボ受付中」のスキルがあるか？
-        boolean hasComboWindow = activeList.stream().anyMatch(a -> a.comboWindowTicks > 0);
+        // 1. カテゴリー固有のロジックで発動可能かチェック
+        if (!Execute(player, lead, activeList)) {
+            return false;
+        }
 
-        boolean canExecute = false;
+        // 2. 実行登録（サーバー側のスケジュール管理に追加）
+        int duration = lead.skillTicks;
+        SkillEffectSpec spec = SkillEffectRegistry.getStrict(lead.skillId());
+        ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
+        activeList.add(active);
+
+        System.out.println("[SkillUtil] スキル登録成功: " + lead.id);
+        return true;
+    }
+
+    private static boolean Execute(ServerPlayer player, SkillLead lead, List<ActiveSkill> activeList) {
+        boolean isUniqueRunning = activeList.stream().anyMatch(a -> a.lead.category == SkillType.Category.UNIQUE);
+        boolean hasComboWindow = activeList.stream().anyMatch(a -> a.comboWindowTicks > 0);
 
         if (lead.category == SkillType.Category.CANCEL) {
             activeList.clear();
             rootCaster(player, false, 0);
-            canExecute = true;
+            return true;
         }
-        else if (lead.category == SkillType.Category.COMBO) {
+
+        if (lead.category == SkillType.Category.COMBO) {
             if (hasComboWindow) {
-                canExecute = true;
-                // 前のスキルの硬直を解除
                 activeList.forEach(a -> a.rootDisabled = true);
                 rootCaster(player, false, 0);
+                return true;
             }
+            return false;
         }
-        else if (lead.category == SkillType.Category.NORMAL) {
-            // UNIQUE中ではなく、かつ (何もしていない OR DASH中)
+
+        if (lead.category == SkillType.Category.NORMAL) {
             boolean isOnlyDashing = activeList.isEmpty() || activeList.stream().allMatch(a -> a.lead.category == SkillType.Category.DASH);
-            if (!isUniqueRunning && isOnlyDashing) canExecute = true;
-        }
-        else { // UNIQUE, DASH
-            if (activeList.isEmpty()) canExecute = true;
+            return !isUniqueRunning && isOnlyDashing;
         }
 
-        if (!canExecute) return false;
-
-        // --- 実行登録 ---
-        int duration = lead.skillTicks;
-        SkillEffectSpec spec = SkillEffectRegistry.getStrict(lead.skillId());
-
-        ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
-        activeList.add(active);
-
-        System.out.println("[SkillUtil] スキル登録成功: " + lead.id + " (Category: " + lead.category + ", Ticks: " + duration + ")");
-        return true;
+        // UNIQUE, DASH 等：他にアクティブなスキルがなければOK
+        return activeList.isEmpty();
     }
+
     public static void tick(ServerLevel level) {
         if (CURRENT_ACTIVE.isEmpty()) return;
 
@@ -83,8 +85,15 @@ public final class SkillUtil {
                 // 登録直後の最初の tick でここを通ると、ticksLeft は (effect + recovery) と一致し、即座に executeFinalEffect が呼ばれる。
                 active.ticksLeft--;
 
+
                 int recoveryStart = active.lead.recoveryTicks;
                 int effectStart = recoveryStart + active.lead.effectTicks;
+
+                if (active.ticksLeft > effectStart) {
+                    int previewProgress = active.ticksLeft - effectStart;
+                    active.spec.onPreviewTick(caster, previewProgress); // ここで引き寄せ処理などが走る
+                }
+
                 int beforeRootStart = effectStart + active.lead.beforeRecoverTicks;
 
                 // 1. 前硬直 (予兆の終盤に差し掛かったタイミング)

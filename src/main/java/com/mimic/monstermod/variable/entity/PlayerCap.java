@@ -17,35 +17,49 @@ import java.util.Set;
  * EntityDataを継承せず、単体で動作するCapability実装
  */
 public class PlayerCap implements IPlayerData, INBTSerializable<CompoundTag> {
-
     private final Set<String> activeStates = new HashSet<>();
     private final Entity owner;
 
+    // ★ カラー用変数 (デフォルト赤)
+    private float leadR = 1.0f;
+    private float leadG = 0.0f;
+    private float leadB = 0.0f;
+    private float leadThickness = 3.0f; // ★ デフォルト太さ
     public PlayerCap(Entity owner) {
         this.owner = owner;
+        this.activeStates.add(STATE_SHOW_SKILL_LEAD);
     }
 
     @Override
-    public boolean hasState(String stateKey) {
-        return activeStates.contains(stateKey);
-    }
+    public boolean hasState(String stateKey) { return activeStates.contains(stateKey); }
 
     @Override
     public void setState(String stateKey, boolean active) {
         boolean changed = active ? activeStates.add(stateKey) : activeStates.remove(stateKey);
-
-        // サーバー側で値が変わったら即座に同期
         if (changed && owner instanceof ServerPlayer sp) {
             CapabilityRegistry.syncToClient(sp);
         }
     }
 
-    @Override
-    public void tick(Player player) {
-        // 必要になったらここにロジックを書く
+    // ★ カラー関連の実装
+    @Override public void setLeadColor(float r, float g, float b) {
+        this.leadR = r; this.leadG = g; this.leadB = b;
+        sync();
     }
 
-    // --- NBT保存 (super呼び出しを削除) ---
+    @Override public void setLeadThickness(float thickness) {
+        this.leadThickness = thickness;
+        sync();
+    }
+
+    @Override public float getLeadR() { return leadR; }
+    @Override public float getLeadG() { return leadG; }
+    @Override public float getLeadB() { return leadB; }
+    @Override public float getLeadThickness() { return leadThickness; }
+    private void sync() {
+        if (owner instanceof ServerPlayer sp) CapabilityRegistry.syncToClient(sp);
+    }
+    @Override public void tick(Player player) {}
 
     @Override
     public CompoundTag serializeNBT() {
@@ -55,6 +69,11 @@ public class PlayerCap implements IPlayerData, INBTSerializable<CompoundTag> {
             statesList.add(StringTag.valueOf(state));
         }
         nbt.put("ActiveStates", statesList);
+        // ★ カラーを保存
+        nbt.putFloat("leadR", leadR);
+        nbt.putFloat("leadG", leadG);
+        nbt.putFloat("leadB", leadB);
+        nbt.putFloat("leadThickness", leadThickness);
         return nbt;
     }
 
@@ -67,5 +86,10 @@ public class PlayerCap implements IPlayerData, INBTSerializable<CompoundTag> {
                 activeStates.add(statesList.getString(i));
             }
         }
+        // ★ カラーを読み込み (データがない場合はデフォルト赤)
+        this.leadR = nbt.contains("leadR") ? nbt.getFloat("leadR") : 1.0f;
+        this.leadG = nbt.getFloat("leadG");
+        this.leadB = nbt.getFloat("leadB");
+        this.leadThickness = nbt.contains("leadThickness") ? nbt.getFloat("leadThickness") : 3.0f;
     }
 }

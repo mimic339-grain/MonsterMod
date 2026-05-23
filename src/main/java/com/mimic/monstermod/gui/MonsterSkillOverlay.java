@@ -31,98 +31,185 @@ public class MonsterSkillOverlay {
             int skillCount = skills.length;
             if (skillCount == 0) return;
 
-            // --- レイアウト定数 (右寄せ設定) ---
-            int spacing = 22;
-            int xRightEdge = (width / 2) + 95;
+            int spacing = 25;
+            int xStart = (width / 2) + 95;
             int baseY = height - 21;
 
-            for (int i = 0; i < skillCount; i++) {
-                int row = (skillCount >= 7 && i >= 6) ? 1 : 0;
-                int col = (skillCount >= 7 && i >= 6) ? i - 6 : i;
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(0, 0, 200);
 
-                int drawX = xRightEdge + (col * spacing);
+            for (int i = 0; i < skillCount; i++) {
+                int row = (i >= 6) ? 1 : 0;
+                int col = (i >= 6) ? i - 6 : i;
+
+                int drawX = xStart + (col * spacing);
                 int drawY = baseY - (row * spacing);
 
-                renderSlot(guiGraphics, drawX, drawY, i, identity, mc.font);
+                renderMonsterSlot(guiGraphics, drawX, drawY, i, identity, mc.font);
             }
+            guiGraphics.pose().popPose();
         });
     };
 
-    private static void renderSlot(GuiGraphics gui, int x, int y, int index, BaseIdentity identity, Font font) {
-        SkillId[] skills = identity.getSkillIds();
-        if (index >= skills.length) return;
-
-        SkillId skillId = skills[index];
+    private static void renderMonsterSlot(GuiGraphics guiGraphics, int x, int y, int index, BaseIdentity identity, Font font) {
+        SkillId skillId = identity.getSkillIds()[index];
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
         if (lead == null) return;
 
         int currentCd = identity.getCooldown(index);
         int defaultCd = identity.getDefaultCooldown(index);
+        boolean isEffectActive = identity.isEffectActive(index);
+        boolean isAnyActive = identity.isAnySkillActive();
+        boolean isComboWindow = identity.isComboWindowActive();
+        int lockTime = identity.getLockTime(index);
 
-        // --- 1. 枠色の決定 ---
+        // --- 1. カラー定義 ---
+        int colorReady = 0x8833FF00;
+        int colorActive = 0x8800CCFF;
+        int colorCooldown = 0x88FF4444;
+        int colorLocked = 0x88555555;
+        int colorComboWindow = 0x88FFFF00;
+
         int frameColor;
+        if (isEffectActive) frameColor = colorActive;
+        else if (currentCd > 0 || lockTime > 0) frameColor = colorCooldown;
+        else {
+            boolean canCast;
+            if (lead.category == SkillType.Category.CANCEL) canCast = true;
+            else if (lead.category == SkillType.Category.COMBO) canCast = isComboWindow;
+            else if (lead.category == SkillType.Category.NORMAL) {
+                boolean isDashing = false;
+                for (SkillId sid : identity.getSkillIds()) {
+                    SkillLead l = SkillLeadRegistry.getNullable(sid);
+                    if (l != null && l.category == SkillType.Category.DASH && identity.getComboWindow(identity.findSkillIndex(sid)) > 0) {
+                        isDashing = true; break;
+                    }
+                }
+                canCast = !isAnyActive || isDashing;
+            } else canCast = !isAnyActive;
 
-        // 【最優先】クールダウン中はカテゴリに関わらず「赤」
-        if (currentCd > 0) {
-            frameColor = 0xFFFF0000;
+            frameColor = canCast ? (lead.category == SkillType.Category.COMBO && isComboWindow ? colorComboWindow : colorReady) : colorLocked;
         }
-        // 2. CANCELカテゴリ：CD中でなければ「常に緑」
-        else if (lead.category == SkillType.Category.CANCEL) {
-            frameColor = 0xFF00FF00;
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0);
+        int s = 20;
+
+        // --- 背景 (黒透過) ---
+        int bgTrans = 0x66151515;
+        guiGraphics.fill(1, 0, s - 1, s, bgTrans);
+        guiGraphics.fill(0, 1, s, s - 1, bgTrans);
+        // --- 3. キーバインド & カテゴリ ---
+        String keyLabel = getBindingLabel(index);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(s / 2f, s / 2f - 5, 10);
+        float keyScale = (keyLabel.length() > 2) ? 0.5f : 0.7f;
+        guiGraphics.pose().scale(keyScale, keyScale, keyScale);
+        guiGraphics.drawCenteredString(font, keyLabel, 0, 0, 0xCCFFFFFF);
+        guiGraphics.pose().popPose();
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(s / 2f, s - 4, 12);
+        guiGraphics.pose().scale(0.4f, 0.4f, 0.4f);
+        int catColor = (lead.category == SkillType.Category.COMBO && isComboWindow) ? 0xCCFFFF00 : 0xCCBBBBBB;
+        guiGraphics.drawCenteredString(font, lead.category.name(), 0, 0, catColor);
+        guiGraphics.pose().popPose();
+
+        // --- 4. クールダウン・プレビュー影演出 ---
+        if ((currentCd > 0 || lockTime > 0) && !isEffectActive) {
+            // lockTimeがある間はプレビュー期間なので、本来のCDゲージは止まっているか最大で維持
+            float ratio = (currentCd > 0) ? (float) currentCd / defaultCd : 1.0f;
+            int shadowH = (int) ((s - 2) * ratio);
+            int shadowY = (s - 1) - shadowH;
+
+            guiGraphics.fill(1, Math.max(1, shadowY), s - 1, s - 1, 0x99000000);
+            if (shadowY < 1) guiGraphics.fill(2, 0, s - 2, 1, 0x99000000);
+        } else if (isEffectActive) {
+            guiGraphics.fill(1, 1, s - 1, s - 1, 0x3300CCFF);
         }
-        // 3. COMBOカテゴリ：コンボ受付中なら「緑」、それ以外は「灰色」
-        else if (lead.category == SkillType.Category.COMBO) {
-            frameColor = identity.isComboWindowActive() ? 0xFF00FF00 : 0xFF444444;
-        }
-        // 4. NORMALカテゴリ：何もしてない or DASH派生受付中なら「緑」、それ以外は「灰色」
-        else if (lead.category == SkillType.Category.NORMAL) {
-            boolean isDashing = false;
-            for (int i = 0; i < skills.length; i++) {
-                SkillLead l = SkillLeadRegistry.getNullable(skills[i]);
-                if (l != null && l.category == SkillType.Category.DASH && identity.getComboWindow(i) > 0) {
-                    isDashing = true;
-                    break;
+
+        // --- 5. 外枠 ---
+        drawCustomFrame(guiGraphics, s, frameColor);
+
+        //todo追加 --- 6. 秒数表示 (プレビュー:オレンジ isComboWindowtick=        int colorComboWindow = 0x88FFFF00;この色/ CD:白) ---
+        renderTimeText(guiGraphics, font, s, index, identity, skillId, currentCd, isEffectActive);
+
+        // --- 7. スキル名 ---
+        String name = skillId.location().getPath().replace("test_", "").toUpperCase();
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(s / 2f, -4, 10);
+        guiGraphics.pose().scale(0.5f, 0.5f, 0.5f);
+        guiGraphics.drawCenteredString(font, name, 0, 0, 0xBBCCCCCC);
+        guiGraphics.pose().popPose();
+
+        guiGraphics.pose().popPose();
+    }
+
+    private static void drawCustomFrame(GuiGraphics guiGraphics, int s, int c) {
+        guiGraphics.fill(1, 0, s - 1, 1, c);
+        guiGraphics.fill(1, s - 1, s - 1, s, c);
+        guiGraphics.fill(0, 1, 1, s - 1, c);
+        guiGraphics.fill(s - 1, 1, s, s - 1, c);
+        guiGraphics.fill(1, 1, 2, 2, c);
+        guiGraphics.fill(s - 2, 1, s - 1, 2, c);
+        guiGraphics.fill(1, s - 2, 2, s - 1, c);
+        guiGraphics.fill(s - 2, s - 2, s - 1, s - 1, c);
+    }
+
+    private static void renderTimeText(GuiGraphics guiGraphics, Font font, int s, int index, BaseIdentity identity, SkillId skillId, int currentCd, boolean isEffectActive) {
+        String cdText = null;
+        int color = 0xFFFFFFFF; // デフォルトは白
+
+        int lockTime = identity.getLockTime(index);
+        SkillLead lead = SkillLeadRegistry.getNullable(skillId);
+
+        if (lockTime > 0 && lead != null) {
+            // タイムライン計算: [予兆] -> [効果(青枠)] -> [後隙]
+            int effectEnd = lead.recoveryTicks + 1;
+            int effectStart = effectEnd + lead.effectTicks;
+
+            if (lockTime > effectStart) {
+                /// todo追加　comboカテゴリーのスキルに対してcobowindotickをcoboのすきるのところに秒数表示じゃね
+                // ★ プレビュー(予兆)時間：オレンジ色
+                cdText = formatTime(lockTime - effectStart);
+                color = 0xFFFF9900; // おしゃれなオレンジ
+            } else if (isEffectActive) {
+                // ★ 効果発動中：水色
+                int remainingEffect = lockTime - effectEnd;
+                if (remainingEffect > 0) {
+                    cdText = formatTime(remainingEffect);
+                    color = 0xFF00E6FF;
                 }
             }
-            frameColor = (!identity.isAnySkillActive() || isDashing) ? 0xFF00FF00 : 0xFF555555;
-        }
-        // 5. DASH, UNIQUE, その他：何か一つでもスキルが動いていたら「灰色」、暇なら「緑」
-        else {
-            frameColor = identity.isAnySkillActive() ? 0xFF555555 : 0xFF00FF00;
+            // recovery期間（後隙）に入ると lockTime は残っているが、
+            // 下記の currentCd 分岐に任せるか、あるいは白にシフトする
         }
 
-        // --- 2. 描画処理 (背景・枠・ゲージ) ---
-        // 背景
-        gui.fill(x + 1, y + 1, x + 19, y + 19, 0x90101010);
-
-        // 決定した frameColor で枠を描画
-        gui.fill(x, y, x + 20, y + 1, frameColor);             // 上
-        gui.fill(x, y + 19, x + 20, y + 20, frameColor);       // 下
-        gui.fill(x, y + 1, x + 1, y + 19, frameColor);         // 左
-        gui.fill(x + 19, y + 1, x + 20, y + 19, frameColor);   // 右
-
-        // クールダウンゲージ
-        if (currentCd > 0) {
-            float ratio = (float) currentCd / Math.max(1, defaultCd);
-            int fillHeight = (int) (18 * ratio);
-            gui.fill(x + 1, y + 19 - fillHeight, x + 19, y + 19, 0x44FFFFFF);
+        // プレビュー表示がなくて、クールダウンがある場合
+        if (cdText == null && currentCd > 0) {
+            cdText = formatTime(currentCd);
+            color = 0xFFFFFFFF; // 通常クールダウンは白
         }
 
-        // --- 3. ラベルと名前 (既存のまま) ---
-        String keyLabel = getBindingLabel(index);
-        gui.drawCenteredString(font, keyLabel, x + 10, y + 6, 0xFFFFFFFF);
+        if (cdText != null) {
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(s / 2f, s / 2f + 1, 50);
+            float scale = 0.85f;
+            guiGraphics.pose().scale(scale, scale, scale);
+            guiGraphics.drawCenteredString(font, cdText, 0, 0, color);
+            guiGraphics.pose().popPose();
+        }
+    }
 
-        String name = skillId.location().getPath().replace("test_", "").toUpperCase();
-        gui.pose().pushPose();
-        float finalScale = (name.length() >= 6) ? 0.4f : 0.6f;
-        gui.pose().scale(finalScale, finalScale, finalScale);
-        gui.drawCenteredString(font, name, (int)((x + 10) / finalScale), (int)((y - 6) / finalScale), 0xFFCCCCCC);
-        gui.pose().popPose();
+    private static String formatTime(int ticks) {
+        float sec = ticks / 20.0f;
+        return (ticks <= 100) ? String.format("%.1f", sec) : String.valueOf((int) Math.ceil(sec));
     }
 
     private static String getBindingLabel(int index) {
         if (index >= 0 && index < MonsterKeyBindings.SKILL_KEYS.length) {
-            return MonsterKeyBindings.SKILL_KEYS[index].getTranslatedKeyMessage().getString().toUpperCase();
+            String key = MonsterKeyBindings.SKILL_KEYS[index].getTranslatedKeyMessage().getString().toUpperCase();
+            return key.replace("MOUSE BUTTON ", "M").replace("BUTTON ", "M");
         }
         return String.valueOf(index + 1);
     }

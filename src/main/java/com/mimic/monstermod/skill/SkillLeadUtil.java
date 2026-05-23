@@ -34,7 +34,7 @@ public final class SkillLeadUtil {
 
         switch (lead.shape) {
             case SPHERE -> b.radius(lead.radius);
-            case CYLINDER -> b.radius(lead.radius).height(lead.height);
+            case CYLINDER, RADIAL, SPIRAL -> b.radius(lead.radius).height(lead.height);
             case FAN -> b.fan(lead.radius, lead.angleDeg).height(lead.height);
             case RECT_PRISM, BOX -> b.rect(lead.xRadius, lead.zRadius).height(lead.height);
             case TRI_PRISM -> b.triangle(lead.baseHalf, lead.depth).height(lead.height);

@@ -12,8 +12,10 @@ import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber(modid = "monstermod", value = Dist.CLIENT)
+//体力ゲージについて左上に作る場合は四角もしくは斜め四角とか角斜めとかが画面っていう四角のボックスに入ってるのに対しては見やすいと思う
+//しかしそれではない真ん中にある場合は四角でもいいのだがマイクラはスロットと体力食料ゲージの関係から四角が多すぎる場合は逆に見にくくなる可能性が高いから真ん中にあるしカプセル型がいいだろう
+//もちろんそうでない場合は単純に四角でもいいのだが、そこは周りのセンスやゲーム雰囲気によるだろう
 public class MonsterHpOverlay {
-
     private static final Minecraft mc = Minecraft.getInstance();
 
     /** IGuiOverlay に登録することで描画タイミングが安定 */

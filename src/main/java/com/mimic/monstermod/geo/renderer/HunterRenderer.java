@@ -18,6 +18,7 @@ public class HunterRenderer extends GeoEntityRenderer<HunterEntity> {
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
 
         poseStack.pushPose();
+
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
         poseStack.popPose();
     }

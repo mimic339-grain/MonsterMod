@@ -56,30 +56,31 @@ public class C2S_SkillCastRequestPacket {
      * (元のコードのロジックを崩さないように切り出し)
      */
     private static void processSkillCast(ServerPlayer player, com.mimic.monstermod.identity.BaseIdentity identity, SkillId skillId) {
+        // サーバー側の Identity インデックス確認
         int skillIndex = identity.findSkillIndex(skillId);
+        if (skillIndex == -1) return;
 
-        // クールダウン・ロック中なら中断
-        if (skillIndex != -1) {
-            if (identity.getCooldown(skillIndex) > 0 || identity.isLocking(skillIndex)) return;
-        }
+        // サーバー側でのクールダウン/ロック最終チェック
+        if (identity.getCooldown(skillIndex) > 0 || identity.isLocking(skillIndex)) return;
 
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
         if (lead == null) return;
 
         MathMain math = SkillLeadUtil.buildMath(lead, player.position());
 
-        // 共通の実行ユーティリティ
-        if (SkillUtil.tryExecute(player.serverLevel(), player, lead, math)) {
-            // クライアント(周囲のプレイヤー含む)へスキル描画パケットを送信
+        // --- 実行判定と状態適用 ---
+        // 1. SkillUtil で「スケジュールとして実行可能か」を判定し登録
+        if (com.mimic.monstermod.skill.SkillUtil.tryExecute(player.serverLevel(), player, lead, math)) {
+
+            // 2. 成功した場合のみ、サーバー側の Identity のCDとLockを確定させる
+            // ※ handleAbility を呼ぶとまたパケット送信処理に入ってしまうため、applyCastResult を直接呼ぶ
+            identity.applyCastResult(lead);
+
+            // 3. 自分を含む周囲のプレイヤーに「描画していいよ」とパケットを送信
             ModMessages.INSTANCE.send(
                     PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
                     new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
             );
-
-            // Identity側の事後処理（ここでCDセットやCapabilityの同期が走る）
-            if (skillIndex != -1) {
-                identity.handleAbility(player, skillIndex);
-            }
         }
     }
 }

@@ -28,12 +28,7 @@ public final class PreviewEvents {
 
     private static final List<Preview> PREVIEWS = new LinkedList<>();
 
-    public static void spawnLocal(Entity caster, SkillLead lead, MathMain math) {
-        handlePreviewSpawning(caster, lead, math, "[Preview] Local spawn: ");
-    }
-
     public static void spawnFromServer(Entity caster, SkillLead lead, MathMain math) {
-        if (caster == Minecraft.getInstance().player) return;
         handlePreviewSpawning(caster, lead, math, "[Preview] S2C spawn: ");
     }
 

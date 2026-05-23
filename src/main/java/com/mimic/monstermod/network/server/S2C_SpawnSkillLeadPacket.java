@@ -8,6 +8,7 @@ import com.mimic.monstermod.skill.SkillLeadRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -65,41 +66,33 @@ public final class S2C_SpawnSkillLeadPacket {
         return new S2C_SpawnSkillLeadPacket(casterEntityId, skillId, math);
     }
 
-    /* =============================================================
-     * Handle (Client)
-     * ============================================================= */
-
     public static void handle(S2C_SpawnSkillLeadPacket msg, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
-
         context.enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
-
-            if (mc.level == null) {
-                System.out.println("[SkillPreview] level == null");
-                return;
-            }
+            if (mc.level == null) return;
 
             Entity caster = mc.level.getEntity(msg.casterEntityId);
-            if (caster == null) {
-                System.out.println("[SkillPreview] caster not found");
-                return;
-            }
-
-            // ★ 自分のプレイヤーはローカル描画しているため無視
-            if (caster == mc.player) return;
+            if (caster == null) return;
 
             SkillLead lead = SkillLeadRegistry.getNullable(msg.skillId);
-            if (lead == null) {
-                System.out.println("[SkillPreview] SkillLead missing on client: " + msg.skillId);
-                return;
+            if (lead == null) return;
+
+            // --- 全員共通：IdentityのCD/Lockを同期 ---
+            if (caster instanceof Player player) {
+                // 通常・ハンター両方のCapabilityを更新
+                player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(cap -> {
+                    if (cap.getIdentity() != null) cap.getIdentity().applyCastResult(lead);
+                });
+                player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(cap -> {
+                    if (cap.isActive() && cap.getIdentity() != null) cap.getIdentity().applyCastResult(lead);
+                });
             }
 
-            System.out.println("[SkillPreview] Spawning preview for " + caster.getName().getString());
-
+            // --- 全員共通：プレビューを表示 ---
+            // 自分の handleAbility で spawnLocal を消したので、ここで spawnFromServer を呼べば全員に見える
             PreviewEvents.spawnFromServer(caster, lead, msg.math);
         });
-
         context.setPacketHandled(true);
     }
 }

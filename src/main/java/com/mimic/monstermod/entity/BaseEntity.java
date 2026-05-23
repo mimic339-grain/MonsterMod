@@ -40,7 +40,18 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
     private final Set<String> activeStates = new HashSet<>();
     private int skillTick = 0; // スキルの残り時間などを保持
     private boolean initialSynced = false;
+    @Override
+    public float getEyeHeight(Pose pose) {
+        return this.getCustomEyeHeight(this.getDimensions(pose));
+    }
 
+    // 子クラスでオーバーライドするためのメソッドを作成
+    protected float getCustomEyeHeight(EntityDimensions dimensions) {
+        return dimensions.height * 0.85f; // デフォルトの目線
+    }
+    protected EntityDimensions getCustomDimensions() {
+        return EntityDimensions.fixed(0.6f, 1.8f); // デフォルト
+    }
     // 寸法設定
     protected EntityDimensions monsterDimensions = EntityDimensions.fixed(0.6f, 1.8f);
     protected float monsterEyeHeight = 1.62f;
@@ -97,12 +108,6 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
     }
 
     // --- 基本パラメータ ---
-    @Override
-    public float getEyeHeight(Pose pose) { return monsterEyeHeight; }
-    @Override
-    public EntityDimensions getDimensions(Pose pose) { return monsterDimensions; }
-    public float getStepHeightValue() { return 1.0f; }
-
     // --- 移動状態 ---
     private boolean playerActiveMove = false;
     public void setPlayerActiveMove(boolean moving) { this.playerActiveMove = moving; }
@@ -132,7 +137,10 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
             }
         }
     }
-
+    // デフォルトでON。特定のEntityだけ消したいならそのEntityでfalseを返すようoverrideする
+    public boolean shouldShowHitbox() {
+        return true;
+    }
     public void syncMonsterState() {
         if (level().isClientSide || !(level() instanceof ServerLevel)) return;
 
@@ -183,5 +191,9 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
                 .add(Attributes.ATTACK_DAMAGE, damage)
                 .add(Attributes.ARMOR, armor)
                 .add(Attributes.KNOCKBACK_RESISTANCE, resistance);
+    }
+
+    public float getStepHeightValue() {
+        return 1.0f;
     }
 }

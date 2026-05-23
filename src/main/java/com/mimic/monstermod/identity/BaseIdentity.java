@@ -1,13 +1,17 @@
 package com.mimic.monstermod.identity;
 
-import com.mimic.monstermod.Math.MathMain;
 import com.mimic.monstermod.effect.EffectRenderManager;
 import com.mimic.monstermod.entity.BaseEntity;
-import com.mimic.monstermod.skill.*;
+import com.mimic.monstermod.skill.SkillId;
+import com.mimic.monstermod.skill.SkillLead;
+import com.mimic.monstermod.skill.SkillLeadRegistry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
@@ -39,9 +43,18 @@ public class BaseIdentity {
     }
 
 
-    public String getId() { return id; }
-    @Nullable public BaseEntity getEntity() { return entity; }
-    public SkillId[] getSkillIds() { return this.skillIds; }
+    public String getId() {
+        return id;
+    }
+
+    @Nullable
+    public BaseEntity getEntity() {
+        return entity;
+    }
+
+    public SkillId[] getSkillIds() {
+        return this.skillIds;
+    }
 
     /**
      * 指定したスキルの予兆ロック中かチェック
@@ -50,10 +63,12 @@ public class BaseIdentity {
         if (index < 0 || index >= lockCooldowns.length) return false;
         return lockCooldowns[index] > 0;
     }
+
     public int getLockTime(int index) {
         if (index < 0 || index >= lockCooldowns.length) return 0;
         return lockCooldowns[index];
     }
+
     //HUD用のeffecttick中の青色枠表示 todo あっていない　スキル発動中のeffecttick期間中のみ青色にみせるようにするもの　この計算ではあっていない　またeffecttickが1だと青色にする処理をなくす1tickだけ青色とかわからなすぎるからいらない
     public boolean isEffectActive(int index) {
         if (index < 0 || index >= this.skillIds.length) return false;
@@ -83,6 +98,7 @@ public class BaseIdentity {
         // この場合、51 >= lockTime > 31 の間だけ true になる
         return lockTime <= effectStart && lockTime > effectEnd;
     }
+
     public void tickServer(Player player) {
         updateCooldowns(player, "サーバー");
         copyFromPlayerServer(player);
@@ -92,21 +108,25 @@ public class BaseIdentity {
         updateCooldowns(player, "クライアント");
         copyFromPlayerClient(player);
     }
+
     public int getDefaultCooldown(int index) {
         if (index < 0 || index >= defaultCooldowns.length) return 0;
         return defaultCooldowns[index];
     }
+
     public void updateCooldowns(Player player, String side) {
         for (int i = 0; i < abilityCooldowns.length; i++) {
-            // 1. 予兆ロック減算
-            if (lockCooldowns[i] > 0) {
-                lockCooldowns[i]--;
-                continue; // ロック中はリロードを進めない
-            }
             // 2. コンボ受付時間の減算 (新規)
             if (comboWindows[i] > 0) {
                 comboWindows[i]--;
             }
+
+            // 1. 予兆ロaック減算
+            if (lockCooldowns[i] > 0) {
+                lockCooldowns[i]--;
+                continue; // ロック中はリロードを進めない
+            }
+
 
             // 2. リロード減算
             if (abilityCooldowns[i] > 0) {
@@ -126,6 +146,7 @@ public class BaseIdentity {
         }
         return false;
     }
+
     /**
      * いずれかのスキルのコンボ受付タイマーが動いているか（コンボ可能か）を返す
      */
@@ -144,72 +165,72 @@ public class BaseIdentity {
         return comboWindows[index];
     }
 
+    /**
+     * SkillCategoryに基づいた発動可否判定 (BaseIdentityのロジックをカプセル化)
+     */
+    private boolean canCastByCategory(SkillLead lead) {
+        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.CANCEL) return true;
+
+        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.COMBO) {
+            return isComboWindowActive();
+        }
+
+        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.NORMAL) {
+            boolean isDashing = false;
+            for (int i = 0; i < skillIds.length; i++) {
+                SkillLead l = SkillLeadRegistry.getNullable(skillIds[i]);
+                if (l != null && l.category == com.mimic.monstermod.skill.SkillType.Category.DASH && comboWindows[i] > 0) {
+                    isDashing = true;
+                    break;
+                }
+            }
+            return !isAnySkillActive() || isDashing;
+        }
+
+        // DASH, UNIQUEなどは他のスキルが動いていないことが条件
+        return !isAnySkillActive();
+    }
+
     public void handleAbility(Player player, int skillIndex) {
         if (skillIndex < 0 || skillIndex >= skillIds.length) return;
         SkillId skillId = skillIds[skillIndex];
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
         if (lead == null) return;
 
-        // --- 【修正】 クールダウン中は全スキル（CANCEL含む）発動不可 ---
-        // すべてのスキルの当たり前：CD中はパケットを送らない
-        if (abilityCooldowns[skillIndex] > 0) return;
+        if (player.level().isClientSide()) {
+            if (abilityCooldowns[skillIndex] > 0 || lockCooldowns[skillIndex] > 0) return;
+            if (!canCastByCategory(lead)) return;
 
-        boolean canCast = false;
+            // ★仮ロック：サーバーからS2Cが届くまでのパケット連打防止
+            this.lockCooldowns[skillIndex] = 20;
 
-        if (lead.category == SkillType.Category.CANCEL) {
-            canCast = true;
+            // ★先行プレビュー：自分だけは即座に見えるようにする
+            // ここで math を生成して PreviewEvents.spawnLocal する処理が必要です
+            // (もし MathMain の生成ロジックがあるならここに追加)
+
+            com.mimic.monstermod.network.ModMessages.INSTANCE.sendToServer(
+                    new com.mimic.monstermod.network.client.C2S_SkillCastRequestPacket(skillId)
+            );
         }
+    }
 
-        else if (lead.category == SkillType.Category.COMBO) {
-            for (int window : comboWindows) {
-                if (window > 0) { canCast = true; break; }
-            }
-        }
+    /**
+     * サーバー側・クライアント側共通：スキル発動の結果をIdentityの状態（CD・Lock）に反映させる
+     * 引数を (SkillLead lead) のみにし、内部で index を探す設計に統一
+     */
+    public void applyCastResult(SkillLead lead) {
+        int index = findSkillIndex(lead.skillId());
+        if (index == -1) return;
 
-        else if (lead.category == SkillType.Category.NORMAL) {
-            // NORMAL：何も動いていない時、またはDASHのcomboWindow中の時だけ
-            boolean isDashing = false;
-            for (int i = 0; i < skillIds.length; i++) {
-                SkillLead l = SkillLeadRegistry.getNullable(skillIds[i]);
-                if (l != null && l.category == SkillType.Category.DASH && comboWindows[i] > 0) {
-                    isDashing = true;
-                    break;
-                }
-            }
-            // 何も動いていない(isAnySkillActive=false) or DASHからの派生
-            if (!isAnySkillActive() || isDashing) canCast = true;
-        }
-        else {
-            // DASH, UNIQUE：他のスキル発動中は不可
-            if (!isAnySkillActive()) canCast = true;
-        }
-
-        if (!canCast) return;
-        // --- 発動確定後の処理 ---
-        // CANCELなら既存のロックをすべて解除（Identity側のロックも消す）
-        if (lead.category == SkillType.Category.CANCEL) {
+        // CANCELカテゴリーなら既存の全スキル予兆ロックを即座にリセット
+        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.CANCEL) {
             for (int i = 0; i < lockCooldowns.length; i++) lockCooldowns[i] = 0;
         }
-        //dashもuniqueも重ねて発動が不可能　normal→dash or unique　とかはしてほしくない重ねるのがだめでskillが終わったら発動可能
-        //ここにいれるべきかわからないけどskillが発動ができた場合に限りcombowindowをセットするとかをするのかな
-        // --- タイマーセット ---
-        this.lockCooldowns[skillIndex] = lead.skillTicks;
-        this.abilityCooldowns[skillIndex] = (skillIndex < defaultCooldowns.length) ? defaultCooldowns[skillIndex] : 60;
-// 【重要】DASHやNORMALが発動した際、コンボ受付時間をセットする
-        this.comboWindows[skillIndex] = lead.comboWindowTicks;
 
-        // パケット送信
-        if (player.level().isClientSide()) {
-            MathMain math = SkillLeadUtil.buildMath(lead, player.position());
-            com.mimic.monstermod.events.PreviewEvents.spawnLocal(player, lead, math);
-            com.mimic.monstermod.network.ModMessages.INSTANCE.sendToServer(new com.mimic.monstermod.network.client.C2S_SkillCastRequestPacket(skillId));
-        } else {
-            // サーバー側：即時スキル実行（予兆なしスキルの場合）
-            if (lead.totalPreviewTicks <= 0) {
-                SkillEffectSpec spec = SkillEffectRegistry.getNullable(skillId);
-                if (spec != null) spec.apply(player, null);
-            }
-        }
+        // 正式なタイマーセット
+        this.lockCooldowns[index] = lead.skillTicks;
+        this.abilityCooldowns[index] = (index < defaultCooldowns.length) ? defaultCooldowns[index] : 60;
+        this.comboWindows[index] = lead.comboWindowTicks;
     }
 
     public int findSkillIndex(com.mimic.monstermod.skill.SkillId skillId) {
@@ -272,29 +293,59 @@ public class BaseIdentity {
         if (menuKey) handleMenu(player);
         if (useKey && skillIndex >= 0) handleAbility(player, skillIndex);
     }
-    public void handleMenu(Player player) {}
+
+    public void handleMenu(Player player) {
+    }
 
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
+        // サーバーが覚えている現在のクールダウン状態を保存
         tag.putIntArray("cooldowns", abilityCooldowns);
         tag.putIntArray("lock_cooldowns", lockCooldowns);
         tag.putIntArray("combo_windows", comboWindows);
+        tag.putIntArray("default_cooldowns", defaultCooldowns);
+        // ★スキルIDも保存する
+        ListTag skillList = new ListTag();
+        for (SkillId sid : skillIds) {
+            if (sid != null) skillList.add(StringTag.valueOf(sid.toString()));
+            else skillList.add(StringTag.valueOf("null"));
+        }
+        tag.put("skill_ids", skillList);
         return tag;
     }
 
     public void deserializeNBT(CompoundTag tag) {
-        if (tag.contains("cooldowns")) {
-            int[] saved = tag.getIntArray("cooldowns");
-            for (int i = 0; i < abilityCooldowns.length && i < saved.length; i++) abilityCooldowns[i] = saved[i];
+        if (tag == null) return;
+
+        // 1. スキルID文字列リストから SkillId オブジェクトを再生成
+        if (tag.contains("skill_ids", Tag.TAG_LIST)) {
+            ListTag skillList = tag.getList("skill_ids", Tag.TAG_STRING);
+            for (int i = 0; i < this.skillIds.length && i < skillList.size(); i++) {
+                String s = skillList.getString(i);
+                if (!s.equals("null") && !s.isEmpty()) {
+                    // 文字列から ResourceLocation を経由して再構築
+                    this.skillIds[i] = new com.mimic.monstermod.skill.SkillId(new net.minecraft.resources.ResourceLocation(s));
+                }
+            }
         }
-        if (tag.contains("lock_cooldowns")) {
-            int[] saved = tag.getIntArray("lock_cooldowns");
-            for (int i = 0; i < lockCooldowns.length && i < saved.length; i++) lockCooldowns[i] = saved[i];
+
+        // 2. 各種タイマー配列の復元
+        restoreArray(tag, "cooldowns", this.abilityCooldowns);
+        restoreArray(tag, "lock_cooldowns", this.lockCooldowns);
+        restoreArray(tag, "combo_windows", this.comboWindows);
+
+        if (tag.contains("default_cooldowns")) {
+            this.defaultCooldowns = tag.getIntArray("default_cooldowns");
         }
-        if (tag.contains("combo_windows")) {
-            int[] saved = tag.getIntArray("combo_windows");
-            for (int i = 0; i < comboWindows.length && i < saved.length; i++) comboWindows[i] = saved[i];
+    }
+
+    private void restoreArray(CompoundTag tag, String key, int[] target) {
+        if (tag.contains(key)) {
+            int[] saved = tag.getIntArray(key);
+            // 現在のModバージョンとセーブデータの配列長が異なっても安全にコピー
+            int length = Math.min(target.length, saved.length);
+            System.arraycopy(saved, 0, target, 0, length);
         }
     }
 }

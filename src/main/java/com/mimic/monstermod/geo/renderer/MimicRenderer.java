@@ -19,7 +19,6 @@ public class MimicRenderer extends GeoEntityRenderer<MimicEntity> {
 
         poseStack.pushPose();
 
-        // GeckoLib 描画
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 
         poseStack.popPose();

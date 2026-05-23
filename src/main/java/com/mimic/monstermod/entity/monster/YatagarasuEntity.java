@@ -1,0 +1,119 @@
+package com.mimic.monstermod.entity.monster;
+
+import com.mimic.monstermod.entity.BaseEntity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.level.Level;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.*;
+import software.bernie.geckolib.core.object.PlayState;
+
+public class YatagarasuEntity extends BaseEntity {
+
+    private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
+    private String currentSkillAnim = null;
+
+    public YatagarasuEntity(EntityType<? extends BaseEntity> type, Level level) {
+        super(type, level);
+        // これを呼ぶことで、getDimensions() と getEyeHeight() が即座に再計算されます
+        this.refreshDimensions();
+    }
+    @Override
+    protected EntityDimensions getCustomDimensions() {
+        return EntityDimensions.fixed(1.2f, 3.0f);
+    }
+
+    @Override
+    protected float getCustomEyeHeight(EntityDimensions dimensions) {
+        return 3.0f; // ここで固定値を返す
+    }
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, "main", 5, this::mainPredicate));
+    }
+    // --- 1. スキルアニメーション再生 ---
+    /**
+     *todo スキル1の螺旋突進はプレビュ＋animation.yatagarasu.spin_idleー→スキル発動でanimation.yatagarasu.spinを行う　スキル効果時間が終わったらanimation.yatagarasu.spin_afterをする
+     *スキル２　エアスラッシュ　プレビュー→スキル発動　animation.yatagarasu.tatsumakiを行う
+     *スキル３　プレビュー＋animation.yatagarasu.chargeでぐるぐる回って　→スキル発動でanimation.yatagarasu.tatsumakiを行う
+     *スキル４　プレビュー＋animation.yatagarasu.spin_idleを自分ではなくentityを自分の横に出して自分は        // --- 2. 通常時のアニメーション（待機・移動） ---
+     *         if (this.onGround()) {
+     *             if (event.isMoving()) {
+     *                 controller.setAnimation(RawAnimation.begin().then("animation.yatagarasu.run", Animation.LoopType.LOOP));
+     *             } else {
+     *                 controller.setAnimation(RawAnimation.begin().then("animation.yatagarasu.idle", Animation.LoopType.LOOP));
+     *             }
+     *         }これのidleでいいんだけど自分の横に出す八咫烏はanimation.yatagarasu.spin_idleでスキル発動まで待機させる→スキル発動で幻影の八咫烏のみにanimation.yatagarasu.spinを行わせる そのまま消える
+     *スキル５ 6 9 10 11 この鏡を出すのはこのアニメーしょんはない作るべき？？
+     *スキル7　プレビュー→スキル発動でanimation.yataarasu.roar
+     *スキル８　プレビュー＋animation.yatagarasu.charge+上に上昇する当たり判定はそのままモデルと自分の目線だけ上に上がるコードで上空に上がったように見せる？→その場でスキル発動でanimation.yataarasu.roar
+     *
+     *
+     *
+     *
+     */
+    private PlayState mainPredicate(AnimationState<YatagarasuEntity> event) {
+        AnimationController<YatagarasuEntity> controller = event.getController();
+        String currentSkill = getCurrentSkill();
+
+        // 1. スキル再生 (JSON内のキー名に完全一致させる)
+        if (currentSkill != null && !currentSkill.isEmpty()) {
+            String skillAnim = switch (currentSkill) {
+                case "spiral_dash" -> "animation.yatagarasu.spin";
+                case "air_slash", "tornado" -> "animation.yatagarasu.tatsumaki";
+                case "roar" -> "animation.yatagarasu.roar";
+                case "charge" -> "animation.yatagarasu.charge"; // JSONにあるので追加
+                default -> null;
+            };
+
+            if (skillAnim != null) {
+                // RawAnimationを直接セット。同じアニメーションが再生中ならGeckoLibが無視してくれる
+                controller.setAnimation(RawAnimation.begin().then(skillAnim, Animation.LoopType.PLAY_ONCE));
+
+                // アニメーションが終了したらスキル状態をリセットする（サーバー同期用）
+                if (controller.getAnimationState() == AnimationController.State.STOPPED) {
+                    if (!level().isClientSide) {
+                        setCurrentSkill(null);
+                    }
+                }
+                return PlayState.CONTINUE;
+            }
+        }
+
+        // 2. 通常時のアニメーション (ここもJSONのキー名に完全一致させる)
+        String anim = event.isMoving()
+                ? "animation.yatagarasu.run"
+                : "animation.yatagarasu.idle";
+
+        controller.setAnimation(RawAnimation.begin().then(anim, Animation.LoopType.LOOP));
+        currentSkillAnim = null;
+        return PlayState.CONTINUE;
+    }
+
+    public static AttributeSupplier.Builder createAttributes() {
+        return BaseEntity.createDefaultAttributes(
+                300.0D, // HP（ボス級）
+                0.35D,  // 移動速度（少し速め）
+                15.0D,  // 攻撃力
+                1.0D,   // ノックバック耐性
+                0D   // アーマー
+        );
+    }
+}
+//No,技名（仮）,攻撃内容・特徴
+//1,螺旋突進,体を細くし、水平姿勢でスピンしながら高速突進。→あたったらダメージ　
+//2,エアスラッシュ,羽を飛ばす前方範囲攻撃。→はんいにいたらだめーじ　形は扇形
+//3,八咫の旋風,回転予備動作後、四隅に追尾竜巻を発生。四隅の竜巻は追尾型で範囲は普通　もう一個自分を中心に大竜巻の発生中心は吸引＋大ダメージ＋大範囲。
+//4　鏡像の乱舞　強ワザ　自分の横方向に２体挟むようにmodelを配置してこのmodelには当たり判定があり偽物と分けるためこのモデルの後ろには鏡がある　んで、そのモデルが螺旋突進,体を細くし、水平姿勢でスピンしながら高速突進。→あたったらダメージを行う感じ　まっすぐにしか行けないけど３回連続でやったりする
+//５鏡の発生　自分から8方向に設置　entityとして動かない鏡を発生させる　この鏡に変身しているplayerが当たれば他の鏡にワープするため螺旋突進して突進してきて自分の方向ではないとわかってもかmonsterが鏡に当たればランダムに自分の近くの鏡に来る可能性があり
+//また、この鏡に弾幕が設置された鏡に鬼火が触れると、**逆方向へ加速(1.5倍)**して反射。
+//6,炎柱,設置型で鬼火柱を立たせる。　playerの存在する場所を特定してそこに設置型でお区感じ　範囲は4かける4とか四角か円型かは未定　おすすめあれば
+//7,神威の咆哮,咆哮によるバインド（移動不可）状態付与。　広範囲のbind　
+//8	昇天爆砕	回転上昇後に咆哮し、範囲を100かける100とかで決めて一定時間30秒ぐらい地面からy+30上の場所に鬼火を設置してふわふわと落下させる落下は傘のようにらんだむにwasd咆哮に動く　地面についたら消えるがあたったらDamage　
+//9,渦巻く鬼火,蚊取り線香のように、自身を中心に回転しながら外側へ広がる弾幕。
+//10,鬼火弾幕（通常）,低速移動する鬼火を東方風の八方放射,自身から16方向へ直線的に鬼火を高速射出。
+//11鏡の風向　　鏡像の乱舞を当てやすくするため自分の周囲にいすぎるとまっすぐ方向しか無理だから当たらない方向も多く発生する　そのため、一定数カ所に集める必要があるので大きなentityとして鏡が吸引する感じのを一個だけ発生　これを破壊することが必須
+//
+//s

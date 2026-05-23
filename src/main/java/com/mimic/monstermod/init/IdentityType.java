@@ -3,8 +3,10 @@ package com.mimic.monstermod.init;
 import com.mimic.monstermod.entity.BaseEntity;
 import com.mimic.monstermod.entity.HunterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
+import com.mimic.monstermod.entity.monster.YatagarasuEntity;
 import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.identity.monster.MimicIdentity;
+import com.mimic.monstermod.identity.monster.YatagarasuIdentity;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -92,6 +94,11 @@ public class IdentityType {
                 new ResourceLocation("monstermod", "mimic"),
                 MimicEntity.class,
                 MimicIdentity::new // これで @Nullable BaseMonsterEntity entity に対応
+        );
+        register(
+                new ResourceLocation("monstermod", "yatagarasu"),
+                YatagarasuEntity.class,
+                YatagarasuIdentity::new
         );
         register(
                 new ResourceLocation("monstermod", "hunter"),

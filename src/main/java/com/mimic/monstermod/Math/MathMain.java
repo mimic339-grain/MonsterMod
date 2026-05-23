@@ -25,7 +25,9 @@ public class MathMain {
         TRI_PRISM,     // 三角柱
         BOX,           // 直方体
         SPHERE,        // 球
-        CAPSULE        // 回転可能カプセル
+        CAPSULE,      // 回転可能カプセル
+        RADIAL,
+        SPIRAL
     }
 
     /* =========================
@@ -249,7 +251,7 @@ public class MathMain {
     public boolean contains(Vec3 worldPoint){
         Vec3 p = toLocal(worldPoint);
 
-        return switch (shape) {
+        return switch (shape) {//'switch' 式は予想されるすべての入力値を網羅していません
             case CYLINDER -> p.x*p.x + p.z*p.z <= radius*radius
                     && Math.abs(p.y) <= height/2f;
 
@@ -270,6 +272,8 @@ public class MathMain {
             case SPHERE -> p.lengthSqr() <= radius*radius;
 
             case CAPSULE -> containsCapsule(p);
+            case RADIAL -> containsRadial(p);
+            case SPIRAL -> containsSpiral(p);
         };
     }
 
@@ -307,7 +311,80 @@ public class MathMain {
         return p.subtract(new Vec3(0, y, 0)).lengthSqr()
                 <= radius*radius;
     }
+    private boolean containsRadial(Vec3 p) {
+        // 高さ判定 (1.0f などの height 指定に従う)
+        if (Math.abs(p.y) > height / 2f) return false;
 
+        double d2 = p.x * p.x + p.z * p.z;
+        // 半径（射程）の外なら false
+        if (d2 > radius * radius) return false;
+        if (d2 == 0) return true; // 中心点はヒット
+
+        // 現在の点 p の角度を求める (-PI ～ PI)
+        double angle = Math.atan2(p.z, p.x);
+        // 0 ～ 2PI に変換
+        if (angle < 0) angle += Math.PI * 2;
+
+        int projectiles = 16;
+        double step = (Math.PI * 2) / projectiles;
+
+        // 最も近い「放射ライン」のインデックスを計算
+        // (angle / step) を四捨五入することで、一番近いラインとの差を見る
+        double closestLineAngle = Math.round(angle / step) * step;
+        double diff = Math.abs(angle - closestLineAngle);
+
+        // 360度(2PI)の境界をまたぐ場合の補正
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+
+        // 角度の差を距離（円弧の長さ）に近似して、太さ(lineWidth)以内か判定
+        // 距離 = 半径 * 角度(ラジアン)
+        double distFromLine = Math.sqrt(d2) * diff;
+
+        // 線の太さを 0.2m (半径 0.1m) と想定する場合
+        float halfWidth = 0.1f;
+        return distFromLine <= halfWidth;
+    }
+    private boolean containsSpiral(Vec3 p) {
+        if (Math.abs(p.y) > height / 2f) return false;
+
+        double d2 = p.x * p.x + p.z * p.z;
+        double currentRadius = Math.sqrt(d2);
+
+        // 螺旋のパラメータ（Entity/Previewと合わせる）
+        double speed = 0.1;
+        double rotationSpeed = Math.toRadians(4);
+        int projectiles = 16;
+
+        // 点Pの角度を求める (0 ～ 2PI)
+        double angleP = Math.atan2(p.z, p.x);
+        if (angleP < 0) angleP += Math.PI * 2;
+
+        for (int i = 0; i < projectiles; i++) {
+            double startAngle = i * (Math.PI * 2 / projectiles);
+
+            // 点Pの角度に到達するまでの回転回数を考慮した相対角度
+            // 螺旋は何周もするので、半径からおよその周回数を逆算
+            double approximateTicks = currentRadius / speed;
+            double totalAngleAtP = angleP;
+
+            // 周回補正：半径に見合う角度まで 2PI を足す
+            while ( (totalAngleAtP - startAngle) / rotationSpeed < approximateTicks - (Math.PI / rotationSpeed) ) {
+                totalAngleAtP += Math.PI * 2;
+            }
+
+            // この角度の時の理想的な螺旋半径
+            double t = (totalAngleAtP - startAngle) / rotationSpeed;
+            if (t < 0) continue;
+
+            double idealRadius = t * speed;
+
+            // 判定距離（線の太さ）
+            if (Math.abs(currentRadius - idealRadius) < 0.3) { // 0.3は判定の余裕
+                return true;
+            }
+        }
+        return false;
+    }
     /* =========================
      * Rotation helpers
      * ========================= */

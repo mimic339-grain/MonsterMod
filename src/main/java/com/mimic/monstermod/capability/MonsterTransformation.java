@@ -23,6 +23,9 @@ public class MonsterTransformation {
     @Nullable private BaseEntity transformedEntity = null;
     @Nullable private BaseIdentity identity = null;
 
+    // クラス上部にフィールドを追加
+    private CompoundTag deferredIdentityData = null;
+
     public boolean isTransformed() { return isTransformed; }
     public ResourceLocation getMobId() { return transformedMobId; }
     public @Nullable BaseIdentity getIdentity() { return identity; }
@@ -107,30 +110,6 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             syncToAllClients(player);
         }
     }
-
-    private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
-        if (identity != null) return identity;
-
-        if (transformedMobId != null && ent != null) {
-            var type = IdentityType.fromId(transformedMobId);
-            if (type != null) {
-                identity = type.createIdentity(ent);
-            }
-        }
-
-        // フォールバック（デバッグ・未登録モンスター用）
-        if (identity == null && ent != null) {
-            identity = new BaseIdentity(ent, 3);
-        }
-
-        if (!level.isClientSide && player != null && identity != null) {
-            identity.copyFromPlayerServer(player);
-        }
-
-        return identity;
-    }
-
-
     private BaseEntity ensureEntity(Level level) {
         if (transformedEntity != null) return transformedEntity;
         if (transformedMobId == null) return null;
@@ -138,19 +117,49 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         var type = ModEntitieType.getEntityType(transformedMobId);
         if (type == null) return null;
 
-        transformedEntity = (BaseEntity) type.create(level);
+        transformedEntity = type.create(level);
         return transformedEntity;
     }
+
+    public CompoundTag serializeNBT() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("isTransformed", isTransformed);
+        // キー名を "transformedMobId" に統一
+        tag.putString("transformedMobId", transformedMobId == null ? "" : transformedMobId.toString());
+
+        if (isTransformed && identity != null) {
+            // Identity内部の状態（クールダウン等）も保存
+            tag.put("identity_data", identity.serializeNBT());
+        }
+        return tag;
+    }
+
+    public void deserializeNBT(CompoundTag tag) {
+        if (tag == null) return;
+        this.isTransformed = tag.getBoolean("isTransformed");
+
+        // キー名を "transformedMobId" に統一
+        String idStr = tag.getString("transformedMobId");
+        this.transformedMobId = idStr.isEmpty() ? null : new ResourceLocation(idStr);
+
+        this.transformedEntity = null;
+        this.identity = null;
+
+        if (tag.contains("identity_data")) {
+            this.deferredIdentityData = tag.getCompound("identity_data");
+        } else {
+            this.deferredIdentityData = null;
+        }
+    }
+
     public void syncToAllClients(Player player) {
         if (player.level().isClientSide) return;
 
-        // 全員に送るデータは「見た目」と「HP」だけで十分
-        CompoundTag nbt = new CompoundTag();
-        nbt.putBoolean("isTransformed", isTransformed);
-        nbt.putString("mobId", transformedMobId == null ? "" : transformedMobId.toString());
-        nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
+        // serializeNBTの結果をベースにする（一貫性の確保）
+        CompoundTag nbt = serializeNBT();
 
-        // IdentityがいるならそのHP、いないなら現在のプレイヤーHPを送る
+        // パケット専用のHPデータを追加
+        nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
         double currentIdHP = (identity != null) ?
                 MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth();
         nbt.putDouble("identityHP", currentIdHP);
@@ -170,7 +179,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             nbt.putDouble("identityHP", MonsterTransformUtil.getIdentityHP(player, identity.getId()));
         } else {
             // Identityがない場合（変身解除中など）は、現在のHPを暫定で送っておく
-            nbt.putDouble("identityHP", (double) player.getHealth());
+            nbt.putDouble("identityHP", player.getHealth());
         }
 
         // 3. 自分自身に送信
@@ -178,19 +187,56 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     }
     public void onLoad(Player player) {
         if (player == null) return;
+        MonsterMod.LOGGER.debug("[Capability] onLoad: isTransformed={}, ID={}", isTransformed, transformedMobId);
 
         if (!isTransformed || transformedMobId == null) {
-            transformedEntity = null;
-            identity = null;
-
+            this.transformedEntity = null;
+            this.identity = null;
             if (!player.level().isClientSide) player.refreshDimensions();
             return;
         }
 
-        transformedEntity = ensureEntity(player.level());
-        identity = ensureIdentity(player.level(), transformedEntity, player);
+        this.transformedEntity = ensureEntity(player.level());
+        this.identity = ensureIdentity(player.level(), this.transformedEntity, player);
 
-        if (!player.level().isClientSide) player.refreshDimensions();
+        if (player.level().isClientSide) {
+            player.refreshDimensions();
+        }
+    }
+
+    private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
+        if (identity != null) return identity;
+
+        if (transformedMobId != null && ent != null) {
+            var type = IdentityType.fromId(transformedMobId);
+            if (type != null) {
+                identity = type.createIdentity(ent);
+            }
+        }
+
+        if (identity == null && ent != null) {
+            identity = new BaseIdentity(ent, 3);
+        }
+
+        if (identity != null && deferredIdentityData != null) {
+            identity.deserializeNBT(deferredIdentityData);
+            deferredIdentityData = null;
+        }
+
+        if (!level.isClientSide && player != null && identity != null) {
+            identity.copyFromPlayerServer(player);
+        }
+        return identity;
+    }
+
+    // 修正版：引数なしの getEntity も安全に生成を試みる
+    public @Nullable BaseEntity getEntity() {
+        if (transformedEntity == null && isTransformed && transformedMobId != null) {
+            // 本来はLevelが必要だが、変身中であれば初期化漏れの可能性があるため
+            // クライアント側なら Minecraft.getInstance().level から補完する等の対策が必要
+            return null;
+        }
+        return transformedEntity;
     }
     // 修正版 getEntity: null ならその場で生成を試みる (クライアント/サーバー共通)
     public BaseEntity getEntity(Level level) {
@@ -198,32 +244,5 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             transformedEntity = ensureEntity(level);
         }
         return transformedEntity;
-    }
-
-    // 既存の getEntity() も念のため残すが、基本は上の level 引数付きを使う
-    public @Nullable BaseEntity getEntity() {
-        return transformedEntity;
-    }
-
-    // MonsterTransformation.java 内の修正
-
-// boolean フィールドと Getter/Setter は削除（GameRuleを参照するため）
-
-    public CompoundTag serializeNBT() {
-        CompoundTag tag = new CompoundTag();
-        tag.putBoolean("isTransformed", isTransformed);
-        tag.putString("mobId", transformedMobId == null ? "" : transformedMobId.toString());
-        // 設定値の保存は不要になった
-        return tag;
-    }
-
-    public void deserializeNBT(CompoundTag tag) {
-        if (tag == null) return;
-        this.isTransformed = tag.getBoolean("isTransformed");
-        String idStr = tag.getString("mobId");
-        this.transformedMobId = idStr.isEmpty() ? null : new ResourceLocation(idStr);
-
-        this.transformedEntity = null;
-        this.identity = null;
     }
 }

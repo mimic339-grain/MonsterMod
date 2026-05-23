@@ -10,7 +10,6 @@ import com.mimic.monstermod.skill.hunter.HunterSkillRegistry;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 
@@ -96,17 +95,15 @@ public class HunterIdentity extends BaseIdentity {
 
         return lockTime <= effectStart && lockTime > effectEnd;
     }
+
     @Override
     public void handleAbility(Player player, int skillIndex) {
-        if (skillIndex < 0 || skillIndex >= skillIds.length) return;
+        if (skillIndex < 0 || skillIndex >= 4) return;
 
-        // 1. スキルIDと最大CDを最新状態にする（保険）
-// パケット側で特定された最新のIDを、Capabilityから取得して配列に即座に反映
+        // スキル情報の更新（最新のIDと最大CDを同期）
         player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(cap -> {
             SkillId equippedId = cap.getEquippedSkill(HunterSkillSlot.values()[skillIndex]);
             this.skillIds[skillIndex] = equippedId;
-
-            // CDの最大値を更新（これをやらないとHUDの「黒い幕」の比率がバグるため重要）
             if (equippedId != null) {
                 HunterSkill hs = HunterSkillRegistry.get(equippedId);
                 if (hs != null) this.defaultCooldowns[skillIndex] = hs.getCooldownTicks();
@@ -119,10 +116,10 @@ public class HunterIdentity extends BaseIdentity {
         SkillLead lead = SkillLeadRegistry.getNullable(currentSkillId);
         if (lead == null) return;
 
-        // 2. CD・ロック中チェック
+        // 1. 基本チェック（CD・ロック中）
         if (abilityCooldowns[skillIndex] > 0 || lockCooldowns[skillIndex] > 0) return;
 
-        // 3. ハンター専用条件チェック（抜刀・納刀）
+        // 2. ハンター専用条件チェック（抜刀・納刀）
         HunterSkill hunterSkill = HunterSkillRegistry.get(currentSkillId);
         if (hunterSkill != null) {
             boolean isSheathed = player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION)
@@ -132,31 +129,17 @@ public class HunterIdentity extends BaseIdentity {
             if (allowed == HunterSkill.SheathState.DRAWN_ONLY && isSheathed) return;
         }
 
-        // 4. カテゴリ別判定
+        // 3. カテゴリ別判定
         if (!canCastByCategory(lead)) return;
 
-        // 5. 実行処理
+        // 4. タイマー反映（共通処理を呼ぶ）
+        super.handleAbility(player, skillIndex);
+
+        // 5. サーバー側での同期処理（パケット受信時ではなく、ここでCDが開始されたことを同期）
         if (!player.level().isClientSide && player instanceof ServerPlayer sp) {
-            com.mimic.monstermod.Math.MathMain math = com.mimic.monstermod.skill.SkillLeadUtil.buildMath(lead, sp.position());
-
-            if (com.mimic.monstermod.skill.SkillUtil.tryExecute(sp.serverLevel(), sp, lead, math)) {
-                // 親のロジックでサーバー側のCD配列をセット
-                super.handleAbility(player, skillIndex);
-
-                // ★重要：セットした瞬間のCD情報をクライアントへ同期する
-                player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(cap -> {
-                    cap.syncToClient(sp);
-                });
-
-                // 演出用パケット送信
-                com.mimic.monstermod.network.ModMessages.INSTANCE.send(
-                        PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> sp),
-                        new com.mimic.monstermod.network.server.S2C_SpawnSkillLeadPacket(sp.getId(), lead, math)
-                );
-            }
-        } else {
-            // クライアント側（予測）
-            super.handleAbility(player, skillIndex);
+            player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(cap -> {
+                cap.syncToClient(sp);
+            });
         }
     }
 

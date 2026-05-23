@@ -137,12 +137,42 @@ public class MonsterTransformUtil {
     // すべて保存 (HP + Attribute)
     // =====================================
     public static void saveAllToNBT(Player player) {
-        CompoundTag tag = new CompoundTag(); // ★ 必ず新規作成する
+        CompoundTag tag = new CompoundTag();
 
         saveHPToNBT(player, tag);
         saveAttributesToNBT(player, tag);
 
+        // Capability(変身フラグやID)を hp_save NBT の中に含める
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            tag.put("transformation_data", trans.serializeNBT());
+        });
+
         player.getPersistentData().put("hp_save", tag);
+        MonsterMod.LOGGER.info("[Save] Player {}'s data (including Transformation) saved.", player.getName().getString());
+    }
+
+    // =====================================
+    // すべて復元
+    // =====================================
+    public static void loadAllFromNBT(Player player) {
+        if (!player.getPersistentData().contains("hp_save")) return;
+        CompoundTag tag = player.getPersistentData().getCompound("hp_save");
+
+        // 1. HPの復元
+        loadHPFromNBT(player, tag);
+
+        // 2. Capability(変身状態)の復元
+        if (tag.contains("transformation_data")) {
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                // ここで ID などの変数を復元
+                trans.deserializeNBT(tag.getCompound("transformation_data"));
+                // 復元したデータに基づきインスタンス(Entity/Identity)を生成
+                trans.onLoad(player);
+            });
+        }
+
+        // 3. 属性の復元 (これに HP セット処理が含まれている)
+        loadAttributesFromNBT(player, tag);
     }
     // ================================
     // HP リセット（コマンド用）
@@ -212,31 +242,33 @@ public class MonsterTransformUtil {
         if (player == null) return;
         boolean isServer = !player.level().isClientSide;
 
-        // 1. 変身状態の確定
+        // ここでデバッグログを入れると原因が追いやすい
+        // MonsterMod.LOGGER.debug("Applying Transform: isTransformed={}, MobId={}", trans.isTransformed(), trans.getMobId());
+
         if (trans.isTransformed() && trans.getMobId() != null) {
-            // 実体（Render用）の生成
+            // 1. 強制的にインスタンスを復元（Entity/Identityの生成）
             trans.onLoad(player);
 
-            if (trans.getEntity() != null) {
-                // 2. 属性（MaxHP, Attack等）をコピー
-                copyAttributesToDEV(player, trans.getEntity());
+            BaseEntity idEnt = trans.getEntity(player.level());
+            if (idEnt != null) {
+                // 2. 属性コピー
+                copyAttributesToDEV(player, idEnt);
 
-                // 3. HPの強制同期
-                String id = trans.getIdentity() != null ? trans.getIdentity().getId() : trans.getMobId().toString();
-                double currentStoredHP = getIdentityHP(player, id);
+                // 3. HP同期（保存されている値を適用）
+                double currentStoredHP = getIdentityHP(player, trans.getIdentity().getId());
 
-                // [重要] クライアント側でも最大HPを反映させてからセットする
-                player.setHealth((float) Math.min(currentStoredHP, player.getMaxHealth()));
-
+                // サーバー側ならパケットを飛ばしてクライアントの「枠」を広げる
                 if (isServer && player instanceof ServerPlayer sp) {
-                    // サーバーなら属性パケットを送信
                     sp.connection.send(new ClientboundUpdateAttributesPacket(
                             sp.getId(), sp.getAttributes().getSyncableAttributes()
                     ));
                 }
+
+                // 最大HPが適用された後にセット
+                player.setHealth((float) Math.min(currentStoredHP, player.getMaxHealth()));
             }
         } else {
-            // ★変身解除状態（ここが外に出ている必要がある）
+            // 変身していない場合
             resetAttributesToPlayer(player, player);
             if (isServer && player instanceof ServerPlayer sp) {
                 sp.connection.send(new ClientboundUpdateAttributesPacket(
@@ -244,15 +276,7 @@ public class MonsterTransformUtil {
                 ));
             }
         }
-
-        // 4. 当たり判定と目線を強制更新
         player.refreshDimensions();
-
-        // 5. サーバーなら全データ同期をキック
-        if (isServer && player instanceof ServerPlayer sp) {
-            CapabilityRegistry.syncToClient(sp);
-        }
-
     }
 
     // =====================================

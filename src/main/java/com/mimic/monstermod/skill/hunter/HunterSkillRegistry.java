@@ -1,5 +1,6 @@
 package com.mimic.monstermod.skill.hunter;
 
+import com.mimic.monstermod.init.SkillEffectRegistry;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.hunter.skills.*;
 
@@ -32,7 +33,7 @@ public final class HunterSkillRegistry {
 
         // 2. SkillEffectRegistry への登録
         // SkillEffectSpec を匿名クラスで作成し、apply をオーバーライドして中身を繋ぐ
-        com.mimic.monstermod.skill.SkillEffectRegistry.register(skill.getId(), new com.mimic.monstermod.skill.SkillEffectSpec(
+        SkillEffectRegistry.register(skill.getId(), new com.mimic.monstermod.skill.SkillEffectSpec(
                 0.0f, // ダメージ0
                 com.mimic.monstermod.skill.DamageType.PHYSICAL,
                 com.mimic.monstermod.skill.SkillType.MOVEMENT,

@@ -10,42 +10,44 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ModSystemManager {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        // 食料システムコマンド
+        // 食料システム一括切り替え
         event.getDispatcher().register(
                 Commands.literal("monstermod_food")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("enabled", BoolArgumentType.bool())
                                 .executes(context -> {
-                                    ServerPlayer player = context.getSource().getPlayerOrException();
                                     boolean enabled = BoolArgumentType.getBool(context, "enabled");
-                                    player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY).ifPresent(cap -> {
-                                        cap.setState(IPlayerData.STATE_HIDE_FOOD, !enabled);
-                                        String status = enabled ? "有効" : "無効";
-                                        context.getSource().sendSuccess(() -> Component.literal("食料システムを " + status + " にしました。"), true);
-                                    });
+                                    // 全プレイヤーに対して処理
+                                    for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
+                                        player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY).ifPresent(cap -> {
+                                            cap.setState(IPlayerData.STATE_HIDE_FOOD, !enabled);
+                                            CapabilityRegistry.syncToClient(player); // 確実な同期
+                                        });
+                                    }
+                                    context.getSource().sendSuccess(() -> Component.literal("サーバー全体の食料システムを " + (enabled ? "有効" : "無効") + " にしました。"), true);
                                     return 1;
                                 }))
         );
 
-        // アーマー表示コマンド (新規追加)
+        // アーマー表示一括切り替え
         event.getDispatcher().register(
                 Commands.literal("monstermod_armor")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("visible", BoolArgumentType.bool())
                                 .executes(context -> {
-                                    ServerPlayer player = context.getSource().getPlayerOrException();
                                     boolean visible = BoolArgumentType.getBool(context, "visible");
-                                    player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY).ifPresent(cap -> {
-                                        cap.setState(IPlayerData.STATE_HIDE_ARMOR, !visible);
-                                        String status = visible ? "表示" : "非表示";
-                                        context.getSource().sendSuccess(() -> Component.literal("アーマーゲージを " + status + " に設定しました。"), true);
-                                    });
+                                    for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
+                                        player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY).ifPresent(cap -> {
+                                            cap.setState(IPlayerData.STATE_HIDE_ARMOR, !visible);
+                                            CapabilityRegistry.syncToClient(player);
+                                        });
+                                    }
+                                    context.getSource().sendSuccess(() -> Component.literal("サーバー全体のアーマー表示を " + (visible ? "表示" : "非表示") + " にしました。"), true);
                                     return 1;
                                 }))
         );

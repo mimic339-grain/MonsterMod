@@ -52,6 +52,8 @@ public abstract class PlayerMixin {
 
         player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transform -> {
             BaseEntity transformed = transform.getEntity();
+
+            // nullチェックと変身状態のチェックのみ行う
             if (transform.isTransformed() && transformed != null) {
                 ((EntityAccessor) player).setMaxUpStep(transformed.getStepHeightValue());
             } else {

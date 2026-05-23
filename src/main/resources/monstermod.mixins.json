@@ -16,6 +16,8 @@
     "player.EntityMixin",
     "player.AttackIndicatorMixin",
     "player.MixinFoodData",
+    "player.AbstractWidgetMixin",
+    "player.VideoSettingsScreenMixin",
     "accessor.EntityAccessor",
     "accessor.AbstractContainerMenuAccessor"
   ],

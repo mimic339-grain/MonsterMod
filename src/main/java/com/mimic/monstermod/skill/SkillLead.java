@@ -175,7 +175,20 @@ public final class SkillLead {
             mathBuilder.shape(MathMain.Shape.BOX).rect(x/2f, z/2f).height(y);
             return this;
         }
-
+        public Builder radial(float r, float h) {
+            this.shape(MathMain.Shape.RADIAL); // 形状を確定
+            this.radius = r;
+            this.height = h;
+            this.mathBuilder.radius(r).height(h); // MathMain側にも半径(射程)と高さを伝える
+            return this;
+        }
+        public Builder spiral(float r, float h) {
+            this.shape(MathMain.Shape.SPIRAL); // 形状を SPIRAL に設定
+            this.radius = r;
+            this.height = h;
+            this.mathBuilder.radius(r).height(h);
+            return this;
+        }
         /* ===== 挙動設定 ===== */
         public Builder followCaster(boolean v) { this.followCaster = v; return this; }
         public Builder yAnchorToGround(boolean v) { this.yAnchorToGround = v; return this; }

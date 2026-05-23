@@ -1,6 +1,9 @@
-package com.mimic.monstermod.skill;
+package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.effect.ModEffects;
+import com.mimic.monstermod.identity.monster.YatagarasuIdentity;
+import com.mimic.monstermod.identity.monster.yatagarasu.*;
+import com.mimic.monstermod.skill.*;
 import net.minecraft.world.effect.MobEffects;
 
 import java.util.HashMap;
@@ -11,6 +14,9 @@ public final class SkillEffectRegistry {
     private static final Map<SkillId, SkillEffectSpec> MAP = new HashMap<>();
 
     static {
+        register(YatagarasuIdentity.ONIBI, new OnibiSkill());
+        register(YatagarasuIdentity.SPIRAL, new OnibiSpiralSkill());
+        register(YatagarasuIdentity.TORNADO, new TornadoSkill());
         // ① test_2d: 物理ダメージ + STRIKE挙動
         register(SkillId.of("monstermod", "test_2d"), new SkillEffectSpec(
                 5.0f, DamageType.PHYSICAL, SkillType.STRIKE, List.of()

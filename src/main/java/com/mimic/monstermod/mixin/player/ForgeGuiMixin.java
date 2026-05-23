@@ -14,12 +14,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 @Mixin(value = ForgeGui.class, remap = false)
 public abstract class ForgeGuiMixin {
-
-    //@Shadow protected int rightHeight; これは食料ゲージやアーマーゲージのところにゲージを作成しておく場合酸素ゲージと被る可能性があるため必要　只今はそれがないため不必要
-    @Shadow protected int leftHeight;
+    @Shadow
+    public int leftHeight;
 
     @Inject(method = "renderHealth", at = @At("HEAD"), cancellable = true)
     private void cancelHealth(CallbackInfo ci) {
@@ -38,27 +36,24 @@ public abstract class ForgeGuiMixin {
 
         String path = overlay.id().getPath();
 
-        // 状態の取得
+        // 状態の安全な取得
         boolean isTransformed = mc.player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
                 .map(MonsterTransformation::isTransformed).orElse(false);
 
-        IPlayerData playerData = mc.player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY).orElse(null);
-        if (playerData == null) return;
+        // ★修正ポイント：.map を使って null チェックを内包する
+        boolean isFoodHidden = mc.player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY)
+                .map(cap -> cap.hasState(IPlayerData.STATE_HIDE_FOOD)).orElse(false);
+        boolean isArmorHidden = mc.player.getCapability(CapabilityRegistry.PLAYER_CAPABILITY)
+                .map(cap -> cap.hasState(IPlayerData.STATE_HIDE_ARMOR)).orElse(false);
 
         // 1. 食料ゲージの判定
-        if (path.equals("food_level")) {
-            // コマンドで非表示設定になっているか
-            if (playerData.hasState(IPlayerData.STATE_HIDE_FOOD)) {
-                //this.rightHeight += 10;
-                cir.setReturnValue(true);
-            }
+        if (path.equals("food_level") && isFoodHidden) {
+            cir.setReturnValue(true); // 描画をキャンセル
         }
 
         // 2. アーマーバーの判定
         if (path.equals("armor_level")) {
-            // 「Monsterに変身している」または「コマンドで非表示設定」なら消す
-            if (isTransformed || playerData.hasState(IPlayerData.STATE_HIDE_ARMOR)) {
-                //this.rightHeight += 10;
+            if (isTransformed || isArmorHidden) {
                 cir.setReturnValue(true);
             }
         }

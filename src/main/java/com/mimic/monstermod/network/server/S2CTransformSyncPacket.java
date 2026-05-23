@@ -28,28 +28,38 @@ public class S2CTransformSyncPacket {
         return new S2CTransformSyncPacket(buf.readUUID(), buf.readNbt());
     }
 
+    // S2CTransformSyncPacket.java の handle メソッド内
+
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            Player player = Minecraft.getInstance().level != null ?
-                    Minecraft.getInstance().level.getPlayerByUUID(playerId) : null;
+            if (Minecraft.getInstance().level == null) return;
+            Player player = Minecraft.getInstance().level.getPlayerByUUID(playerId);
             if (player == null) return;
 
             player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                // 1. データの同期
+                // 1. データを流し込む（isTransformed や transformedMobId がセットされる）
                 trans.deserializeNBT(nbt);
 
-                // 2. クライアント側で実体（Entity）を強制生成
-                // これをやらないと getEntity() が null を返し、 Steve サイズになる
+                // 2. ★ここが重要：見た目とIdentityのインスタンスをクライアント側でも即座に作る
                 trans.onLoad(player);
 
-                // 3. HP情報の適用
-                if (nbt.contains("playerHP")) MonsterTransformUtil.setPlayerHP(player, nbt.getDouble("playerHP"));
-                if (nbt.contains("identityHP") && trans.getMobId() != null) {
-                    MonsterTransformUtil.setIdentityHP(player, trans.getMobId().toString(), nbt.getDouble("identityHP"));
+                // 3. 属性とHPの適用
+                MonsterTransformUtil.applyFullTransformation(player, trans);
+
+                // 4. HPの最終補正
+                if (trans.isTransformed() && trans.getIdentity() != null) {
+                    if (nbt.contains("identityHP")) {
+                        double targetHP = nbt.getDouble("identityHP");
+                        MonsterTransformUtil.setIdentityHP(player, trans.getIdentity().getId(), targetHP);
+                        player.setHealth((float) Math.min(targetHP, player.getMaxHealth()));
+                    }
+                } else if (nbt.contains("playerHP")) {
+                    double targetHP = nbt.getDouble("playerHP");
+                    MonsterTransformUtil.setPlayerHP(player, targetHP);
+                    player.setHealth((float) Math.min(targetHP, player.getMaxHealth()));
                 }
 
-                // 4. 当たり判定・目線の更新
-                MonsterTransformUtil.applyFullTransformation(player, trans);
+                player.refreshDimensions();
             });
         });
         ctx.get().setPacketHandled(true);
