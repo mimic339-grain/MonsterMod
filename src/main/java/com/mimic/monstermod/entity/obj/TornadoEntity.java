@@ -55,9 +55,9 @@ public class TornadoEntity extends Entity {
         boolean currentIsCenter = this.entityData.get(DATA_IS_CENTER);
 
         // --- クライアント側：密度の高い円柱の壁を構築 ---
-        if (this.level().isClientSide) {
+        /*if (this.level().isClientSide) {
             spawnTornadoParticles(currentSize);
-        }
+        }*/
 
         // --- サーバー側：ロジック ---
         if (this.tickCount > currentLife || (owner != null && !owner.isAlive())) {
@@ -177,7 +177,9 @@ public class TornadoEntity extends Entity {
             }
         }
     }
-
+    public float getScale() {
+        return this.entityData.get(DATA_SIZE);
+    }
     /**
      * パーティクルの計算式と同期させて、高さに応じた現在の半径を取得
      */

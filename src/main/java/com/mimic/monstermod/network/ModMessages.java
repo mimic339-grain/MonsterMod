@@ -46,7 +46,7 @@ public class ModMessages {
         registerMessage(C2SHunterInputPacket.class, C2SHunterInputPacket::toBytes, C2SHunterInputPacket::new, C2SHunterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2S_SetHunterSkillPacket.class,  C2S_SetHunterSkillPacket::toBytes,  C2S_SetHunterSkillPacket::new,  C2S_SetHunterSkillPacket::handle,NetworkDirection.PLAY_TO_SERVER);
         registerMessage(C2SMonsterInputPacket.class, C2SMonsterInputPacket::encode, C2SMonsterInputPacket::decode, C2SMonsterInputPacket::handle,NetworkDirection.PLAY_TO_SERVER);
-
+        registerMessage(OBBSyncPacket.class, OBBSyncPacket::encode, OBBSyncPacket::new, OBBSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CMonsterSyncPacket.class, S2CMonsterSyncPacket::encode, S2CMonsterSyncPacket::decode, S2CMonsterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SpawnSkillLeadPacket.class, S2C_SpawnSkillLeadPacket::encode, S2C_SpawnSkillLeadPacket::decode, S2C_SpawnSkillLeadPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayAnimationPacket.class, S2CPlayAnimationPacket::encode, S2CPlayAnimationPacket::decode, S2CPlayAnimationPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
@@ -84,7 +84,9 @@ public class ModMessages {
     public static <MSG> void sendToAllClients(MSG message) {
         INSTANCE.send(PacketDistributor.ALL.noArg(), message);
     }
-
+    public static void sendOBBToAll(OBBSyncPacket packet) {
+        INSTANCE.send(PacketDistributor.ALL.noArg(), packet);
+    }
     public static void sendToAllClientsExcept(Object packet, ServerPlayer excluded) {
         if (!(excluded.getCommandSenderWorld() instanceof ServerLevel serverLevel)) return;
 
