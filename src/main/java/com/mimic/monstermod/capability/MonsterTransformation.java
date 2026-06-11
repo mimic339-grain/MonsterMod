@@ -120,7 +120,11 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         transformedEntity = type.create(level);
         return transformedEntity;
     }
-
+    // MonsterTransformation.java に追加（または確認）
+    public String getMonsterType() {
+        // transformedMobId は ResourceLocation なので、文字列が必要なら toString() を返す
+        return transformedMobId != null ? transformedMobId.toString() : "none";
+    }
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("isTransformed", isTransformed);

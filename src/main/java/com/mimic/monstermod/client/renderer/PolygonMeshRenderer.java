@@ -1,6 +1,6 @@
-package com.mimic.monstermod.client;
+package com.mimic.monstermod.client.renderer;
 
-
+import com.mimic.monstermod.entity.base.CustomEntityBase;
 import com.mimic.monstermod.model.anim.SkeletonPose;
 import com.mimic.monstermod.model.parser.ParsedModel;
 import com.mojang.blaze3d.vertex.*;
@@ -46,67 +46,57 @@ public class PolygonMeshRenderer<T extends CustomEntityBase>
     }
 
     @Override
-    public void render(T entity, float yaw, float partialTick,
-                       PoseStack poseStack, MultiBufferSource bufferSource,
-                       int packedLight) {
-
-        // ① スキニング行列を現在のアニメーション時刻で更新
-        double animTime = entity.getAnimationTick() / 20.0; // tickをsecに変換
+    public void render(T entity, float yaw, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
+        double animTime = entity.getAnimationTick() / 20.0;
         pose.update(model.animation, animTime);
 
-        // ② 描画バッファを取得
-        VertexConsumer consumer = bufferSource.getBuffer(
-                RenderType.entityCutout(texture));
-
+        VertexConsumer consumer = bufferSource.getBuffer(RenderType.entityCutout(texture));
         poseStack.pushPose();
-        // Blender→Minecraft座標系変換（Y=上）
         poseStack.scale(1f, 1f, -1f);
 
-        Matrix4f transform = poseStack.last().pose();
+        Matrix4f poseMat = poseStack.last().pose();
         Matrix4f[] skinMats = pose.getSkinningMatrices();
 
-        // ③ 三角形インデックスバッファを走査して描画
-        int[] indices = model.indexBuffer;
-        float[] pos   = model.positions;
-        float[] uvs   = model.uvs;
-        float[] norms = model.normals;
-
-        for (int i = 0; i < indices.length; i += 3) {
+        for (int i = 0; i < model.indexBuffer.length; i += 3) {
             for (int j = 0; j < 3; j++) {
-                int vi = indices[i + j]; // 頂点インデックス
+                int vi = model.indexBuffer[i + j];
 
-                // バインドポーズの位置
-                Vector3f bindPos = new Vector3f(
-                        pos[vi * 3],
-                        pos[vi * 3 + 1],
-                        pos[vi * 3 + 2]
-                );
+                // 高速化したウェイトアクセス
+                int[] boneIdx = model.skinnedBoneIndices[vi];
+                float[] boneWt = model.skinnedWeights[vi];
 
-                // スキニング
-                int[] boneIdx = getBoneIndices(vi);
-                float[] boneWt = getBoneWeights(vi);
+                // 1. 位置のスキニングとワールド変換
+                Vector3f bindPos = new Vector3f(model.positions[vi*3], model.positions[vi*3+1], model.positions[vi*3+2]);
                 Vector3f skinnedPos = pose.skinVertex(bindPos, boneIdx, boneWt);
+                Vector3f worldPos = poseMat.transformPosition(skinnedPos, new Vector3f());
 
-                // ワールド変換
-                Vector3f worldPos = transform.transformPosition(skinnedPos, new Vector3f());
-
-                // 法線（簡易: スキニングせず元の法線を使用）
-                // Phase 3改善: 法線もスキニング行列の逆転置で変換する
-                int ni = vi; // 法線インデックス（今回は頂点と同じ）
+                // 2. 法線のスキニング（逆転置行列を考慮した変換）
+                Vector3f bindNorm = new Vector3f(model.normals[vi*3], model.normals[vi*3+1], model.normals[vi*3+2]);
+                Vector3f skinnedNorm = skinNormal(bindNorm, boneIdx, boneWt, skinMats);
 
                 consumer.vertex(worldPos.x, worldPos.y, worldPos.z)
                         .color(255, 255, 255, 255)
-                        .uv(uvs[vi * 2], uvs[vi * 2 + 1])
+                        .uv(model.uvs[vi*2], model.uvs[vi*2+1])
                         .overlayCoords(OverlayTexture.NO_OVERLAY)
                         .uv2(packedLight)
-                        .normal(norms[ni*3], norms[ni*3+1], norms[ni*3+2])
+                        .normal(skinnedNorm.x, skinnedNorm.y, skinnedNorm.z)
                         .endVertex();
             }
         }
-
         poseStack.popPose();
+    }
 
-        super.render(entity, yaw, partialTick, poseStack, bufferSource, packedLight);
+    /** 法線のスキニング計算 */
+    private Vector3f skinNormal(Vector3f normal, int[] indices, float[] weights, Matrix4f[] mats) {
+        Vector3f result = new Vector3f(0, 0, 0);
+        for (int i = 0; i < indices.length; i++) {
+            if (weights[i] <= 0) continue;
+            // 法線は回転行列のみを適用（平行移動成分を含まない）
+            Matrix4f m = mats[indices[i]];
+            Vector3f transformed = m.transformDirection(new Vector3f(normal));
+            result.add(transformed.mul(weights[i]));
+        }
+        return result.normalize(); // 正規化して返す
     }
 
     // ── ウェイトデータを頂点インデックスから取り出すヘルパー ──────

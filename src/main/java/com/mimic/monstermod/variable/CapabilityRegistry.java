@@ -35,10 +35,6 @@ public class CapabilityRegistry {
     public static final Capability<HunterTransformation> HUNTER_TRANSFORMATION =
             CapabilityManager.get(new CapabilityToken<>() {});
 
-    // ★ 新規追加：ハンター戦闘状態
-    public static final Capability<HunterCombatState> HUNTER_COMBAT_STATE =
-            CapabilityManager.get(new CapabilityToken<>() {});
-
     public static final Capability<IPlayerData> PLAYER_CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
 
@@ -53,10 +49,6 @@ public class CapabilityRegistry {
         return player.getCapability(HUNTER_TRANSFORMATION);
     }
 
-    // ★ 新規追加 Getter
-    public static LazyOptional<HunterCombatState> getHunterCombatState(Player player) {
-        return player.getCapability(HUNTER_COMBAT_STATE);
-    }
     public static LazyOptional<IPlayerData> getPlayerData(Player player) {
         return player.getCapability(PLAYER_CAPABILITY);
     }
@@ -69,7 +61,6 @@ public class CapabilityRegistry {
         event.register(MonsterTransformation.class);
         event.register(HunterTransformation.class);
         event.register(IPlayerData.class);
-        event.register(HunterCombatState.class);
     }
 
 
@@ -93,11 +84,6 @@ public class CapabilityRegistry {
                     new HunterTransformationProvider()
             );
 
-            // ★ 新規追加：CombatState
-            event.addCapability(
-                    new ResourceLocation(MonsterMod.MOD_ID, "hunter_combat_state"),
-                    new HunterCombatStateProvider()
-            );
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
         }
     }
@@ -123,12 +109,6 @@ public class CapabilityRegistry {
                 })
         );
 
-        // ★ 新規追加：CombatState コピー
-        oldPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(oldCap ->
-                newPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                )
-        );
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
                         newCap.deserializeNBT(oldCap.serializeNBT())
@@ -153,8 +133,5 @@ public class CapabilityRegistry {
         // -------- transformation --------
         getPlayerTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
         getHunterTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
-
-        // -------- combat state --------
-        getHunterCombatState(player).ifPresent(combat -> combat.syncToClient(sp));
     }
 }

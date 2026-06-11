@@ -1,7 +1,6 @@
 package com.mimic.monstermod.network;
 
-
-import com.mimic.monstermod.entity.CustomEntityBase;
+import com.mimic.monstermod.entity.base.CustomEntityBase;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;

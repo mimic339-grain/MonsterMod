@@ -1,4 +1,4 @@
-package com.mimic.monstermod.client.debug;
+package com.mimic.monstermod.debug;
 
 import com.mimic.monstermod.collision.OBBCollider;
 import com.mojang.blaze3d.vertex.PoseStack;

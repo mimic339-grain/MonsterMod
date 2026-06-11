@@ -1,7 +1,6 @@
 package com.mimic.monstermod.collision;
 
-
-import com.mimic.monstermod.entity.CustomEntityBase;
+import com.mimic.monstermod.entity.base.CustomEntityBase;
 import com.mimic.monstermod.model.anim.SkeletonPose;
 import com.mimic.monstermod.model.parser.EntityModelData.ColliderData;
 import com.mimic.monstermod.model.parser.ParsedModel;

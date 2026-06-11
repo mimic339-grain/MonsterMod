@@ -24,9 +24,7 @@ public class HunterTransformation {
     private BaseIdentity identity = null;
     @Nullable
     public BaseIdentity getIdentity() { return identity; }
-    // ================================================================
     // 基本状態
-    // ================================================================
     private ItemStack equippedWeapon = ItemStack.EMPTY;
     private ItemStack weaponSlot = ItemStack.EMPTY;
 

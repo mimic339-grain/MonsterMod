@@ -40,22 +40,18 @@ public class EntityModelLoader {
         }
     }
 
-    // ── JSON → ParsedModel 変換 ────────────────────────────────────
-
     private static ParsedModel parse(EntityModelData raw) {
         ParsedModel model = new ParsedModel();
 
-        // ① ボーンツリー構築
+        // 1. ボーンツリー構築
         model.boneTree = buildBoneTree(raw.armature.hierarchy, null);
-
-        // ② ボーン名→インデックスマップ
         model.boneIndexMap = new HashMap<>();
         for (int i = 0; i < raw.armature.joints.size(); i++) {
             model.boneIndexMap.put(raw.armature.joints.get(i), i);
         }
         model.boneCount = raw.armature.joints.size();
 
-        // ③ メッシュデータ（最初のメッシュのみ、複数対応は拡張可能）
+        // 2. メッシュデータ読み込み
         if (raw.meshes != null && !raw.meshes.isEmpty()) {
             EntityModelData.MeshData meshData = raw.meshes.values().iterator().next();
             model.positions  = meshData.positions.toFloatArray();
@@ -64,21 +60,31 @@ public class EntityModelLoader {
             model.vcounts    = meshData.vcounts.toIntArray();
             model.weights    = meshData.weights.toFloatArray();
             model.vindices   = meshData.vindices.toIntArray();
-            // パーツ（noGroups が通常の描画対象）
+
             if (meshData.parts.containsKey("noGroups")) {
                 model.indexBuffer = meshData.parts.get("noGroups").toIntArray();
             }
+
+            // 3. 【追加】頂点ウェイトデータの事前フラット化 (高速化の鍵)
+            model.skinnedBoneIndices = new int[model.vcounts.length][4];
+            model.skinnedWeights = new float[model.vcounts.length][4];
+
+            int offset = 0;
+            for (int i = 0; i < model.vcounts.length; i++) {
+                int count = model.vcounts[i];
+                for (int j = 0; j < count; j++) {
+                    if (j < 4) { // 最大4ボーン制限
+                        model.skinnedBoneIndices[i][j] = model.vindices[offset + j * 2];
+                        model.skinnedWeights[i][j] = model.weights[model.vindices[offset + j * 2 + 1]];
+                    }
+                }
+                offset += count * 2;
+            }
         }
 
-        // ④ アニメーション
-        if (raw.animation != null) {
-            model.animation = parseAnimation(raw.animation);
-        }
-
-        // ⑤ OBBコライダー
-        if (raw.colliders != null) {
-            model.colliders = raw.colliders;
-        }
+        // 4. アニメーションとコライダー
+        if (raw.animation != null) model.animation = parseAnimation(raw.animation);
+        if (raw.colliders != null) model.colliders = raw.colliders;
 
         return model;
     }

@@ -15,7 +15,9 @@ public class ParsedModel {
     public BoneNode boneTree;               // ルートノード（"Root"）
     public Map<String, Integer> boneIndexMap; // ボーン名→インデックス
     public int boneCount;
-
+    // ParsedModel.java に追加
+    public int[][] skinnedBoneIndices; // [vertexIndex][4]
+    public float[][] skinnedWeights;    // [vertexIndex][4]
     // ── 頂点データ ────────────────────────────────────────────────
     public float[] positions;    // stride=3, count=N, [x,y,z, x,y,z, ...]
     public float[] uvs;          // stride=2, [u,v, u,v, ...]

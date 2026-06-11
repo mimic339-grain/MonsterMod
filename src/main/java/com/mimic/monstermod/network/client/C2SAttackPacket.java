@@ -2,7 +2,6 @@ package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.capability.HunterTransformation;
 import com.mimic.monstermod.item.weapon.WeaponItem;
-import com.mimic.monstermod.util.CombatUtil;
 import com.mimic.monstermod.util.HunterUtil;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
