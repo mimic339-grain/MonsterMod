@@ -177,7 +177,9 @@ public class TornadoEntity extends Entity {
             }
         }
     }
-
+    public float getScale() {
+        return this.entityData.get(DATA_SIZE);
+    }
     /**
      * パーティクルの計算式と同期させて、高さに応じた現在の半径を取得
      */

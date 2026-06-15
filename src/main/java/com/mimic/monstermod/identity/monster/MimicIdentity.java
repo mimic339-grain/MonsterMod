@@ -27,6 +27,7 @@ public class MimicIdentity extends BaseIdentity {
         // ここで this.abilityCooldowns = new int[...] をしてはいけない（親の結果を消してしまうため）
     }
 
+
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = super.serializeNBT();

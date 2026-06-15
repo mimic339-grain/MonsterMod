@@ -21,6 +21,8 @@ public class EntityRendererRegister {
         event.registerEntityRenderer(ModEntitieType.ONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.SPIRALONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.TORNADO.get(), TornadoRenderer::new);
+        //event.registerEntityRenderer(ModEntitieType.BIGTORNADO.get(), TornadoRenderer::new);
+
         // 今後、他のモンスター（PRO_HERO等）が増えたらここに追加していけばOK！
     }
 }

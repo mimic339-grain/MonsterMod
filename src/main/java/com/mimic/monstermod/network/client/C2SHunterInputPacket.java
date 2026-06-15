@@ -1,6 +1,7 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.capability.HunterTransformation;
+import com.mimic.monstermod.identity.HunterIdentity;
 import com.mimic.monstermod.util.HunterUtil;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -43,27 +44,38 @@ public class C2SHunterInputPacket {
 
     public void handle(Supplier<NetworkEvent.Context> ctxSupplier) {
         NetworkEvent.Context ctx = ctxSupplier.get();
-
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
 
             HunterTransformation ht = HunterUtil.getHunter(player);
-            if (ht == null || !ht.isActive()) return;
+            if (ht == null || !ht.isActive()) {
+                LOGGER.info("DEBUG: Hunter is inactive or null. Active={}", ht != null ? ht.isActive() : "null");
+                return;
+            }
 
-            // 納刀/抜刀
+            // 鞘の切り替え
             if (sheathToggle) {
                 ht.setSheathed(player, !ht.isSheathed());
+                LOGGER.info("DEBUG: Sheath state toggled to {}", ht.isSheathed());
             }
 
-            // スキル実行 (IdentityのhandleAbilityを呼ぶ)
-            if (skillIndex >= 0 && skillIndex <= 3) {
-                // identity.handleAbility を呼ぶことで、Identity内部のCDチェックと
-                // その中からの SkillUtil.tryExecute 呼び出しが連鎖します
-                ht.getIdentity().handleAbility(player, skillIndex);
+            // ★修正ポイント：Identity が存在する場合、実行前に必ず強制同期を行う
+            if (ht.getIdentity() instanceof HunterIdentity hi) {
+                // HunterTransformation 内の refreshIdentitySkills メソッドを直接呼び出すか、
+                // 同等の処理をここで実行します
+                ht.refreshIdentitySkills();
+
+                if (skillIndex >= 0) {
+                    LOGGER.info("DEBUG: Calling serverExecuteSkill for index {}", skillIndex);
+                    hi.serverExecuteSkill(player, skillIndex);
+                } else {
+                    LOGGER.info("DEBUG: Invalid index ({})", skillIndex);
+                }
+            } else {
+                LOGGER.info("DEBUG: Identity is null or not a HunterIdentity");
             }
         });
-
         ctx.setPacketHandled(true);
     }
 }

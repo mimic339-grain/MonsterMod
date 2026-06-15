@@ -192,28 +192,26 @@ public class BaseIdentity {
     }
 
     public void handleAbility(Player player, int skillIndex) {
-        if (skillIndex < 0 || skillIndex >= skillIds.length) return;
+        // 1. 現在のID配列が自分のものか再確認
+        if (skillIds == null || skillIndex < 0 || skillIndex >= skillIds.length) return;
+
         SkillId skillId = skillIds[skillIndex];
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
         if (lead == null) return;
 
         if (player.level().isClientSide()) {
+            // ここで再確認：もしIdentityが切り替わったばかりで同期が遅れている場合、
+            // 自分のskillIdsに入っていないIDが来たら弾くなどのガードが必要です
             if (abilityCooldowns[skillIndex] > 0 || lockCooldowns[skillIndex] > 0) return;
             if (!canCastByCategory(lead)) return;
 
-            // ★仮ロック：サーバーからS2Cが届くまでのパケット連打防止
             this.lockCooldowns[skillIndex] = 20;
-
-            // ★先行プレビュー：自分だけは即座に見えるようにする
-            // ここで math を生成して PreviewEvents.spawnLocal する処理が必要です
-            // (もし MathMain の生成ロジックがあるならここに追加)
 
             com.mimic.monstermod.network.ModMessages.INSTANCE.sendToServer(
                     new com.mimic.monstermod.network.client.C2S_SkillCastRequestPacket(skillId)
             );
         }
     }
-
     /**
      * サーバー側・クライアント側共通：スキル発動の結果をIdentityの状態（CD・Lock）に反映させる
      * 引数を (SkillLead lead) のみにし、内部で index を探す設計に統一

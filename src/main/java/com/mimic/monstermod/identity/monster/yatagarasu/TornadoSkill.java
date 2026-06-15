@@ -19,7 +19,7 @@ public class TornadoSkill extends SkillEffectSpec {
 
     public static SkillLead createLead(SkillId id) {
         return new SkillLead.Builder(id)
-                .category(SkillType.Category.NORMAL)
+                .category(SkillType.Category.CANCEL)//todoキャンセルの場合プレビュー出さないようにskilllead出なってる
                 .shape(MathMain.Shape.RADIAL)
                 .radial(15.0f, 1.0f) // 吸引範囲を15マス程度に設定
                 .attackType(SkillType.STRIKE)

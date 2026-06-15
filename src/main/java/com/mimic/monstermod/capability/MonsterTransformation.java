@@ -39,13 +39,15 @@ public class MonsterTransformation {
 public void startTransformation(Player player, ResourceLocation mobId) {
     if (player == null || mobId == null) return;
     MonsterMod.LOGGER.info("[Transform] Starting transformation to: {}", mobId);
-    double targetHP = MonsterTransformUtil.getIdentityHP(player, mobId.toString());
 
+    // 1. 変身先が存在するかHPデータでチェック
+    double targetHP = MonsterTransformUtil.getIdentityHP(player, mobId.toString());
     if (targetHP <= 0) {
         player.displayClientMessage(Component.literal("対象のHPが0のため変身できません！"), true);
         return;
     }
-    // 現在のHPを保存（死んでいなければ）
+
+    // 2. [重要] 現在のHPを保存（現在のIdentityがあればそれを使い、なければ人間用HPとして保存）
     double currentHP = player.getHealth();
     if (currentHP > 0) {
         if (isTransformed && identity != null) {
@@ -55,12 +57,23 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         }
     }
 
+    // 3. 変身先が現在と異なる場合、古いIdentityとEntityを破棄
+    if (this.transformedMobId != null && !this.transformedMobId.equals(mobId)) {
+        this.identity = null;
+        this.transformedEntity = null;
+    }
+
+    // 4. 新しいIDをセット
     this.transformedMobId = mobId;
+
+    // 5. サーバー側処理
     if (!player.level().isClientSide) {
+        // EntityとIdentityを確保（ensureIdentity内で再生成ロジックが動く）
         this.transformedEntity = ensureEntity(player.level());
         this.identity = ensureIdentity(player.level(), transformedEntity, player);
 
         if (transformedEntity != null && identity != null) {
+            // 属性のコピー
             MonsterTransformUtil.copyAttributesToDEV(player, transformedEntity);
 
             if (player instanceof ServerPlayer sp) {
@@ -69,42 +82,46 @@ public void startTransformation(Player player, ResourceLocation mobId) {
                 ));
             }
 
+            // 保存されていたHPをロード（なければ最大値）
             double savedHP = MonsterTransformUtil.getIdentityHP(player, identity.getId());
-            // 保存HPが0以下なら最大値にする（即死回避）
             if (savedHP <= 0) savedHP = player.getMaxHealth();
 
             this.isTransformed = true;
             player.setHealth((float) Math.min(savedHP, player.getMaxHealth()));
         }
-        player.refreshDimensions();
-        syncToAllClients(player);
     }
+
+    // 6. 最後にUIと同期
+    player.refreshDimensions();
+    syncToAllClients(player);
 }
     public void stopTransformation(Player player) {
         if (!isTransformed || player == null) return;
 
-        // 1. [仕組み] 今のモンスターHP(例:40)を保存
+        // 1. [仕組み] インスタンスを破棄する「前」にデータを保存する
         if (identity != null) {
             MonsterTransformUtil.setIdentityHP(player, identity.getId(), player.getHealth());
         }
 
-        // 2. 属性を人間に戻す(MaxHPが20に戻る)
+        // 2. 属性を人間に戻す
         MonsterTransformUtil.resetAttributesToPlayer(player, player);
 
         // 3. [重要] 退避していた人間HP(例:19)を復元
         double prevHP = MonsterTransformUtil.getPlayerHP(player);
 
         if (player instanceof ServerPlayer sp) {
-            // 先に人間属性をクライアントに教える
             sp.connection.send(new net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket(
                     sp.getId(), sp.getAttributes().getSyncableAttributes()
             ));
         }
 
-        // [仕組み] 属性が戻った後にHPをセットすることで、19HPが正しく表示される
         player.setHealth((float) Math.min(prevHP, player.getMaxHealth()));
 
-        isTransformed = false;
+        // 4. 全ての処理が終わった後にインスタンスを破棄・フラグを折る
+        this.identity = null;
+        this.transformedEntity = null;
+        this.isTransformed = false;
+
         player.refreshDimensions();
         if (!player.level().isClientSide) {
             syncToAllClients(player);
@@ -203,9 +220,16 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             player.refreshDimensions();
         }
     }
-
     private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
-        if (identity != null) return identity;
+        // 修正: 既存のidentityが存在しても、IDが異なる場合は古いものを破棄して再作成する
+        if (identity != null) {
+            if (transformedMobId != null && identity.getId().equals(transformedMobId.toString())) {
+                return identity;
+            } else {
+                // IDが一致しない場合は破棄
+                identity = null;
+            }
+        }
 
         if (transformedMobId != null && ent != null) {
             var type = IdentityType.fromId(transformedMobId);
@@ -218,17 +242,18 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             identity = new BaseIdentity(ent, 3);
         }
 
+        // NBTデータがある場合の復元処理
         if (identity != null && deferredIdentityData != null) {
             identity.deserializeNBT(deferredIdentityData);
             deferredIdentityData = null;
         }
 
+        // サーバー側でプレイヤー情報をコピー
         if (!level.isClientSide && player != null && identity != null) {
             identity.copyFromPlayerServer(player);
         }
         return identity;
     }
-
     // 修正版：引数なしの getEntity も安全に生成を試みる
     public @Nullable BaseEntity getEntity() {
         if (transformedEntity == null && isTransformed && transformedMobId != null) {

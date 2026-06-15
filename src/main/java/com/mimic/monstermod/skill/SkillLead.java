@@ -203,7 +203,6 @@ public final class SkillLead {
 
         /* ===== 描画フラグ (エラー回避のために復活) ===== */
         public Builder render2D() { this.render2D = true; return this; }
-        public Builder render2DOverlay() { this.render2DOverlay = true; return this; }
         public Builder renderBlock2D() { this.renderBlock2D = true; return this; }
         public Builder render3DPreview() { this.render3DPreview = true; return this; }
         public Builder texture(ResourceLocation tex) { this.previewTexture = tex; return this; }

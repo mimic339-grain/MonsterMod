@@ -1,9 +1,13 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_SpawnSkillLeadPacket;
-import com.mimic.monstermod.skill.*;
+import com.mimic.monstermod.skill.SkillId;
+import com.mimic.monstermod.skill.SkillLead;
+import com.mimic.monstermod.skill.SkillLeadRegistry;
+import com.mimic.monstermod.skill.SkillLeadUtil;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -55,8 +59,12 @@ public class C2S_SkillCastRequestPacket {
      * 指定された Identity を使用してスキル実行を試みる内部メソッド
      * (元のコードのロジックを崩さないように切り出し)
      */
-    private static void processSkillCast(ServerPlayer player, com.mimic.monstermod.identity.BaseIdentity identity, SkillId skillId) {
+    public static void processSkillCast(ServerPlayer player, com.mimic.monstermod.identity.BaseIdentity identity, SkillId skillId) {
         // サーバー側の Identity インデックス確認
+        // 【デバッグ用】実行前に Identity の中身をチェック
+        MonsterMod.LOGGER.info("DEBUG: Casting Skill: {}, Identity Instance: {}, SkillArray: {}",
+                skillId, System.identityHashCode(identity), java.util.Arrays.toString(identity.getSkillIds()));
+
         int skillIndex = identity.findSkillIndex(skillId);
         if (skillIndex == -1) return;
 
@@ -82,5 +90,6 @@ public class C2S_SkillCastRequestPacket {
                     new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
             );
         }
+
     }
 }

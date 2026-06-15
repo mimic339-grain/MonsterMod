@@ -25,7 +25,7 @@ public class ModEntitieType {
     public static final RegistryObject<EntityType<MimicEntity>> MIMIC =
             ENTITY_TYPES.register("mimic",
                     () -> EntityType.Builder.of(MimicEntity::new, MobCategory.MONSTER)
-                            .sized(4.6f, 4.7f) // MimicEntity側の寸法設定に合わせるのが吉
+                            .sized(0.5f, 0.5f) // MimicEntity側の寸法設定に合わせるのが吉
                             .build(MonsterMod.MOD_ID + ":mimic")
             );
 
@@ -56,14 +56,8 @@ public class ModEntitieType {
                             .setUpdateInterval(1)
                             .build(new ResourceLocation(MonsterMod.MOD_ID, "spiralonibi").toString())
             );
-    // ModEntitieType.java (もしあれば)
-    public static final RegistryObject<EntityType<TornadoEntity>> TORNADO =
-            ENTITY_TYPES.register("tornado",
-                    () -> EntityType.Builder.<TornadoEntity>of(TornadoEntity::new, MobCategory.MISC)
-                    .sized(1.0f, 1.0f) // 当たり判定のサイズ
-                    .clientTrackingRange(64) // これが短いと遠くで消える
-                    .updateInterval(3)
-                    .build("tornado"));
+    public static final RegistryObject<EntityType<TornadoEntity>> TORNADO = ENTITY_TYPES.register("tornado", () -> EntityType.Builder.<TornadoEntity>of(TornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("tornado"));
+    public static final RegistryObject<EntityType<BigTornadoEntity>> BIGTORNADO = ENTITY_TYPES.register("bigtornado", () -> EntityType.Builder.<BigTornadoEntity>of(BigTornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("bigtornado"));
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
     }

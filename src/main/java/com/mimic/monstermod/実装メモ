@@ -1,3 +1,48 @@
 OBBの作成　
 マイクラにモンハンのような緻密な当たり判定を作成しようとAABB(並行のみ)ではなくOBB（回転を含めた）ものを作成しentityに付与しようとしたが、サーバークライアントのズレが１度でもあるとかなりズレるし難易度が高いaabb実装にするべき
 エンダードラゴンと同じもので代用
+ /*int[] colors = {0xF0F0F0, 0x909090, 0x505050};
+
+        for (int i = 0; i < 1; i++) {
+            float startP = 0.0f;
+            float offset = (float) (Math.PI * 2.0 / 3.0) * i;
+            // colors[i] を渡して色を指定
+            drawSpikySpiral(pose, normal, vc, bodyHeight, scale, angleTime, offset, colors[i], packedLight, startP);
+        }*/
+    /*
+    private void drawSpikySpiral(Matrix4f pose, Matrix3f normal, VertexConsumer vc, float bH, float scale, float angleTime, float offset, int color, int light, float startP) {
+        float thickness = 0.7f;
+        // 1. 回転速度を落とす：値を小さくすればするほど、螺旋の回転がゆっくりになります
+        float degree = (float) (Math.PI / 16.0);
+
+        for (int j = 0; j < LINE_SEGMENT_COUNT - 1; j++) {
+            float p1 = startP + ((float) j / 80.0f);
+            float p2 = startP + ((float) (j + 1) / 80.0f);
+            if (p1 >= 3f) break;
+
+            float progress = (float) j / (LINE_SEGMENT_COUNT - 1);
+            float taper = (float) Math.sin(progress * Math.PI);
+            float currentThickness = thickness * taper;
+
+            float h1 = p1 * bH * 2.3f;
+            float h2 = p2 * bH * 2.3f;
+
+            // 2. 円を大きくする：ここの定数（2.0fや4.0f）を大きくすることで螺旋全体の半径が広がります
+            // 現在の (2.0f + ...) を (5.0f + ...) などにするとより大きく広がります
+            float r1 = (5.0f + (float) Math.pow(p1, 1.5) * 6.0f) * (scale / 3.0f);
+            float r2 = (5.0f + (float) Math.pow(p2, 1.5) * 6.0f) * (scale / 3.0f);
+
+            // 3. angleTimeへの乗数を減らして、全体的な回転のキレを落ち着かせる
+            float angle1 = (angleTime * 2.0f) + (j * degree) + offset;
+            float angle2 = (angleTime * 2.0f) + ((j + 1) * degree) + offset;
+
+            float cx1 = (float)Math.cos(angle1) * r1; float cz1 = (float)Math.sin(angle1) * r1;
+            float cx2 = (float)Math.cos(angle2) * r2; float cz2 = (float)Math.sin(angle2) * r2;
+
+            // 頂点描画：dyを利用して、上下方向に三角形が伸びるように配置
+            vc.vertex(pose, cx1, h1 - currentThickness, cz1).color(color, color, color, 200).uv(0.0f, p1).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light).normal(normal, 0, 1, 0).endVertex();
+            vc.vertex(pose, cx1, h1 + currentThickness, cz1).color(color, color, color, 200).uv(1.0f, p1).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light).normal(normal, 0, 1, 0).endVertex();
+            vc.vertex(pose, cx2, h2 + currentThickness, cz2).color(color, color, color, 200).uv(1.0f, p2).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light).normal(normal, 0, 1, 0).endVertex();
+            vc.vertex(pose, cx2, h2 - currentThickness, cz2).color(color, color, color, 200).uv(0.0f, p2).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light).normal(normal, 0, 1, 0).endVertex();
+        }
+    }*/

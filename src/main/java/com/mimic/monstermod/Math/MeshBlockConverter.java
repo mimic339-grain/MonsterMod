@@ -110,8 +110,8 @@ public final class MeshBlockConverter {
                                        BlockPos pos, Level level) {
         BlockState below = level.getBlockState(pos.below());
         BlockState here  = level.getBlockState(pos);
-
-        if (!below.isSolidRender(level, pos.below()) || !here.isAir()) return false;
+        //ここ上が空気じゃないとだめっていうのは半ブロック雪に邪魔される
+        /*if (!below.isSolidRender(level, pos.below()) || !here.isAir()) return false;*/
 
         Vec3 sample = new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
         return insideAnyQuad(sample, quads);

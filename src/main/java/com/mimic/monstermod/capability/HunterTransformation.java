@@ -2,6 +2,7 @@ package com.mimic.monstermod.capability;
 
 import com.mimic.monstermod.entity.BaseEntity;
 import com.mimic.monstermod.identity.BaseIdentity;
+import com.mimic.monstermod.identity.HunterIdentity;
 import com.mimic.monstermod.item.weapon.WeaponItem;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CHunterSyncPacket;
@@ -121,7 +122,7 @@ public class HunterTransformation {
         if (player instanceof ServerPlayer sp)
             syncToClient(sp);
     }
-    // HunterTransformation.java
+
     public void startHunter(Player player) {
         isActive = true;
 
@@ -131,8 +132,13 @@ public class HunterTransformation {
                 renderEnt = com.mimic.monstermod.init.ModEntitieType.HUNTER.get().create(player.level());
             }
 
-            // 第2引数は必ず 4 (SKILL1,2,3 + DODGE)
+            // 引数を (BaseEntity, int) に合わせる
             this.identity = new com.mimic.monstermod.identity.HunterIdentity(renderEnt, 4);
+        }
+
+        // Identityが存在していようがいまいが、現在の装備スキルで強制同期する
+        if (this.identity instanceof HunterIdentity hi) {
+            hi.forceRefreshSkills(player);
         }
 
         if (player instanceof ServerPlayer sp) syncToClient(sp);
@@ -227,27 +233,24 @@ public class HunterTransformation {
 
     public void deserializeNBT(CompoundTag tag) {
         if (tag == null) return;
-// ★修正ポイント：identity が null なら作成してからデータを読み込む
-        if (tag.contains("IdentityData")) {
-            if (this.identity == null) {
-                // クライアント側でも Identity インスタンスが必要
-                this.identity = new com.mimic.monstermod.identity.HunterIdentity(null, 4);
-            }
-            this.identity.deserializeNBT(tag.getCompound("IdentityData"));
-        }
+
+        // 1. 基本状態の読み込み
         isSheathed = tag.getBoolean("Sheathed");
         isActive = tag.getBoolean("IsActive");
         weaponType = tag.getString("WeaponType");
         comboCount = tag.getInt("ComboCount");
         attackStiffness = tag.getFloat("AttackStiffness");
 
+        // 2. アイテム・装備の読み込み
         equippedWeapon = tag.contains("EquippedWeapon")
                 ? ItemStack.of(tag.getCompound("EquippedWeapon"))
                 : ItemStack.EMPTY;
-
         weaponSlot = tag.contains("WeaponSlot")
                 ? ItemStack.of(tag.getCompound("WeaponSlot"))
                 : ItemStack.EMPTY;
+
+        // 3. スキルマッピングの復元
+        equippedSkills.clear();
         if (tag.contains("EquippedSkills")) {
             CompoundTag skillsTag = tag.getCompound("EquippedSkills");
             for (String key : skillsTag.getAllKeys()) {
@@ -255,8 +258,28 @@ public class HunterTransformation {
                     HunterSkill.HunterSkillSlot slot = HunterSkill.HunterSkillSlot.valueOf(key);
                     String[] split = skillsTag.getString(key).split(":");
                     equippedSkills.put(slot, SkillId.of(split[0], split[1]));
-                } catch (Exception e) { /* エラー処理 */ }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
+        }
+
+        // 4. Identity の復元と同期
+        if (tag.contains("IdentityData")) {
+            if (this.identity == null) {
+                this.identity = new com.mimic.monstermod.identity.HunterIdentity(null, 4);
+            }
+            this.identity.deserializeNBT(tag.getCompound("IdentityData"));
+
+            // ★ ここで Map から配列へ強制同期を行う
+            refreshIdentitySkills();
+        }
+    }
+
+    // 確実にスキル配列を再構築するメソッド
+    public void refreshIdentitySkills() {
+        if (this.identity instanceof HunterIdentity hi) {
+            hi.syncSkillsFromCapability(this.equippedSkills);
         }
     }
 

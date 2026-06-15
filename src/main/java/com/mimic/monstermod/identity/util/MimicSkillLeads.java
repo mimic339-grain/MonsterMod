@@ -27,7 +27,7 @@ public final class MimicSkillLeads {
         SkillLead lead = new SkillLead.Builder(TEST_2D)
                 .shape(MathMain.Shape.CYLINDER)
                 .category(SkillType.Category.UNIQUE)
-                .cylinder(8.0f, 2.0f)
+                .cylinder(8.0f, 4.0f)
                 .followCaster(true)
                 .attackType(SkillType.STRIKE)
                 .render2D()
@@ -37,9 +37,9 @@ public final class MimicSkillLeads {
 
     private static void registerBlock() {
         SkillLead lead = new SkillLead.Builder(TEST_BLOCK)
-                .shape(MathMain.Shape.SPHERE)
-                .category(SkillType.Category.CANCEL)
-                .sphere(8.0f)
+                .shape(MathMain.Shape.BOX)      // 1. 形状をBOXに合わせる
+                .category(SkillType.Category.NORMAL)
+                .box(8.0f, 2.0f, 8.0f)
                 .followCaster(true)
                 .attackType(SkillType.STRIKE)
                 .renderBlock2D()
@@ -60,9 +60,13 @@ public final class MimicSkillLeads {
     }
     private static void registerEmergency() {
         SkillLead lead = new SkillLead.Builder(TEST_EMERGENCY)
+                .shape(MathMain.Shape.FAN)         // 形状をFAN（扇形）に指定
+                .fan(5.0f, 60.0f, 2.0f)
                 .category(SkillType.Category.COMBO)
                 .canBeCanceled(true)
                 .attackType(SkillType.MOVEMENT)
+                .render2D()                        // 描画フラグをON
+                .totalPreviewTicks(60)             // プレビュー表示時間を設定
                 .build();
         SkillLeadRegistry.register(lead);
     }

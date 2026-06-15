@@ -26,11 +26,17 @@ public class MimicEntity extends BaseEntity {
 
     public MimicEntity(EntityType<? extends BaseEntity> type, Level level) {
         super(type, level);
-        // BaseEntity側で寸法を設定している場合はここでの再設定は不要ですが、Mimic専用に上書き
-        this.monsterDimensions = EntityDimensions.fixed(4.6f, 4.7f);
-        this.monsterEyeHeight = 0.52f;
+        this.refreshDimensions();
+    }
+    @Override
+    protected EntityDimensions getCustomDimensions() {
+        return EntityDimensions.fixed(0.5f, 0.5f);
     }
 
+    @Override
+    protected float getCustomEyeHeight(EntityDimensions dimensions) {
+        return 0.5f; // ここで固定値を返す
+    }
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();

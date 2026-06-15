@@ -5,6 +5,7 @@ import com.mimic.monstermod.events.PreviewEvents;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
 import com.mimic.monstermod.skill.SkillLeadRegistry;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
@@ -78,14 +79,25 @@ public final class S2C_SpawnSkillLeadPacket {
             SkillLead lead = SkillLeadRegistry.getNullable(msg.skillId);
             if (lead == null) return;
 
-            // --- 全員共通：IdentityのCD/Lockを同期 ---
             if (caster instanceof Player player) {
-                // 通常・ハンター両方のCapabilityを更新
-                player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(cap -> {
-                    if (cap.getIdentity() != null) cap.getIdentity().applyCastResult(lead);
-                });
-                player.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(cap -> {
-                    if (cap.isActive() && cap.getIdentity() != null) cap.getIdentity().applyCastResult(lead);
+                // 優先順位：ハンター変身中ならハンター、そうでなければ通常変身
+// S2C_SpawnSkillLeadPacket.java の handle メソッド内
+                player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
+                    // 自身のidentityにあるか確認
+                    if (hunter.isActive() && hunter.getIdentity() != null) {
+                        int idx = hunter.getIdentity().findSkillIndex(msg.skillId);
+                        if (idx != -1) {
+                            hunter.getIdentity().applyCastResult(lead);
+                            return; // 成功したら終了
+                        }
+                    }
+
+                    // 見つからない場合のみ通常変身を確認
+                    player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(cap -> {
+                        if (cap.getIdentity() != null && cap.getIdentity().findSkillIndex(msg.skillId) != -1) {
+                            cap.getIdentity().applyCastResult(lead);
+                        }
+                    });
                 });
             }
 
