@@ -21,7 +21,8 @@ public final class MeshBlockConverter {
     private MeshBlockConverter() {}
 
     public static List<BlockPos> toBlocks(MathMain math, Level level, Vec3 playerPos) {
-        AoeMeshBuilder2D builder = new AoeMeshBuilder2D(math);
+        // このパスはrenderBlock2D(ブロック設置系プレビュー)専用で、Radial/Spiral系は通らないためlead不要
+        AoeMeshBuilder2D builder = new AoeMeshBuilder2D(null, math);
         List<AoeMeshBuilder2D.Quad> quads = builder.build();
 
         // ★ List ではなく Set を使って重複を自動排除する

@@ -99,7 +99,7 @@ public final class PreviewEvents {
                 math.origin = p.caster.getPosition(e.getPartialTick());
             }
 
-            if (lead.render2D) { AoeRenderer2D.render(e.getPoseStack(), buffers, new AoeMeshBuilder2D(math), tex); }
+            if (lead.render2D) { AoeRenderer2D.render(e.getPoseStack(), buffers, new AoeMeshBuilder2D(lead, math), tex); }
             if (lead.renderBlock2D) { AoeRenderer2DBlock.render(e.getPoseStack(), buffers, math, mc.level, tex, mc.player.position()); }
             if (lead.render3DPreview) { AoeRenderer3D.render(e.getPoseStack(), buffers, new AoeMeshBuilder3D(math), tex); }
         }

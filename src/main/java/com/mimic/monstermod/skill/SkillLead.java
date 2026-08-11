@@ -1,6 +1,7 @@
 package com.mimic.monstermod.skill;
 
 import com.mimic.monstermod.Math.MathMain;
+import com.mimic.monstermod.Math.ProjectilePattern;
 import net.minecraft.resources.ResourceLocation;
 
 public final class SkillLead {
@@ -11,6 +12,9 @@ public final class SkillLead {
 
     // ★ 判定・描画の「唯一の真実」となるパラメータ
     public final MathMain params;
+
+    /* ===== 弾幕パターン(Radial/Spiral系スキル用、無ければnull) ===== */
+    public final ProjectilePattern projectilePattern;
 
     /* ===== 旧コード互換用のフィールド (外部参照用) ===== */
     public final float radius;
@@ -51,6 +55,7 @@ public final class SkillLead {
 
         // パラメータを確定
         this.params = b.mathBuilder.build();
+        this.projectilePattern = b.projectilePattern;
 
         // 互換性のためにフィールドにもコピー
         this.radius = b.radius;
@@ -93,6 +98,8 @@ public final class SkillLead {
 
         // ★ 内部で判定用Builderを並行して動かす
         private final MathMain.Builder mathBuilder = new MathMain.Builder();
+
+        private ProjectilePattern projectilePattern = null;
 
         private float radius = 0f;
         private float height = 0f;
@@ -188,6 +195,25 @@ public final class SkillLead {
             this.height = h;
             this.mathBuilder.radius(r).height(h);
             return this;
+        }
+
+        /**
+         * ProjectilePatternから放射状スキルを構築する。
+         * 射程(radius)はパターンの速度×寿命から自動算出されるため、
+         * 実際に飛ぶ弾の射程とプレビューの長さが必ず一致する。
+         */
+        public Builder radialPattern(ProjectilePattern pattern) {
+            this.projectilePattern = pattern;
+            return this.radial((float) pattern.maxReach(), 1.0f);
+        }
+
+        /**
+         * ProjectilePatternから螺旋状スキルを構築する。
+         * 射程(radius)はパターンの速度×寿命から自動算出される。
+         */
+        public Builder spiralPattern(ProjectilePattern pattern) {
+            this.projectilePattern = pattern;
+            return this.spiral((float) pattern.maxReach(), 1.0f);
         }
         /* ===== 挙動設定 ===== */
         public Builder followCaster(boolean v) { this.followCaster = v; return this; }
