@@ -30,7 +30,7 @@ public class YatagarasuRenderer extends GeoEntityRenderer<YatagarasuEntity> {
         // ★ConfigがON かつ Entity側が表示許可を出している場合
         com.mimic.monstermod.util.HitboxRenderUtil.renderIfEnabled(entity, poseStack, buffer);
         // ボーン追従ヒットボックス(頭・翼・尻尾など、弱点部位)の回転込み表示
-        com.mimic.monstermod.util.HitboxRenderUtil.renderYatagarasuHitboxesIfEnabled(entity, poseStack, buffer);
+        com.mimic.monstermod.util.HitboxRenderUtil.renderYatagarasuHitboxesIfEnabled(entity, poseStack, buffer, partialTicks);
 
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
 

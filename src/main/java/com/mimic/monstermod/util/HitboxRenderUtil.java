@@ -55,7 +55,7 @@ public class HitboxRenderUtil {
      * LevelRenderer.renderLineBoxは使えず、12本の辺を個別に描画する。
      * ON/OFF・色・太さは既存の「当たり判定表示」設定をそのまま共有する。
      */
-    public static void renderYatagarasuHitboxesIfEnabled(YatagarasuEntity entity, PoseStack poseStack, MultiBufferSource buffer) {
+    public static void renderYatagarasuHitboxesIfEnabled(YatagarasuEntity entity, PoseStack poseStack, MultiBufferSource buffer, float partialTick) {
         var localPlayer = Minecraft.getInstance().player;
         if (localPlayer == null) return;
 
@@ -72,7 +72,7 @@ public class HitboxRenderUtil {
 
             String animation = entity.getActiveAnimation();
             if (animation == null || animation.isEmpty()) return;
-            double elapsedSeconds = entity.getCurrentAnimationElapsedSeconds();
+            double elapsedSeconds = entity.getAnimationElapsedSeconds(rig, partialTick);
 
             for (YatagarasuHitboxProfile.PartConfig part : YatagarasuHitboxProfile.PARTS) {
                 // poseStackは既にエンティティ位置へ平行移動済みなので、原点基準で計算する
@@ -89,7 +89,8 @@ public class HitboxRenderUtil {
      * PlayerRendererMixinから呼ばれ、実体のモンスターと同じ見え方になる。
      */
     public static void renderTransformedPlayerHitboxes(net.minecraft.world.entity.player.Player player,
-                                                       PoseStack poseStack, MultiBufferSource buffer) {
+                                                       PoseStack poseStack, MultiBufferSource buffer,
+                                                       float partialTick) {
         var localPlayer = Minecraft.getInstance().player;
         if (localPlayer == null) return;
 
@@ -107,7 +108,7 @@ public class HitboxRenderUtil {
 
             String animation = proxy.getActiveAnimation();
             if (animation == null || animation.isEmpty()) return;
-            double elapsed = proxy.getAnimationElapsedSeconds(rig.rigData());
+            double elapsed = proxy.getAnimationElapsedSeconds(rig.rigData(), partialTick);
 
             float r = cap.getLeadR();
             float g = cap.getLeadG();

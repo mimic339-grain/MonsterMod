@@ -137,9 +137,26 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
 
     /** 現在のアニメーションが再生され始めてから何秒経過したか(ループなら周回込み) */
     public double getAnimationElapsedSeconds(com.mimic.monstermod.entity.hitbox.BoneRigData rig) {
+        return getAnimationElapsedSeconds(rig, 0f);
+    }
+
+    /**
+     * partialTick込みの経過秒。
+     *
+     * 【なぜpartialTickが要るか】
+     * GeckoLibはエンティティのアニメーション時刻に tickCount + partialTick を使い
+     * (GeoModel#handleAnimations)、毎フレーム滑らかに姿勢を更新する。
+     * 一方こちらが整数tickだけで計算すると1tickに1回しか動かないため、
+     * 描画されるモデルと最大1tick分ずれて見える。
+     * 描画(デバッグ表示)では必ずpartialTickを渡してモデルと一致させること。
+     *
+     * 当たり判定の実体は毎tick更新のままでよい(バニラのエンティティ判定も
+     * tick単位で、描画だけが補間される。これはMinecraftとして正常な挙動)。
+     */
+    public double getAnimationElapsedSeconds(com.mimic.monstermod.entity.hitbox.BoneRigData rig, float partialTick) {
         if (activeAnim.isEmpty()) return 0.0;
 
-        double elapsed = Math.max(0, this.tickCount - activeAnimAnchorTick) / 20.0;
+        double elapsed = Math.max(0.0, (this.tickCount - activeAnimAnchorTick) + partialTick) / 20.0;
         double length = rig.getAnimationLength(activeAnim);
         if (length > 0 && rig.isLooping(activeAnim)) {
             elapsed = elapsed % length;
