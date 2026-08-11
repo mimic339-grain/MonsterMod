@@ -54,7 +54,7 @@ public class ModMessages {
         registerMessage(S2CTransformSyncPacket.class, S2CTransformSyncPacket::encode, S2CTransformSyncPacket::decode, S2CTransformSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CHunterSyncPacket.class, S2CHunterSyncPacket::encode, S2CHunterSyncPacket::decode, S2CHunterSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2CPlayerCapSyncPacket.class, S2CPlayerCapSyncPacket::toBytes, S2CPlayerCapSyncPacket::new, S2CPlayerCapSyncPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
-        registerMessage(S2C_SyncCombatStatePacket.class, S2C_SyncCombatStatePacket::toBytes, S2C_SyncCombatStatePacket::new, S2C_SyncCombatStatePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_SyncCombatStatePacket.class, S2C_SyncCombatStatePacket::encode, S2C_SyncCombatStatePacket::decode, S2C_SyncCombatStatePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SyncWeaponSlotPacket.class, S2C_SyncWeaponSlotPacket::encode, S2C_SyncWeaponSlotPacket::decode, S2C_SyncWeaponSlotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_PlayerRootPacket.class, S2C_PlayerRootPacket::encode, S2C_PlayerRootPacket::decode, S2C_PlayerRootPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SetEntityBindPacket.class, S2C_SetEntityBindPacket::encode, S2C_SetEntityBindPacket::decode, S2C_SetEntityBindPacket::handle, NetworkDirection.PLAY_TO_CLIENT);

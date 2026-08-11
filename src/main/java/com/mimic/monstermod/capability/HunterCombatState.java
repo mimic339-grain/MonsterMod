@@ -1,5 +1,7 @@
 package com.mimic.monstermod.capability;
 
+import com.mimic.monstermod.network.ModMessages;
+import com.mimic.monstermod.network.server.S2C_SyncCombatStatePacket;
 import com.mimic.monstermod.weapon.WeaponCategory;
 import com.mimic.monstermod.weapon.WeaponCategoryUtil;
 import net.minecraft.nbt.CompoundTag;
@@ -142,10 +144,45 @@ public class HunterCombatState {
     // ============================================================
 // NBT
 // ============================================================
-    public CompoundTag serializeNBT() { /* 省略: 元のまま */ return new CompoundTag(); }
-    public void deserializeNBT(CompoundTag tag) { /* 省略: 元のまま */ }
+    public CompoundTag serializeNBT() {
+        CompoundTag tag = new CompoundTag();
+        tag.putBoolean("drawn", drawn);
+        tag.putInt("comboStep", comboStep);
+        tag.putInt("comboGraceTimer", comboGraceTimer);
+        tag.putInt("attackStiffness", attackStiffness);
+        tag.putString("currentCategory", currentCategory.name());
+        return tag;
+    }
 
-    public void syncToClient(ServerPlayer player) { /* 省略: 元のまま */ }
+    public void deserializeNBT(CompoundTag tag) {
+        if (tag == null) return;
+
+        // カテゴリ由来の派生値(ダメージ倍率・硬直テーブル等)を先に復元する
+        if (tag.contains("currentCategory")) {
+            try {
+                applyCategoryStats(WeaponCategory.valueOf(tag.getString("currentCategory")));
+            } catch (IllegalArgumentException ignored) {
+                applyCategoryStats(WeaponCategory.NONE);
+            }
+        }
+
+        this.drawn = tag.getBoolean("drawn");
+        this.comboStep = tag.getInt("comboStep");
+        this.comboGraceTimer = tag.getInt("comboGraceTimer");
+        this.attackStiffness = tag.getInt("attackStiffness");
+    }
+
+    /**
+     * 戦闘状態(納刀/コンボ/硬直)を自分自身を含む周囲のプレイヤーへ同期する。
+     * 以前は空実装で、他プレイヤーからの見た目(納刀・コンボ表示)が一切同期されていなかった。
+     */
+    public void syncToClient(ServerPlayer player) {
+        if (player == null) return;
+        ModMessages.INSTANCE.send(
+                net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
+                new S2C_SyncCombatStatePacket(player.getUUID(), serializeNBT())
+        );
+    }
 
     // ============================================================
 // AttackResult
