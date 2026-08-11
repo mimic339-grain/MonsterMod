@@ -63,10 +63,8 @@ public final class PreviewEvents {
                 continue;
             }
 
-            // 術者に追従する場合の座標更新
-            if (p.lead.followCaster) {
-                p.math.origin = p.caster.position();
-            }
+            // followCasterの座標更新はonRender側(補間済み座標)で行う。
+            // ここではtick単位のライフサイクル管理のみ行う。
 
             p.life--;
             if (p.life <= 0) {
@@ -91,6 +89,15 @@ public final class PreviewEvents {
             SkillLead lead = p.lead;
             MathMain math = p.math;
             ResourceLocation tex = lead.previewTexture;
+
+            // 【修正】追従プレビューの座標更新をtick単位(onClientTick)から
+            // 描画フレーム単位(補間済み座標)に変更。
+            // 以前はtickごとにしか座標を更新していなかったため、モデル本体は毎フレーム
+            // 滑らかに補間表示されるのに対し、プレビュー円だけがtick単位でカクつき、
+            // かつネットワーク遅延がある環境では実際の判定位置とズレて見える原因になっていた。
+            if (lead.followCaster) {
+                math.origin = p.caster.getPosition(e.getPartialTick());
+            }
 
             if (lead.render2D) { AoeRenderer2D.render(e.getPoseStack(), buffers, new AoeMeshBuilder2D(math), tex); }
             if (lead.renderBlock2D) { AoeRenderer2DBlock.render(e.getPoseStack(), buffers, math, mc.level, tex, mc.player.position()); }
