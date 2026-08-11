@@ -77,7 +77,7 @@ public class HitboxRenderUtil {
             for (YatagarasuHitboxProfile.PartConfig part : YatagarasuHitboxProfile.PARTS) {
                 // poseStackは既にエンティティ位置へ平行移動済みなので、原点基準で計算する
                 Vector3f[] local = BonePoseResolver.resolveLocalCorners(
-                        rig, part.boneName(), animation, elapsedSeconds, entity.getYRot());
+                        rig, part.boneName(), animation, elapsedSeconds, entity.yBodyRot);
                 if (local == null) continue;
                 drawObbEdges(poseStack, consumer, local, r, g, b);
             }
@@ -116,7 +116,7 @@ public class HitboxRenderUtil {
 
             for (var part : rig.parts()) {
                 Vector3f[] local = BonePoseResolver.resolveLocalCorners(
-                        rig.rigData(), part.boneName(), animation, elapsed, player.getYRot());
+                        rig.rigData(), part.boneName(), animation, elapsed, player.yBodyRot);
                 if (local == null) continue;
                 drawObbEdges(poseStack, consumer, local, r, g, b);
             }

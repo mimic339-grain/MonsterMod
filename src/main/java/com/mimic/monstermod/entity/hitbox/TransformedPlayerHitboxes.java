@@ -57,8 +57,11 @@ public final class TransformedPlayerHitboxes {
             }
         }
 
+        // 【重要】yawは必ず yBodyRot(胴体の向き)を使うこと。
+        // BaseIdentity.renderは entity.yBodyRot を GeckoLib へ渡してモデルを回すため、
+        // getYRot()(頭/視線の向き)を使うと首を振っただけで判定と見た目がズレる。
         BoneHitboxUpdater.update(rig.rigData(), parts, animation, elapsed,
-                player.position(), player.getYRot());
+                player.position(), player.yBodyRot);
     }
 
     private static void deactivateAll(BoneHitboxPart[] parts) {

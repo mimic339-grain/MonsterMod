@@ -101,9 +101,12 @@ public class YatagarasuEntity extends BaseEntity {
         // ダメージが一切入らない(本体の大きな判定にしか当たらなくなる)。
         // 計算は同期済みデータからの決定的な導出なので、両サイドで同じ結果になる。
         if (BONE_RIG.isLoaded()) {
+            // 【重要】yawは必ず yBodyRot(胴体の向き)を使うこと。
+            // GeckoLibのGeoEntityRendererは lerpBodyRot(=yBodyRot) でモデルを回すため、
+            // getYRot()(頭/視線の向き)を使うと首を振っただけで判定と見た目がズレる。
             BoneHitboxUpdater.update(BONE_RIG, bodyParts,
                     getActiveAnimation(), getAnimationElapsedSeconds(BONE_RIG),
-                    this.position(), this.getYRot());
+                    this.position(), this.yBodyRot);
         }
     }
 
