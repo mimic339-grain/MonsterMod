@@ -11,7 +11,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static com.mimic.monstermod.capability.HunterTransformation.isHunter;
 /**
- * todo修正したい　これのままだとなぜかmimicがノックバックする　ただクリティカルは消えてる
  * attack(Entity) の開始時点でフックして、Hunter状態なら
  * Vanilla のクールタイム・攻撃補正・スイープを無効化
  */
@@ -31,6 +30,15 @@ public abstract class PlayerAttackMixin {
 
         // 攻撃対象が空ならスキップ
         if (target == null || !target.isAttackable()) {
+            ci.cancel();
+            return;
+        }
+
+        // 【修正】attack()はクライアント側の自己予測(見た目のスイング)でも呼ばれるため、
+        // ここでダメージ・ノックバックを適用するとサーバー側の適用と合わせて
+        // 二重にpush()されてしまい、「なぜかノックバックする」不具合の原因になっていた。
+        // ダメージ/ノックバックの確定はサーバー権威のみで行う。
+        if (player.level().isClientSide()) {
             ci.cancel();
             return;
         }
