@@ -39,6 +39,23 @@ public class MonsterTransformation {
     public ResourceLocation getMobId() { return transformedMobId; }
     public @Nullable BaseIdentity getIdentity() { return identity; }
 
+    /**
+     * Identityごとの保存HPを引くための正規キー。
+     *
+     * 【重要】以前は identity.getId() と mobId.toString() が混在してキーになっていた。
+     * BaseIdentity.getId() は entity.getType().toString() であり、EntityType.toString() は
+     * getDescriptionId() を返すため "entity.monstermod.yatagarasu" になる。一方
+     * mobId.toString() は "monstermod:yatagarasu" で、両者は別物。
+     * その結果 HP を書いた場所と読む場所が食い違い、HPが正しく引き継がれていなかった。
+     * HPの読み書きは必ずこのキーを使うこと。
+     *
+     * また identity が未生成(deserializeNBT直後など)でも使えるため、
+     * getIdentity() の null チェック漏れによるNPEも避けられる。
+     */
+    public String getHpKey() {
+        return transformedMobId == null ? "" : transformedMobId.toString();
+    }
+
     // ======= HPの読み書き（MonsterTransformUtilから呼ばれる） =======
     public double getHumanHP(double maxHealthFallback) {
         return humanHP >= 0 ? humanHP : maxHealthFallback;
@@ -90,7 +107,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     double currentHP = player.getHealth();
     if (currentHP > 0) {
         if (isTransformed && identity != null) {
-            MonsterTransformUtil.setIdentityHP(player, identity.getId(), currentHP);
+            MonsterTransformUtil.setIdentityHP(player, getHpKey(), currentHP);
         } else {
             MonsterTransformUtil.setPlayerHP(player, currentHP);
         }
@@ -122,7 +139,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             }
 
             // 保存されていたHPをロード（なければ最大値）
-            double savedHP = MonsterTransformUtil.getIdentityHP(player, identity.getId());
+            double savedHP = MonsterTransformUtil.getIdentityHP(player, getHpKey());
             if (savedHP <= 0) savedHP = player.getMaxHealth();
 
             this.isTransformed = true;
@@ -139,7 +156,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
 
         // 1. [仕組み] インスタンスを破棄する「前」にデータを保存する
         if (identity != null) {
-            MonsterTransformUtil.setIdentityHP(player, identity.getId(), player.getHealth());
+            MonsterTransformUtil.setIdentityHP(player, getHpKey(), player.getHealth());
         }
 
         // 2. 属性を人間に戻す
@@ -236,7 +253,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         // パケット専用のHPデータを追加
         nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
         double currentIdHP = (identity != null) ?
-                MonsterTransformUtil.getIdentityHP(player, identity.getId()) : player.getHealth();
+                MonsterTransformUtil.getIdentityHP(player, getHpKey()) : player.getHealth();
         nbt.putDouble("identityHP", currentIdHP);
 
         ModMessages.sendToAllClients(new S2CTransformSyncPacket(player.getUUID(), nbt));
@@ -251,7 +268,7 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         // 2. HP情報（これはserializeNBTに含まれないので手動追加）
         nbt.putDouble("playerHP", MonsterTransformUtil.getPlayerHP(player));
         if (identity != null) {
-            nbt.putDouble("identityHP", MonsterTransformUtil.getIdentityHP(player, identity.getId()));
+            nbt.putDouble("identityHP", MonsterTransformUtil.getIdentityHP(player, getHpKey()));
         } else {
             // Identityがない場合（変身解除中など）は、現在のHPを暫定で送っておく
             nbt.putDouble("identityHP", player.getHealth());
@@ -281,10 +298,16 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
         // 修正: 既存のidentityが存在しても、IDが異なる場合は古いものを破棄して再作成する
         if (identity != null) {
-            if (transformedMobId != null && identity.getId().equals(transformedMobId.toString())) {
+            // 【修正】以前は identity.getId()("entity.monstermod.yatagarasu") と
+            // transformedMobId.toString()("monstermod:yatagarasu") を比較しており、
+            // 形式が違うため一度も一致せず、毎回Identityを作り直していた
+            // (クールダウン等の状態が保持されない原因)。EntityTypeで直接比較する。
+            var expectedType = ModEntitieType.getEntityType(transformedMobId);
+            if (expectedType != null && identity.getEntity() != null
+                    && identity.getEntity().getType() == expectedType) {
                 return identity;
             } else {
-                // IDが一致しない場合は破棄
+                // 変身先が変わっている場合は破棄
                 identity = null;
             }
         }

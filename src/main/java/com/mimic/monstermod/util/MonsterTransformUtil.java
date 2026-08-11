@@ -46,7 +46,7 @@ public class MonsterTransformUtil {
 
             if (transformation.getEntity() != null &&
                     transformation.getIdentity() != null &&
-                    transformation.getIdentity().getId().equals(identityId)) {
+                    transformation.getHpKey().equals(identityId)) {
                 transformation.getEntity().setHealth((float) hp);
             }
         });
@@ -205,7 +205,7 @@ public class MonsterTransformUtil {
                 copyAttributesToDEV(player, idEnt);
 
                 // 3. HP同期（保存されている値を適用）
-                double currentStoredHP = getIdentityHP(player, trans.getIdentity().getId());
+                double currentStoredHP = getIdentityHP(player, trans.getHpKey());
 
                 // サーバー側ならパケットを飛ばしてクライアントの「枠」を広げる
                 if (isServer && player instanceof ServerPlayer sp) {
@@ -260,8 +260,7 @@ public class MonsterTransformUtil {
 
         // [重要] 現在のHPを設定（属性変更の直後にやらないと最大値でキャップされる）
         if (isTransformed) {
-            String id = transformation.getIdentity().getId();
-            player.setHealth((float) getIdentityHP(player, id));
+            player.setHealth((float) getIdentityHP(player, transformation.getHpKey()));
         } else {
             player.setHealth((float) getPlayerHP(player));
         }

@@ -6,8 +6,7 @@ import com.mimic.monstermod.util.MonsterTransformUtil;
 import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.event.entity.living.LivingHealEvent;
-import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -16,34 +15,31 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class PlayerHPEvents {
 
+    /**
+     * 変身中のHPスナップショットを毎tick更新する。
+     *
+     * 【設計】変身中の「今のHP」はバニラの player.getHealth() を唯一の正とする。
+     * バニラが自動でクライアントへ同期するため、表示も自前同期なしで常に正しくなる。
+     * Capabilityが持つHPマップは「別のIdentityへ切り替えた際に元のHPへ戻すための控え」
+     * であって、表示や判定に使う値ではない。
+     *
+     * 【以前の不具合】LivingHurtEvent / LivingHealEvent の中で player.setHealth() を
+     * 呼んでいたため、その直後にバニラが再度ダメージを適用して二重に減っていた。
+     * さらに表示(MonsterHpOverlay)は控えの値だけを見ており、その控えはダメージ時に
+     * クライアントへ同期されないため、
+     * 「表示は300のまま変わらないのに実HPは減っていて0で死ぬ」状態になっていた。
+     */
     @SubscribeEvent
-    public static void onPlayerHurt(LivingHurtEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
-        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            if (trans.isTransformed() && trans.getIdentity() != null) {
-                String id = trans.getIdentity().getId();
-                double newHP = MonsterTransformUtil.getIdentityHP(player, id) - event.getAmount();
-                MonsterTransformUtil.setIdentityHP(player, id, newHP);
-                player.setHealth((float) Math.max(0, newHP));
-            } else {
-                float newPlayerHP = player.getHealth() - event.getAmount();
-                MonsterTransformUtil.setPlayerHP(player, (double)newPlayerHP);
-            }
-        });
-    }
+    public static void onPlayerTickHpSnapshot(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        Player player = event.player;
+        if (player.level().isClientSide) return;
 
-    @SubscribeEvent
-    public static void onPlayerHeal(LivingHealEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
-        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
-            if (transformation.isTransformed() && transformation.getIdentity() != null) {
-                String id = transformation.getIdentity().getId();
-                double newHP = MonsterTransformUtil.getIdentityHP(player, id) + event.getAmount();
-                MonsterTransformUtil.setIdentityHP(player, id, newHP);
-                player.setHealth((float) Math.min(player.getMaxHealth(), newHP));
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            if (trans.isTransformed()) {
+                trans.setIdentityHP(trans.getHpKey(), player.getHealth());
             } else {
-                float finalHP = Math.min(player.getMaxHealth(), player.getHealth() + event.getAmount());
-                MonsterTransformUtil.setPlayerHP(player, (double)finalHP);
+                trans.setHumanHP(player.getHealth());
             }
         });
     }
@@ -69,28 +65,35 @@ public class PlayerHPEvents {
                 trans.stopTransformation(player);
             }
 
+            // 【重要】PlayerEvent.Clone の copyCaps は deserializeNBT を通すため、
+            // この時点では isTransformed が true でも identity は null になっている。
+            // 以前はここで trans.getIdentity().getId() を無防備に呼んでおり、
+            // NullPointerException でリスポーン処理が中断して復活できなくなっていた。
+            // HPのキーは identity ではなく getHpKey() から引けるので null 安全。
+            String hpKey = trans.getHpKey();
+
             if (resetHp) {
                 MonsterTransformUtil.resetPlayerHP(player);
                 MonsterTransformUtil.resetIdentityHP(player);
             } else {
                 if (keepTransform && trans.isTransformed()) {
-                    String currentId = trans.getIdentity().getId();
-                    double currentHP = MonsterTransformUtil.getIdentityHP(player, currentId);
+                    double currentHP = MonsterTransformUtil.getIdentityHP(player, hpKey);
                     if (currentHP <= 0) {
-                        MonsterTransformUtil.setIdentityHP(player, currentId, MonsterTransformUtil.getIdentityMaxHP(player));
+                        MonsterTransformUtil.setIdentityHP(player, hpKey, MonsterTransformUtil.getIdentityMaxHP(player));
                     }
                 } else if (MonsterTransformUtil.getPlayerHP(player) <= 0) {
                     MonsterTransformUtil.resetPlayerHP(player);
                 }
             }
 
-            // 属性の適用
+            // 属性の適用(この中で trans.onLoad が走り Entity/Identity が再生成される)
             MonsterTransformUtil.applyFullTransformation(player, trans);
 
             double finalHP = trans.isTransformed()
-                    ? MonsterTransformUtil.getIdentityHP(player, trans.getIdentity().getId())
+                    ? MonsterTransformUtil.getIdentityHP(player, hpKey)
                     : MonsterTransformUtil.getPlayerHP(player);
 
+            // 復活直後にHPが0だと即死してリスポーンを繰り返すため、必ず正の値にする
             if (finalHP <= 0) finalHP = player.getMaxHealth();
             player.setHealth((float) finalHP);
 
@@ -107,7 +110,14 @@ public class PlayerHPEvents {
         Player oldPlayer = event.getOriginal();
         Player newPlayer = event.getEntity();
         oldPlayer.reviveCaps();
-        CapabilityRegistry.copyCaps(oldPlayer, newPlayer);
+        try {
+            CapabilityRegistry.copyCaps(oldPlayer, newPlayer);
+        } finally {
+            // reviveCaps したら必ず invalidateCaps で元に戻すこと。
+            // 戻し忘れると古いプレイヤーのCapabilityが生き続けてリークになる。
+            // またコピー中に例外が出てもリスポーンを止めないよう finally で行う。
+            oldPlayer.invalidateCaps();
+        }
     }
 
     @SubscribeEvent

@@ -50,7 +50,7 @@ public class S2CTransformSyncPacket {
                 if (trans.isTransformed() && trans.getIdentity() != null) {
                     if (nbt.contains("identityHP")) {
                         double targetHP = nbt.getDouble("identityHP");
-                        MonsterTransformUtil.setIdentityHP(player, trans.getIdentity().getId(), targetHP);
+                        MonsterTransformUtil.setIdentityHP(player, trans.getHpKey(), targetHP);
                         player.setHealth((float) Math.min(targetHP, player.getMaxHealth()));
                     }
                 } else if (nbt.contains("playerHP")) {

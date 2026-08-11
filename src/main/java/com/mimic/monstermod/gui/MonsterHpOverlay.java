@@ -35,10 +35,15 @@ public class MonsterHpOverlay {
             // 変身中かつIdentityが存在する場合のみ表示
             if (!trans.isTransformed() || trans.getIdentity() == null) return;
 
-            // HP情報の取得
-            String identityId = trans.getIdentity().getId();
-            double currentHP = MonsterTransformUtil.getIdentityHP(player, identityId);
-            double maxHP = MonsterTransformUtil.getIdentityMaxHP(player);
+            // HP情報の取得。
+            // 【重要】バニラの player.getHealth()/getMaxHealth() を使うこと。
+            // 変身中はプレイヤーの最大HP属性が変身先の値(八咫烏なら300)になっており、
+            // これはバニラが自動でクライアントへ同期するため常に実HPと一致する。
+            // 以前はCapability側のHP控えを表示していたが、その値はダメージ時に
+            // クライアントへ同期されないため「表示は300のまま変わらないのに
+            // 実HPは減っていて0で死ぬ」という食い違いが起きていた。
+            double currentHP = player.getHealth();
+            double maxHP = player.getMaxHealth();
             if (maxHP <= 0) return;
 
             // --- 1. レイアウト計算 (通常のハートの位置を狙う) ---
