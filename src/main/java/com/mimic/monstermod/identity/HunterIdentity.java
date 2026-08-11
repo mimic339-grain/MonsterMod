@@ -136,20 +136,6 @@ public class HunterIdentity extends BaseIdentity {
         }
     }
 
-    private boolean canCastByCategory(SkillLead lead) {
-        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.CANCEL) return true;
-        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.COMBO) return isComboWindowActive();
-        if (lead.category == com.mimic.monstermod.skill.SkillType.Category.NORMAL) {
-            boolean isDashing = false;
-            for (int i = 0; i < skillIds.length; i++) {
-                SkillLead l = SkillLeadRegistry.getNullable(skillIds[i]);
-                if (l != null && l.category == com.mimic.monstermod.skill.SkillType.Category.DASH && comboWindows[i] > 0) {
-                    isDashing = true;
-                    break;
-                }
-            }
-            return !isAnySkillActive() || isDashing;
-        }
-        return !isAnySkillActive();
-    }
+    // canCastByCategory() は BaseIdentity のものをそのまま継承して使用する
+    // (以前はここに全く同一のロジックが重複実装されていた)
 }

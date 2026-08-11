@@ -162,9 +162,11 @@ public class BaseIdentity {
     }
 
     /**
-     * SkillCategoryに基づいた発動可否判定 (BaseIdentityのロジックをカプセル化)
+     * SkillCategoryに基づいた発動可否判定。
+     * (以前はHunterIdentityに同一ロジックが重複実装されていたため、片方だけ修正すると
+     *  挙動がずれるリスクがあった。BaseIdentityに一本化し、HunterIdentityは継承する)
      */
-    private boolean canCastByCategory(SkillLead lead) {
+    protected boolean canCastByCategory(SkillLead lead) {
         if (lead.category == com.mimic.monstermod.skill.SkillType.Category.CANCEL) return true;
 
         if (lead.category == com.mimic.monstermod.skill.SkillType.Category.COMBO) {
