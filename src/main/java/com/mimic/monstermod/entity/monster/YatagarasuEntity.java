@@ -100,7 +100,12 @@ public class YatagarasuEntity extends BaseEntity {
             activeAnimAnchorTick = this.tickCount;
         }
 
-        if (!level().isClientSide && BONE_RIG.isLoaded()) {
+        // 【重要】クライアント側でも必ず更新すること。
+        // プレイヤーが殴る対象の選択(レイピック)はクライアントが行うため、
+        // クライアント側のパーツ位置が古いままだと照準が当たらず
+        // ダメージが一切入らない(本体の大きな判定にしか当たらなくなる)。
+        // 計算は同期済みデータからの決定的な導出なので、両サイドで同じ結果になる。
+        if (BONE_RIG.isLoaded()) {
             updateBodyPartHitboxes();
         }
     }
