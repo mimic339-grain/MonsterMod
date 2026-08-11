@@ -124,6 +124,15 @@ public class HunterTransformation {
     }
 
     public void startHunter(Player player) {
+        // モンスターとハンターは排他。ハンターになるならモンスター変身は解除する。
+        // (stopTransformationは属性・HPを人間用へ戻す処理も行うため、
+        //  ハンターの状態を作る前に済ませておく)
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(monster -> {
+            if (monster.isTransformed()) {
+                monster.stopTransformation(player);
+            }
+        });
+
         isActive = true;
 
         if (this.identity == null) {

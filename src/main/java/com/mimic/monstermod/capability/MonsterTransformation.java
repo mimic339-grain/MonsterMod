@@ -8,6 +8,7 @@ import com.mimic.monstermod.init.IdentityType;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2CTransformSyncPacket;
 import com.mimic.monstermod.util.MonsterTransformUtil;
+import com.mimic.monstermod.variable.CapabilityRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -75,6 +76,15 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         player.displayClientMessage(Component.literal("対象のHPが0のため変身できません！"), true);
         return;
     }
+
+    // 1.5 モンスターとハンターは排他。モンスター化するならハンター状態は解除する。
+    // (変身が確定した後に行う。上のHPチェックで失敗した場合にハンターを
+    //  解除してしまわないよう、必ずチェックより後に置くこと)
+    player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
+        if (hunter.isActive()) {
+            hunter.stopHunter(player);
+        }
+    });
 
     // 2. [重要] 現在のHPを保存（現在のIdentityがあればそれを使い、なければ人間用HPとして保存）
     double currentHP = player.getHealth();
