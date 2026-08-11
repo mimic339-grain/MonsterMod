@@ -1,24 +1,100 @@
 package com.mimic.monstermod.entity.monster;
 
 import com.mimic.monstermod.entity.BaseEntity;
+import com.mimic.monstermod.entity.hitbox.BonePoseResolver;
+import com.mimic.monstermod.entity.hitbox.BoneRigData;
+import com.mimic.monstermod.entity.hitbox.YatagarasuBodyPart;
+import com.mimic.monstermod.entity.hitbox.YatagarasuHitboxProfile;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraftforge.entity.PartEntity;
+import org.joml.Vector3f;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
+
+import java.util.List;
 
 public class YatagarasuEntity extends BaseEntity {
 
     private final AnimatableInstanceCache cache = new SingletonAnimatableInstanceCache(this);
     private String currentSkillAnim = null;
 
+    // --- ボーン追従ヒットボックス(弱点部位) ---
+    private static final List<String> HITBOX_BONE_NAMES =
+            YatagarasuHitboxProfile.PARTS.stream().map(YatagarasuHitboxProfile.PartConfig::boneName).toList();
+    private static final BoneRigData BONE_RIG = BoneRigData.load(
+            "assets/monstermod/geo/yatagarasu.geo.json",
+            "assets/monstermod/animations/yatagarasu.animation.json",
+            HITBOX_BONE_NAMES
+    );
+
+    private final YatagarasuBodyPart[] bodyParts;
+
     public YatagarasuEntity(EntityType<? extends BaseEntity> type, Level level) {
         super(type, level);
         // これを呼ぶことで、getDimensions() と getEyeHeight() が即座に再計算されます
         this.refreshDimensions();
+
+        this.bodyParts = new YatagarasuBodyPart[YatagarasuHitboxProfile.PARTS.size()];
+        for (int i = 0; i < bodyParts.length; i++) {
+            bodyParts[i] = new YatagarasuBodyPart(this, YatagarasuHitboxProfile.PARTS.get(i));
+        }
+    }
+
+    public static BoneRigData getBoneRig() {
+        return BONE_RIG;
+    }
+
+    @Override
+    public boolean isMultipartEntity() {
+        return true;
+    }
+
+    @Override
+    public PartEntity<?>[] getParts() {
+        return bodyParts;
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!level().isClientSide && BONE_RIG.isLoaded()) {
+            updateBodyPartHitboxes();
+        }
+    }
+
+    /** 現在のアニメーションが再生され始めてから何秒経過したか(ループなら周回込み) */
+    public double getCurrentAnimationElapsedSeconds() {
+        String animation = getCurrentAnimation();
+        if (animation == null || animation.isEmpty()) return 0.0;
+
+        double elapsedSeconds = getAnimationElapsedTicks() / 20.0;
+        double length = BONE_RIG.getAnimationLength(animation);
+        if (length > 0 && BONE_RIG.isLooping(animation)) {
+            elapsedSeconds = elapsedSeconds % length;
+        }
+        return elapsedSeconds;
+    }
+
+    /** ボーン追従ヒットボックスを現在のアニメーションに合わせて毎tick更新する */
+    private void updateBodyPartHitboxes() {
+        String animation = getCurrentAnimation();
+        if (animation == null || animation.isEmpty()) return;
+
+        double elapsedSeconds = getCurrentAnimationElapsedSeconds();
+
+        for (YatagarasuBodyPart part : bodyParts) {
+            String boneName = part.getConfig().boneName();
+            Vector3f[] corners = BonePoseResolver.resolveWorldCorners(BONE_RIG, boneName, animation, elapsedSeconds, this);
+            if (corners == null) continue;
+            AABB box = BonePoseResolver.enclosingAABB(corners);
+            part.updateFromWorldAABB(box);
+        }
     }
     @Override
     protected EntityDimensions getCustomDimensions() {

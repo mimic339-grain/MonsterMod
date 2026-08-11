@@ -91,12 +91,25 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
         this.entityData.define(CURRENT_SKILL, "");
     }
 
+    // アニメーションが切り替わった瞬間のtickCount(ボーン追従ヒットボックスの
+    // 経過時間計算に使う。「今のアニメーションが何秒再生されているか」が分かる)
+    private int animationAnchorTick = 0;
+
     public void setCurrentAnimation(String name) {
-        this.entityData.set(CURRENT_ANIMATION, name == null ? "" : name);
+        String normalized = name == null ? "" : name;
+        if (!normalized.equals(this.entityData.get(CURRENT_ANIMATION))) {
+            this.animationAnchorTick = this.tickCount;
+        }
+        this.entityData.set(CURRENT_ANIMATION, normalized);
     }
 
     public String getCurrentAnimation() {
         return this.entityData.get(CURRENT_ANIMATION);
+    }
+
+    /** 現在のアニメーションが再生され始めてから経過したtick数 */
+    public int getAnimationElapsedTicks() {
+        return Math.max(0, this.tickCount - this.animationAnchorTick);
     }
 
     public void setCurrentSkill(String name) {
