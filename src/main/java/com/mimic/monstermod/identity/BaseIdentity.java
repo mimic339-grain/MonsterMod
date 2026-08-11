@@ -240,6 +240,16 @@ public class BaseIdentity {
         return abilityCooldowns[index];
     }
 
+    /**
+     * サーバーがスキル発動を拒否した際に、クライアント側で仮設定した予兆ロックを解除する。
+     * (handleAbility が応答を待たずに lockCooldowns を仮セットするため、
+     *  拒否された場合はこれを呼ばないと連打時に再入力できなくなる)
+     */
+    public void clearLock(int index) {
+        if (index < 0 || index >= lockCooldowns.length) return;
+        this.lockCooldowns[index] = 0;
+    }
+
     // --- 同期/描画系（省略せずそのまま保持） ---
     public void copyFromPlayerServer(Player player) {
         if (entity == null) return;

@@ -1,8 +1,8 @@
 package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.network.ModMessages;
+import com.mimic.monstermod.network.server.S2C_SkillCastRejectedPacket;
 import com.mimic.monstermod.network.server.S2C_SpawnSkillLeadPacket;
 import com.mimic.monstermod.skill.SkillId;
 import com.mimic.monstermod.skill.SkillLead;
@@ -60,19 +60,23 @@ public class C2S_SkillCastRequestPacket {
      * (元のコードのロジックを崩さないように切り出し)
      */
     public static void processSkillCast(ServerPlayer player, com.mimic.monstermod.identity.BaseIdentity identity, SkillId skillId) {
-        // サーバー側の Identity インデックス確認
-        // 【デバッグ用】実行前に Identity の中身をチェック
-        MonsterMod.LOGGER.info("DEBUG: Casting Skill: {}, Identity Instance: {}, SkillArray: {}",
-                skillId, System.identityHashCode(identity), java.util.Arrays.toString(identity.getSkillIds()));
-
         int skillIndex = identity.findSkillIndex(skillId);
-        if (skillIndex == -1) return;
+        if (skillIndex == -1) {
+            reject(player, skillId);
+            return;
+        }
 
         // サーバー側でのクールダウン/ロック最終チェック
-        if (identity.getCooldown(skillIndex) > 0 || identity.isLocking(skillIndex)) return;
+        if (identity.getCooldown(skillIndex) > 0 || identity.isLocking(skillIndex)) {
+            reject(player, skillId);
+            return;
+        }
 
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
-        if (lead == null) return;
+        if (lead == null) {
+            reject(player, skillId);
+            return;
+        }
 
         MathMain math = SkillLeadUtil.buildMath(lead, player.position());
 
@@ -89,7 +93,18 @@ public class C2S_SkillCastRequestPacket {
                     PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> player),
                     new S2C_SpawnSkillLeadPacket(player.getId(), lead, math)
             );
+        } else {
+            // 発動不可(他スキル実行中など) → クライアントの仮ロックを解除させる
+            reject(player, skillId);
         }
+    }
 
+    /**
+     * クライアントが応答を待たずに仮設定した予兆ロック(lockCooldowns)を解除させるための通知。
+     * これが無いと、サーバーが拒否した際にクライアントの仮ロックが自然減衰するまで
+     * 再入力を受け付けられず、連打時にスキルが発動できないことがあった。
+     */
+    private static void reject(ServerPlayer player, SkillId skillId) {
+        ModMessages.sendToClient(new S2C_SkillCastRejectedPacket(skillId), player);
     }
 }
