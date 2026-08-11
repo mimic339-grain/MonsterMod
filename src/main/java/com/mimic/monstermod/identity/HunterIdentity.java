@@ -24,12 +24,10 @@ public class HunterIdentity extends BaseIdentity {
      * 【修正版】CapabilityのMapからスキルIDとCDを配列に同期する
      */
     public void syncSkillsFromCapability(Map<HunterSkillSlot, SkillId> skills) {
-        System.out.println("[Debug] Syncing skills to Identity...");
         for (var entry : skills.entrySet()) {
             int index = entry.getKey().ordinal();
             if (index >= 0 && index < this.skillIds.length) {
                 this.skillIds[index] = entry.getValue();
-                System.out.println("[Debug] Set index " + index + " to " + entry.getValue());
 
                 if (this.skillIds[index] != null) {
                     HunterSkill hs = HunterSkillRegistry.get(this.skillIds[index]);
@@ -96,9 +94,8 @@ public class HunterIdentity extends BaseIdentity {
         if (skillIndex < 0 || skillIndex >= 4) return;
 
         SkillId id = this.skillIds[skillIndex];
+        // null になる場合は syncSkillsFromCapability が正しく呼ばれていないことを意味する
         if (id == null) {
-            // ここでログが出る場合は syncSkillsFromCapability が正しく呼ばれていないことを意味します
-            System.out.println("[Debug] serverExecuteSkill: SkillId is null at index " + skillIndex);
             return;
         }
 

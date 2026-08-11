@@ -71,7 +71,6 @@ public class MimicEntity extends BaseEntity {
 
             if (skillAnim != null) {
                 if (!skillAnim.equals(currentSkillAnim)) {
-                    System.out.println("[MimicEntity] Play skill animation: " + skillAnim);
                     controller.setAnimation(RawAnimation.begin().then(skillAnim, Animation.LoopType.PLAY_ONCE));
                     currentSkillAnim = skillAnim;
                 }
@@ -79,8 +78,6 @@ public class MimicEntity extends BaseEntity {
 
             // skill アニメ終了判定
             if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                System.out.println("[MimicEntity] Skill animation finished: " + currentSkill);
-
                 // サーバー側で状態を確定させる
                 if (!level().isClientSide) {
                     if ("switch".equals(currentSkill)) {

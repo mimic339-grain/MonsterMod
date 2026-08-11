@@ -46,13 +46,6 @@ public class BigTornadoEntity extends Entity {
     public void tick() {
         super.tick();
 
-        System.out.println("BigTornadoEntity is ticking at: " + this.getX() + ", " + this.getY());
-
-        /*
-        if (this.level().isClientSide) {
-            spawnTornadoParticles(this.entityData.get(DATA_SIZE));
-        }*/
-
         if (!this.level().isClientSide) {
             if (this.tickCount > this.entityData.get(DATA_LIFE) || (owner != null && !owner.isAlive())) {
                 this.discard();
@@ -60,37 +53,7 @@ public class BigTornadoEntity extends Entity {
             }
             applyStormEffect(this.entityData.get(DATA_SIZE));
         }
-    }/*
-    private void spawnTornadoParticles(float radius) {
-
-        // 🔴 出しすぎ防止
-        if (this.tickCount % 5 != 0) return;
-
-        System.out.println("Spawn Effekseer");
-
-        // 🔴 ここが一番重要
-        ResourceLocation effectId =
-                new ResourceLocation("monstermod", "effeks/Laser01");
-
-        ParticleEmitterInfo info = ParticleEmitterInfo.create(this.level(), effectId)
-                .position(this.getX(), this.getY(), this.getZ())
-                .scale(radius)
-                .bindOnEntity(this); // ←これ超良い（そのままでOK）
-
-        AAALevel.addParticle(this.level(), info);
-    }*/
-
-    /*private void spawnTornadoParticles(float radius) {
-        int streamCount = 120;
-        if (this.tickCount == 1 || (this.tickCount > 1 && this.tickCount % 180 == 0)) {
-            for (int i = 0; i < streamCount; i++) {
-                double startAngle = (Math.PI * 2 / streamCount) * i;
-                this.level().addParticle(new TornadoParticleOptions(1.5f), // 視覚的にも1.5倍
-                        this.getX(), this.getY(), this.getZ(),
-                        startAngle, radius, 0);
-            }
-        }
-    }*/
+    }
 
     private void applyStormEffect(float radius) {
         float height = 45.0f; // 30.0f * 1.5

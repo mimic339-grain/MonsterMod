@@ -131,10 +131,6 @@ public class BaseIdentity {
             // 2. リロード減算
             if (abilityCooldowns[i] > 0) {
                 abilityCooldowns[i]--;
-                if (abilityCooldowns[i] == 0) {
-                    SkillId id = (i < skillIds.length) ? skillIds[i] : null;
-                    System.out.println("[" + side + "] スキル使用可能: " + (id != null ? id : "Index " + i));
-                }
             }
         }
     }

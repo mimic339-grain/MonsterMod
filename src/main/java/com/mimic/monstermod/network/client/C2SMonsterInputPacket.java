@@ -55,13 +55,11 @@ public class C2SMonsterInputPacket {
 
                 // 1. メニュー処理
                 if (msg.menuKey) {
-                    System.out.println("[Packet/Server] handleMenu実行: " + player.getName().getString());
                     identity.handleMenu(player);
                 }
 
                 // 2. スキル処理 (回避も handleAbility 内で判定される)
                 if (msg.useKey && msg.skillIndex >= 0) {
-                    System.out.println("[Packet/Server] handleAbilityキーバインド送信 Index: " + msg.skillIndex + " (" + player.getName().getString() + ")");
                     identity.handleAbility(player, msg.skillIndex);
                 }
             });

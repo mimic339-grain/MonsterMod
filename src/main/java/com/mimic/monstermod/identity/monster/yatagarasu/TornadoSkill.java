@@ -72,13 +72,11 @@ public class TornadoSkill extends SkillEffectSpec {
 
     private void spawnTornadoEntity(LivingEntity owner, Vec3 pos, float size, float damage, boolean isCenter) {
         if (!owner.level().isClientSide) {
-            System.out.println("TORNADO SPAWN ATTEMPT: " + pos); // サーバーログに出るか
             TornadoEntity tornado = new TornadoEntity(ModEntitieType.TORNADO.get(), owner.level());
             tornado.setPos(pos.x, pos.y, pos.z);
             tornado.setProperties(owner, 100, size, damage, isCenter);
 
-            boolean success = owner.level().addFreshEntity(tornado);
-            System.out.println("SPAWN SUCCESS: " + success); // true になっているか
+            owner.level().addFreshEntity(tornado);
         }
     }
 }

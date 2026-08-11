@@ -96,9 +96,6 @@ public class ModMessages {
     }
 
     public static <MSG> void sendToServer(MSG message) {
-
-        System.out.println("Sending packet to server: " + message.getClass().getSimpleName());
-
         INSTANCE.sendToServer(message);
     }
     public static <MSG> void sendToClient(MSG message, ServerPlayer player) {

@@ -29,14 +29,13 @@ public final class PreviewEvents {
     private static final List<Preview> PREVIEWS = new LinkedList<>();
 
     public static void spawnFromServer(Entity caster, SkillLead lead, MathMain math) {
-        handlePreviewSpawning(caster, lead, math, "[Preview] S2C spawn: ");
+        handlePreviewSpawning(caster, lead, math);
     }
 
-    private static void handlePreviewSpawning(Entity caster, SkillLead lead, MathMain math, String logPrefix) {
-        // 【強化】EMERGENCY の場合、その術者(caster)に関連するプレビューを即座に全削除
+    private static void handlePreviewSpawning(Entity caster, SkillLead lead, MathMain math) {
+        // EMERGENCY(CANCEL)カテゴリの場合、その術者(caster)に関連するプレビューを即座に全削除
         if (lead.category == SkillType.Category.CANCEL) {
             PREVIEWS.removeIf(p -> p.caster.getUUID().equals(caster.getUUID()));
-            System.out.println(logPrefix + "EMERGENCYにより既存プレビューをクリア");
         }
         // 通常スキルの重複防止（クライアント側での表示重複を防ぐ）
         else if (lead.category == SkillType.Category.NORMAL) {

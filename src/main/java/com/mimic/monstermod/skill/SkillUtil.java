@@ -33,7 +33,6 @@ public final class SkillUtil {
         ActiveSkill active = new ActiveSkill(lead, math, spec, duration);
         activeList.add(active);
 
-        System.out.println("[SkillUtil] スキル登録成功: " + lead.id);
         return true;
     }
 
@@ -125,7 +124,6 @@ public final class SkillUtil {
                                 com.mimic.monstermod.skill.hunter.HunterSkillRegistry.get(active.lead.skillId());
                         if (hunterSkill != null) {
                             hunterSkill.onEffectEnd(sp); // ここで飛行解除や無敵解除を行う
-                            System.out.println("[SkillUtil/Debug] 効果終了(onEffectEnd): " + active.lead.id);
                         }
                     }
                 }
@@ -167,7 +165,6 @@ public final class SkillUtil {
         // 1. 攻撃系 (STRIKE / TOUCH) の処理
         if (active.lead.skillType == SkillType.STRIKE || active.lead.skillType == SkillType.TOUCH) {
             Collection<LivingEntity> targets = AttackExecutor.collect(level, active.lead, active.math, caster);
-            System.out.println("[SkillUtil/Debug] 攻撃判定: " + active.lead.id + " | ヒット数: " + targets.size());
             for (LivingEntity target : targets) {
                 if (target == caster) continue;
                 active.spec.apply(caster, target);
@@ -176,7 +173,6 @@ public final class SkillUtil {
 
         // 2. 移動・特殊系 (MOVEMENT) の処理
         else if (active.lead.skillType == SkillType.MOVEMENT) {
-            System.out.println("[SkillUtil/Debug] 特殊効果(MOVEMENT)実行: " + active.lead.id);
             // JSON側のEffectSpecを実行
             active.spec.apply(caster, null);
 
