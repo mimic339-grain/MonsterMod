@@ -57,9 +57,12 @@ public class TornadoEntity extends Entity {
         // --- クライアント側：密度の高い円柱の壁を構築 ---
         if (this.level().isClientSide) {
             spawnTornadoParticles(currentSize);
+            return;
         }
 
         // --- サーバー側：ロジック ---
+        // (以前はこのガードが無く、移動処理とダメージ判定がクライアント側でも
+        //  実行されてしまっていた。BigTornadoEntityと同じくサーバー限定にする)
         if (this.tickCount > currentLife || (owner != null && !owner.isAlive())) {
             this.discard();
             return;
