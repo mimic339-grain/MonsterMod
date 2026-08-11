@@ -53,6 +53,11 @@ public final class CommonTickEvents {
                 });
             }
         });
+
+        // 変身中プレイヤーの部位当たり判定を更新(クライアント/サーバー両方で必要)。
+        // 見た目用プロキシへ移動量・向きがコピーされた後に呼ぶ必要があるため、
+        // 必ず上のtickIdentityより後に置くこと。
+        com.mimic.monstermod.entity.hitbox.TransformedPlayerHitboxes.tick(player);
     }
 
     /**

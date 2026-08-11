@@ -56,6 +56,8 @@ public class PlayerRendererMixin {
                                  PoseStack poseStack, MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
         identity.copyFromPlayerClient(player);
         identity.render(player, partialTicks, poseStack, buffer, packedLight);
+        // 変身中プレイヤーの部位当たり判定を表示(実体のモンスターと同じ設定・見え方)
+        com.mimic.monstermod.util.HitboxRenderUtil.renderTransformedPlayerHitboxes(player, poseStack, buffer);
         ci.cancel();
     }
     @Inject(method = "<init>", at = @At("TAIL"))

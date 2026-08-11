@@ -1,23 +1,21 @@
 package com.mimic.monstermod.entity.monster;
 
 import com.mimic.monstermod.entity.BaseEntity;
-import com.mimic.monstermod.entity.hitbox.BonePoseResolver;
+import com.mimic.monstermod.entity.hitbox.BoneHitboxPart;
+import com.mimic.monstermod.entity.hitbox.BoneHitboxRegistry;
+import com.mimic.monstermod.entity.hitbox.BoneHitboxUpdater;
 import com.mimic.monstermod.entity.hitbox.BoneRigData;
-import com.mimic.monstermod.entity.hitbox.YatagarasuBodyPart;
 import com.mimic.monstermod.entity.hitbox.YatagarasuHitboxProfile;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
 import net.minecraftforge.entity.PartEntity;
-import org.joml.Vector3f;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animatable.instance.SingletonAnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
-
-import java.util.List;
 
 public class YatagarasuEntity extends BaseEntity {
 
@@ -25,24 +23,31 @@ public class YatagarasuEntity extends BaseEntity {
     private String currentSkillAnim = null;
 
     // --- ボーン追従ヒットボックス(弱点部位) ---
-    private static final List<String> HITBOX_BONE_NAMES =
-            YatagarasuHitboxProfile.PARTS.stream().map(YatagarasuHitboxProfile.PartConfig::boneName).toList();
+    public static final ResourceLocation RIG_ID = new ResourceLocation("monstermod", "yatagarasu");
+
     private static final BoneRigData BONE_RIG = BoneRigData.load(
             "assets/monstermod/geo/yatagarasu.geo.json",
             "assets/monstermod/animations/yatagarasu.animation.json",
-            HITBOX_BONE_NAMES
+            YatagarasuHitboxProfile.PARTS.stream().map(YatagarasuHitboxProfile.PartConfig::boneName).toList()
     );
 
-    private final YatagarasuBodyPart[] bodyParts;
+    static {
+        // 実体のモンスターと、八咫烏に変身したプレイヤーの両方がこの定義を使う
+        BoneHitboxRegistry.register(RIG_ID,
+                new BoneHitboxRegistry.Rig(BONE_RIG, YatagarasuHitboxProfile.PARTS));
+    }
+
+    private final BoneHitboxPart[] bodyParts;
 
     public YatagarasuEntity(EntityType<? extends BaseEntity> type, Level level) {
         super(type, level);
         // これを呼ぶことで、getDimensions() と getEyeHeight() が即座に再計算されます
         this.refreshDimensions();
 
-        this.bodyParts = new YatagarasuBodyPart[YatagarasuHitboxProfile.PARTS.size()];
+        this.bodyParts = new BoneHitboxPart[YatagarasuHitboxProfile.PARTS.size()];
         for (int i = 0; i < bodyParts.length; i++) {
-            bodyParts[i] = new YatagarasuBodyPart(this, YatagarasuHitboxProfile.PARTS.get(i));
+            bodyParts[i] = new BoneHitboxPart(this);
+            bodyParts[i].activate(YatagarasuHitboxProfile.PARTS.get(i), this);
         }
     }
 
@@ -60,18 +65,12 @@ public class YatagarasuEntity extends BaseEntity {
         return bodyParts;
     }
 
-    // 現在再生中のアニメーション名と、その再生が始まったtick。
-    // SynchedEntityDataではなくローカルに持つ(下のresolveAnimationName()が
-    // 同期済みのgetCurrentSkill()と移動状態から決定的に導出するため、
-    // クライアント・サーバーそれぞれが独立に同じ値を計算できる)。
-    private String activeAnim = "";
-    private int activeAnimAnchorTick = 0;
-
     /**
      * 今再生されるべきアニメーション名を返す。
      * 描画(mainPredicate)と当たり判定(updateBodyPartHitboxes)の両方がこれを使うため、
      * 見た目と当たり判定のアニメーションが食い違わない。
      */
+    @Override
     public String resolveAnimationName() {
         String currentSkill = getCurrentSkill();
         if (currentSkill != null && !currentSkill.isEmpty()) {
@@ -94,11 +93,7 @@ public class YatagarasuEntity extends BaseEntity {
         super.tick();
 
         // アニメーションが切り替わったら経過時間の基準をリセットする
-        String resolved = resolveAnimationName();
-        if (!resolved.equals(activeAnim)) {
-            activeAnim = resolved;
-            activeAnimAnchorTick = this.tickCount;
-        }
+        updateActiveAnimation();
 
         // 【重要】クライアント側でも必ず更新すること。
         // プレイヤーが殴る対象の選択(レイピック)はクライアントが行うため、
@@ -106,38 +101,15 @@ public class YatagarasuEntity extends BaseEntity {
         // ダメージが一切入らない(本体の大きな判定にしか当たらなくなる)。
         // 計算は同期済みデータからの決定的な導出なので、両サイドで同じ結果になる。
         if (BONE_RIG.isLoaded()) {
-            updateBodyPartHitboxes();
+            BoneHitboxUpdater.update(BONE_RIG, bodyParts,
+                    getActiveAnimation(), getAnimationElapsedSeconds(BONE_RIG),
+                    this.position(), this.getYRot());
         }
     }
 
-    public String getActiveAnimation() {
-        return activeAnim;
-    }
-
-    /** 現在のアニメーションが再生され始めてから何秒経過したか(ループなら周回込み) */
+    /** 現在のアニメーションが再生され始めてから何秒経過したか(デバッグ描画用) */
     public double getCurrentAnimationElapsedSeconds() {
-        if (activeAnim.isEmpty()) return 0.0;
-
-        double elapsedSeconds = Math.max(0, this.tickCount - activeAnimAnchorTick) / 20.0;
-        double length = BONE_RIG.getAnimationLength(activeAnim);
-        if (length > 0 && BONE_RIG.isLooping(activeAnim)) {
-            elapsedSeconds = elapsedSeconds % length;
-        }
-        return elapsedSeconds;
-    }
-
-    /** ボーン追従ヒットボックスを現在のアニメーションに合わせて毎tick更新する */
-    private void updateBodyPartHitboxes() {
-        if (activeAnim.isEmpty()) return;
-        double elapsedSeconds = getCurrentAnimationElapsedSeconds();
-
-        for (YatagarasuBodyPart part : bodyParts) {
-            String boneName = part.getConfig().boneName();
-            Vector3f[] corners = BonePoseResolver.resolveWorldCorners(
-                    BONE_RIG, boneName, activeAnim, elapsedSeconds, this.position(), this.getYRot());
-            if (corners == null) continue;
-            part.updateFromWorldAABB(BonePoseResolver.enclosingAABB(corners));
-        }
+        return getAnimationElapsedSeconds(BONE_RIG);
     }
     @Override
     protected EntityDimensions getCustomDimensions() {

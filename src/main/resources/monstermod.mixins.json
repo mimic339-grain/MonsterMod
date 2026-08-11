@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "monstermod.refmap.json",
   "mixins": [
+    "player.PlayerMultipartMixin"
   ],
   "client": [
     "player.PlayerMixin",

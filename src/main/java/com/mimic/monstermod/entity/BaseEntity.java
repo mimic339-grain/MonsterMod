@@ -91,25 +91,60 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
         this.entityData.define(CURRENT_SKILL, "");
     }
 
-    // アニメーションが切り替わった瞬間のtickCount(ボーン追従ヒットボックスの
-    // 経過時間計算に使う。「今のアニメーションが何秒再生されているか」が分かる)
-    private int animationAnchorTick = 0;
-
     public void setCurrentAnimation(String name) {
-        String normalized = name == null ? "" : name;
-        if (!normalized.equals(this.entityData.get(CURRENT_ANIMATION))) {
-            this.animationAnchorTick = this.tickCount;
-        }
-        this.entityData.set(CURRENT_ANIMATION, normalized);
+        this.entityData.set(CURRENT_ANIMATION, name == null ? "" : name);
     }
 
     public String getCurrentAnimation() {
         return this.entityData.get(CURRENT_ANIMATION);
     }
 
-    /** 現在のアニメーションが再生され始めてから経過したtick数 */
-    public int getAnimationElapsedTicks() {
-        return Math.max(0, this.tickCount - this.animationAnchorTick);
+    // ================================================================
+    // ボーン追従ヒットボックス用のアニメーション追跡
+    // ================================================================
+    // 「今どのアニメーションが何秒再生されているか」を保持する。
+    // SynchedEntityDataではなくローカルに持つ理由:
+    //   resolveAnimationName()が同期済みの状態から決定的に導出されるため、
+    //   クライアント・サーバーがそれぞれ独立に同じ値を計算できる(同期不要)。
+    private String activeAnim = "";
+    private int activeAnimAnchorTick = 0;
+
+    /**
+     * 今再生されるべきアニメーション名。部位当たり判定を持つモンスターはこれをオーバーライドし、
+     * 描画側(GeckoLibのpredicate)もこれを使うこと。両者が別々に名前を決めると
+     * 見た目と当たり判定がズレる。
+     */
+    public String resolveAnimationName() {
+        return "";
+    }
+
+    /**
+     * アニメーション名の切り替わりを検出して経過時間の基準を更新する。
+     * 通常のエンティティはtick()から、変身プレイヤーの見た目用プロキシ(ワールドに
+     * 存在せずtick()が呼ばれない)は外部から毎tick呼ぶ必要がある。
+     */
+    public void updateActiveAnimation() {
+        String resolved = resolveAnimationName();
+        if (!resolved.equals(activeAnim)) {
+            activeAnim = resolved;
+            activeAnimAnchorTick = this.tickCount;
+        }
+    }
+
+    public String getActiveAnimation() {
+        return activeAnim;
+    }
+
+    /** 現在のアニメーションが再生され始めてから何秒経過したか(ループなら周回込み) */
+    public double getAnimationElapsedSeconds(com.mimic.monstermod.entity.hitbox.BoneRigData rig) {
+        if (activeAnim.isEmpty()) return 0.0;
+
+        double elapsed = Math.max(0, this.tickCount - activeAnimAnchorTick) / 20.0;
+        double length = rig.getAnimationLength(activeAnim);
+        if (length > 0 && rig.isLooping(activeAnim)) {
+            elapsed = elapsed % length;
+        }
+        return elapsed;
     }
 
     public void setCurrentSkill(String name) {
