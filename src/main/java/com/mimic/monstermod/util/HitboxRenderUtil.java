@@ -69,39 +69,23 @@ public class HitboxRenderUtil {
             float b = cap.getLeadB();
             VertexConsumer consumer = buffer.getBuffer(RenderType.lines());
 
-            String animation = entity.getCurrentAnimation();
+            String animation = entity.getActiveAnimation();
             if (animation == null || animation.isEmpty()) return;
             double elapsedSeconds = entity.getCurrentAnimationElapsedSeconds();
 
             for (YatagarasuHitboxProfile.PartConfig part : YatagarasuHitboxProfile.PARTS) {
-                Vector3f[] corners = BonePoseResolver.resolveWorldCorners(rig, part.boneName(), animation, elapsedSeconds, entity);
-                if (corners == null) continue;
-
-                // entityの位置基準(poseStackは既にentity位置へ平行移動済み)に変換
-                Vector3f[] local = new Vector3f[8];
-                for (int i = 0; i < 8; i++) {
-                    local[i] = new Vector3f(
-                            (float) (corners[i].x - entity.getX()),
-                            (float) (corners[i].y - entity.getY()),
-                            (float) (corners[i].z - entity.getZ())
-                    );
-                }
+                // poseStackは既にエンティティ位置へ平行移動済みなので、原点基準で計算する
+                Vector3f[] local = BonePoseResolver.resolveLocalCorners(
+                        rig, part.boneName(), animation, elapsedSeconds, entity.getYRot());
+                if (local == null) continue;
                 drawObbEdges(poseStack, consumer, local, r, g, b);
             }
         });
     }
 
-    // 頂点の並びはBonePoseResolver.resolveWorldCornersと対応させる:
-    // 0:(x,y,z) 1:(x+w,y,z) 2:(x,y+h,z) 3:(x+w,y+h,z) 4:(x,y,z+d) 5:(x+w,y,z+d) 6:(x,y+h,z+d) 7:(x+w,y+h,z+d)
-    private static final int[][] OBB_EDGES = {
-            {0, 1}, {0, 2}, {1, 3}, {2, 3}, // 手前の面
-            {4, 5}, {4, 6}, {5, 7}, {6, 7}, // 奥の面
-            {0, 4}, {1, 5}, {2, 6}, {3, 7}  // 手前と奥をつなぐ辺
-    };
-
     private static void drawObbEdges(PoseStack poseStack, VertexConsumer consumer, Vector3f[] corners, float r, float g, float b) {
         var pose = poseStack.last().pose();
-        for (int[] edge : OBB_EDGES) {
+        for (int[] edge : BonePoseResolver.EDGES) {
             Vector3f a = corners[edge[0]];
             Vector3f bVert = corners[edge[1]];
             Vector3f normal = new Vector3f(bVert).sub(a).normalize();

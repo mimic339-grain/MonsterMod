@@ -60,22 +60,62 @@ public class YatagarasuEntity extends BaseEntity {
         return bodyParts;
     }
 
+    // 現在再生中のアニメーション名と、その再生が始まったtick。
+    // SynchedEntityDataではなくローカルに持つ(下のresolveAnimationName()が
+    // 同期済みのgetCurrentSkill()と移動状態から決定的に導出するため、
+    // クライアント・サーバーそれぞれが独立に同じ値を計算できる)。
+    private String activeAnim = "";
+    private int activeAnimAnchorTick = 0;
+
+    /**
+     * 今再生されるべきアニメーション名を返す。
+     * 描画(mainPredicate)と当たり判定(updateBodyPartHitboxes)の両方がこれを使うため、
+     * 見た目と当たり判定のアニメーションが食い違わない。
+     */
+    public String resolveAnimationName() {
+        String currentSkill = getCurrentSkill();
+        if (currentSkill != null && !currentSkill.isEmpty()) {
+            String skillAnim = switch (currentSkill) {
+                case "spiral_dash" -> "animation.yatagarasu.spin";
+                case "air_slash", "tornado" -> "animation.yatagarasu.tatsumaki";
+                case "roar" -> "animation.yatagarasu.roar";
+                case "charge" -> "animation.yatagarasu.charge";
+                default -> null;
+            };
+            if (skillAnim != null) return skillAnim;
+        }
+        // 移動判定はサーバー権威の速度から導出する(クライアントでも同じ値が得られる)
+        boolean moving = this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6D;
+        return moving ? "animation.yatagarasu.run" : "animation.yatagarasu.idle";
+    }
+
     @Override
     public void tick() {
         super.tick();
+
+        // アニメーションが切り替わったら経過時間の基準をリセットする
+        String resolved = resolveAnimationName();
+        if (!resolved.equals(activeAnim)) {
+            activeAnim = resolved;
+            activeAnimAnchorTick = this.tickCount;
+        }
+
         if (!level().isClientSide && BONE_RIG.isLoaded()) {
             updateBodyPartHitboxes();
         }
     }
 
+    public String getActiveAnimation() {
+        return activeAnim;
+    }
+
     /** 現在のアニメーションが再生され始めてから何秒経過したか(ループなら周回込み) */
     public double getCurrentAnimationElapsedSeconds() {
-        String animation = getCurrentAnimation();
-        if (animation == null || animation.isEmpty()) return 0.0;
+        if (activeAnim.isEmpty()) return 0.0;
 
-        double elapsedSeconds = getAnimationElapsedTicks() / 20.0;
-        double length = BONE_RIG.getAnimationLength(animation);
-        if (length > 0 && BONE_RIG.isLooping(animation)) {
+        double elapsedSeconds = Math.max(0, this.tickCount - activeAnimAnchorTick) / 20.0;
+        double length = BONE_RIG.getAnimationLength(activeAnim);
+        if (length > 0 && BONE_RIG.isLooping(activeAnim)) {
             elapsedSeconds = elapsedSeconds % length;
         }
         return elapsedSeconds;
@@ -83,17 +123,15 @@ public class YatagarasuEntity extends BaseEntity {
 
     /** ボーン追従ヒットボックスを現在のアニメーションに合わせて毎tick更新する */
     private void updateBodyPartHitboxes() {
-        String animation = getCurrentAnimation();
-        if (animation == null || animation.isEmpty()) return;
-
+        if (activeAnim.isEmpty()) return;
         double elapsedSeconds = getCurrentAnimationElapsedSeconds();
 
         for (YatagarasuBodyPart part : bodyParts) {
             String boneName = part.getConfig().boneName();
-            Vector3f[] corners = BonePoseResolver.resolveWorldCorners(BONE_RIG, boneName, animation, elapsedSeconds, this);
+            Vector3f[] corners = BonePoseResolver.resolveWorldCorners(
+                    BONE_RIG, boneName, activeAnim, elapsedSeconds, this.position(), this.getYRot());
             if (corners == null) continue;
-            AABB box = BonePoseResolver.enclosingAABB(corners);
-            part.updateFromWorldAABB(box);
+            part.updateFromWorldAABB(BonePoseResolver.enclosingAABB(corners));
         }
     }
     @Override
@@ -134,37 +172,22 @@ public class YatagarasuEntity extends BaseEntity {
         AnimationController<YatagarasuEntity> controller = event.getController();
         String currentSkill = getCurrentSkill();
 
-        // 1. スキル再生 (JSON内のキー名に完全一致させる)
-        if (currentSkill != null && !currentSkill.isEmpty()) {
-            String skillAnim = switch (currentSkill) {
-                case "spiral_dash" -> "animation.yatagarasu.spin";
-                case "air_slash", "tornado" -> "animation.yatagarasu.tatsumaki";
-                case "roar" -> "animation.yatagarasu.roar";
-                case "charge" -> "animation.yatagarasu.charge"; // JSONにあるので追加
-                default -> null;
-            };
+        // 【重要】再生するアニメーション名は resolveAnimationName() に一本化する。
+        // ここで独自に名前を決めてしまうと、ボーン追従ヒットボックス側が参照している
+        // アニメーションと食い違い、当たり判定と見た目がズレる。
+        String anim = resolveAnimationName();
+        boolean isSkillAnim = currentSkill != null && !currentSkill.isEmpty()
+                && !anim.equals("animation.yatagarasu.run")
+                && !anim.equals("animation.yatagarasu.idle");
 
-            if (skillAnim != null) {
-                // RawAnimationを直接セット。同じアニメーションが再生中ならGeckoLibが無視してくれる
-                controller.setAnimation(RawAnimation.begin().then(skillAnim, Animation.LoopType.PLAY_ONCE));
+        controller.setAnimation(RawAnimation.begin().then(anim,
+                isSkillAnim ? Animation.LoopType.PLAY_ONCE : Animation.LoopType.LOOP));
 
-                // アニメーションが終了したらスキル状態をリセットする（サーバー同期用）
-                if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                    if (!level().isClientSide) {
-                        setCurrentSkill(null);
-                    }
-                }
-                return PlayState.CONTINUE;
-            }
+        // スキルアニメーションが終了したらスキル状態をリセットする（サーバー同期用）
+        if (isSkillAnim && controller.getAnimationState() == AnimationController.State.STOPPED
+                && !level().isClientSide) {
+            setCurrentSkill(null);
         }
-
-        // 2. 通常時のアニメーション (ここもJSONのキー名に完全一致させる)
-        String anim = event.isMoving()
-                ? "animation.yatagarasu.run"
-                : "animation.yatagarasu.idle";
-
-        controller.setAnimation(RawAnimation.begin().then(anim, Animation.LoopType.LOOP));
-        currentSkillAnim = null;
         return PlayState.CONTINUE;
     }
 

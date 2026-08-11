@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,30 +21,41 @@ import java.util.Map;
  * .geo.json / .animation.json を、MinecraftのResourceManagerを一切経由せずに
  * JVMのクラスパスリソースとして直接読み込むローダー。
  *
- * 【なぜこうするか】
- * 専用サーバー(dedicated server)は通常 assets/ 配下のクライアント用アセットパックを
- * ロードしない。GeckoLibのモデル/アニメーションキャッシュはクライアント向けの仕組みの
- * ため、サーバー側の当たり判定計算がそれに依存すると専用サーバーで動かない恐れがある。
- * ここではmodのjarに実ファイルとして同梱されている同じ .json を、Minecraftのアセット
- * 管理を介さず直接読むことで、クライアント・専用サーバーどちらでも同一に動作させる。
+ * 【なぜResourceManagerを使わないか】
+ * 専用サーバー(dedicated server)は assets/ 配下のクライアント用アセットパックを
+ * ロードしない。当たり判定はサーバー権威で計算する必要があるため、クライアント向けの
+ * GeckoLibモデルキャッシュに依存できない。modのjarに実ファイルとして同梱されている
+ * 同じ .json を直接読むことで、クライアント・専用サーバーどちらでも同一に動作させる。
  *
- * Blockbench/GeckoLibの座標単位(1 = 1/16ブロック)は、ここでブロック単位に変換して保持する。
+ * 【重要】値の変換規則は GeckoLib の BakedModelFactory / BakedAnimationsAdapter に
+ * 完全に一致させてある。ここがズレると描画と当たり判定がズレるため、勝手に単純化しないこと。
+ *   - ボーン pivot     : X を反転 (BakedModelFactory#constructBone)
+ *   - ボーン 基本回転  : toRadians(-x, -y, +z)  (同上)
+ *   - Cube origin      : (-(origin.x + size.x)/16, origin.y/16, origin.z/16)
+ *   - Cube pivot       : X を反転
+ *   - Cube 回転        : toRadians(-x, -y, +z)
+ *   - アニメの回転     : toRadians(-x, -y, +z)  (BakedAnimationsAdapter)
+ *   - アニメの位置     : 変換なし(生のピクセル値。使用時に X を反転して 1/16 する)
+ * pivot / position はピクセル単位のまま保持し、行列適用時に 1/16 する
+ * (GeckoLibの RenderUtils と同じ扱い)。origin / size のみブロック単位で保持する。
  */
 public final class BoneRigData {
 
-    private static final float UNITS_TO_BLOCKS = 1.0f / 16.0f;
+    /** アニメーションのキーフレーム。time は秒。value の単位はチャンネルにより異なる。 */
+    public record Keyframe(double time, Vector3f value) {}
 
-    /** rotation(度)のキーフレーム。time は秒。 */
-    public record Keyframe(double time, Vector3f rotationDeg) {}
+    /** hitbox_*ボーンが持つCube(直方体)。origin/sizeはブロック単位、pivotはピクセル単位、rotationはラジアン。 */
+    public record BoneCube(Vector3f origin, Vector3f size, Vector3f pivot, Vector3f rotationRad) {}
 
-    /** hitbox_*ボーンが持つ、ボーンローカル空間でのCube(直方体)のサイズ・原点(ブロック単位) */
-    public record BoneCube(Vector3f origin, Vector3f size) {}
+    /** ボーンの静的データ。pivotはピクセル単位(X反転済み)、baseRotationはラジアン。 */
+    public record BoneDef(String parent, Vector3f pivot, Vector3f baseRotationRad) {}
 
-    private final Map<String, String> parentOf = new HashMap<>();
-    private final Map<String, Vector3f> pivotOf = new HashMap<>();
+    private final Map<String, BoneDef> bones = new HashMap<>();
     private final Map<String, BoneCube> hitboxCubeOf = new HashMap<>();
-    // animationName -> boneName -> 時系列ソート済みのキーフレーム
-    private final Map<String, Map<String, List<Keyframe>>> rotationByAnimation = new HashMap<>();
+
+    // animationName -> boneName -> キーフレーム(時系列ソート済み)
+    private final Map<String, Map<String, List<Keyframe>>> rotationChannels = new HashMap<>();
+    private final Map<String, Map<String, List<Keyframe>>> positionChannels = new HashMap<>();
     private final Map<String, Double> animationLength = new HashMap<>();
     private final Map<String, Boolean> animationLoop = new HashMap<>();
 
@@ -53,12 +65,8 @@ public final class BoneRigData {
         return loaded;
     }
 
-    public String getParent(String bone) {
-        return parentOf.get(bone);
-    }
-
-    public Vector3f getPivot(String bone) {
-        return pivotOf.getOrDefault(bone, new Vector3f());
+    public BoneDef getBone(String name) {
+        return bones.get(name);
     }
 
     public BoneCube getHitboxCube(String bone) {
@@ -73,17 +81,28 @@ public final class BoneRigData {
         return animationLoop.getOrDefault(animation, false);
     }
 
-    /** ボーン単体の、あるアニメーション内・ある時刻(秒)における回転(度)を線形補間で求める */
-    public Vector3f resolveRotationDeg(String animation, String bone, double timeSeconds) {
-        Map<String, List<Keyframe>> boneMap = rotationByAnimation.get(animation);
+    /** ボーンの、あるアニメーション・ある時刻(秒)における回転(ラジアン)。無ければゼロ。 */
+    public Vector3f sampleRotationRad(String animation, String bone, double timeSeconds) {
+        return sample(rotationChannels, animation, bone, timeSeconds);
+    }
+
+    /** ボーンの、あるアニメーション・ある時刻(秒)における位置(ピクセル)。無ければゼロ。 */
+    public Vector3f samplePositionPixels(String animation, String bone, double timeSeconds) {
+        return sample(positionChannels, animation, bone, timeSeconds);
+    }
+
+    private Vector3f sample(Map<String, Map<String, List<Keyframe>>> channels,
+                            String animation, String bone, double timeSeconds) {
+        Map<String, List<Keyframe>> boneMap = channels.get(animation);
         if (boneMap == null) return new Vector3f();
         List<Keyframe> frames = boneMap.get(bone);
         if (frames == null || frames.isEmpty()) return new Vector3f();
-        if (frames.size() == 1) return new Vector3f(frames.get(0).rotationDeg());
+        if (frames.size() == 1) return new Vector3f(frames.get(0).value());
 
-        if (timeSeconds <= frames.get(0).time()) return new Vector3f(frames.get(0).rotationDeg());
+        Keyframe first = frames.get(0);
         Keyframe last = frames.get(frames.size() - 1);
-        if (timeSeconds >= last.time()) return new Vector3f(last.rotationDeg());
+        if (timeSeconds <= first.time()) return new Vector3f(first.value());
+        if (timeSeconds >= last.time()) return new Vector3f(last.value());
 
         for (int i = 0; i < frames.size() - 1; i++) {
             Keyframe a = frames.get(i);
@@ -91,20 +110,21 @@ public final class BoneRigData {
             if (timeSeconds >= a.time() && timeSeconds <= b.time()) {
                 double span = b.time() - a.time();
                 float t = span <= 0 ? 0f : (float) ((timeSeconds - a.time()) / span);
-                return new Vector3f(a.rotationDeg()).lerp(b.rotationDeg(), t);
+                return new Vector3f(a.value()).lerp(b.value(), t);
             }
         }
-        return new Vector3f(last.rotationDeg());
+        return new Vector3f(last.value());
     }
 
     /** 指定ボーンから根までの親チェーン(根が先頭)を返す */
     public List<String> resolveParentChain(String boneName) {
         List<String> chain = new ArrayList<>();
         String current = boneName;
-        while (current != null) {
-            chain.add(0, current);
-            current = parentOf.get(current);
+        while (current != null && bones.containsKey(current)) {
+            chain.add(current);
+            current = bones.get(current).parent();
         }
+        Collections.reverse(chain);
         return chain;
     }
 
@@ -114,6 +134,8 @@ public final class BoneRigData {
             data.loadGeometry(geoResourcePath, hitboxBoneNames);
             data.loadAnimations(animationResourcePath);
             data.loaded = true;
+            MonsterMod.LOGGER.info("[BoneRigData] {} を読み込みました (ボーン{}個 / ヒットボックス{}個 / アニメーション{}個)",
+                    geoResourcePath, data.bones.size(), data.hitboxCubeOf.size(), data.animationLength.size());
         } catch (Exception e) {
             MonsterMod.LOGGER.error("[BoneRigData] {} / {} の読み込みに失敗しました。ボーン追従ヒットボックスは無効化されます。",
                     geoResourcePath, animationResourcePath, e);
@@ -136,29 +158,56 @@ public final class BoneRigData {
 
     private void loadGeometry(String path, List<String> hitboxBoneNames) throws IOException {
         JsonObject root = readClasspathJson(path);
-        JsonArray geometries = root.getAsJsonArray("minecraft:geometry");
-        for (JsonElement geoEl : geometries) {
-            JsonArray bones = geoEl.getAsJsonObject().getAsJsonArray("bones");
-            for (JsonElement boneEl : bones) {
+        for (JsonElement geoEl : root.getAsJsonArray("minecraft:geometry")) {
+            for (JsonElement boneEl : geoEl.getAsJsonObject().getAsJsonArray("bones")) {
                 JsonObject bone = boneEl.getAsJsonObject();
                 String name = bone.get("name").getAsString();
                 String parent = bone.has("parent") ? bone.get("parent").getAsString() : null;
-                Vector3f pivot = bone.has("pivot") ? readVec3(bone.getAsJsonArray("pivot")).mul(UNITS_TO_BLOCKS) : new Vector3f();
 
-                parentOf.put(name, parent);
-                pivotOf.put(name, pivot);
+                // GeckoLib BakedModelFactory#constructBone と同じ変換
+                Vector3f rawPivot = bone.has("pivot") ? readVec3(bone.getAsJsonArray("pivot")) : new Vector3f();
+                Vector3f pivot = new Vector3f(-rawPivot.x, rawPivot.y, rawPivot.z);
+
+                Vector3f rawRot = bone.has("rotation") ? readVec3(bone.getAsJsonArray("rotation")) : new Vector3f();
+                Vector3f baseRot = new Vector3f(
+                        (float) Math.toRadians(-rawRot.x),
+                        (float) Math.toRadians(-rawRot.y),
+                        (float) Math.toRadians(rawRot.z));
+
+                bones.put(name, new BoneDef(parent, pivot, baseRot));
 
                 if (hitboxBoneNames.contains(name) && bone.has("cubes")) {
                     JsonArray cubes = bone.getAsJsonArray("cubes");
                     if (cubes.size() > 0) {
-                        JsonObject cube = cubes.get(0).getAsJsonObject();
-                        Vector3f origin = readVec3(cube.getAsJsonArray("origin")).mul(UNITS_TO_BLOCKS);
-                        Vector3f size = readVec3(cube.getAsJsonArray("size")).mul(UNITS_TO_BLOCKS);
-                        hitboxCubeOf.put(name, new BoneCube(origin, size));
+                        hitboxCubeOf.put(name, parseCube(cubes.get(0).getAsJsonObject()));
                     }
                 }
             }
         }
+    }
+
+    /** GeckoLib BakedModelFactory#constructCube と同じ変換 */
+    private BoneCube parseCube(JsonObject cube) {
+        Vector3f size = readVec3(cube.getAsJsonArray("size"));
+        Vector3f rawOrigin = readVec3(cube.getAsJsonArray("origin"));
+
+        // origin = (-(origin.x + size.x)/16, origin.y/16, origin.z/16)
+        Vector3f origin = new Vector3f(
+                -(rawOrigin.x + size.x) / 16f,
+                rawOrigin.y / 16f,
+                rawOrigin.z / 16f);
+        Vector3f vertexSize = new Vector3f(size).mul(1f / 16f);
+
+        Vector3f rawCubePivot = cube.has("pivot") ? readVec3(cube.getAsJsonArray("pivot")) : new Vector3f();
+        Vector3f cubePivot = new Vector3f(-rawCubePivot.x, rawCubePivot.y, rawCubePivot.z);
+
+        Vector3f rawCubeRot = cube.has("rotation") ? readVec3(cube.getAsJsonArray("rotation")) : new Vector3f();
+        Vector3f cubeRot = new Vector3f(
+                (float) Math.toRadians(-rawCubeRot.x),
+                (float) Math.toRadians(-rawCubeRot.y),
+                (float) Math.toRadians(rawCubeRot.z));
+
+        return new BoneCube(origin, vertexSize, cubePivot, cubeRot);
     }
 
     private void loadAnimations(String path) throws IOException {
@@ -169,42 +218,49 @@ public final class BoneRigData {
             JsonObject anim = entry.getValue().getAsJsonObject();
 
             animationLength.put(animName, anim.has("animation_length") ? anim.get("animation_length").getAsDouble() : 0.0);
-            animationLoop.put(animName, anim.has("loop") && anim.get("loop").getAsBoolean());
+            animationLoop.put(animName, anim.has("loop") && anim.get("loop").isJsonPrimitive()
+                    && anim.get("loop").getAsJsonPrimitive().isBoolean() && anim.get("loop").getAsBoolean());
 
-            Map<String, List<Keyframe>> boneMap = new HashMap<>();
+            Map<String, List<Keyframe>> rotMap = new HashMap<>();
+            Map<String, List<Keyframe>> posMap = new HashMap<>();
+
             if (anim.has("bones")) {
-                JsonObject bones = anim.getAsJsonObject("bones");
-                for (Map.Entry<String, JsonElement> boneEntry : bones.entrySet()) {
+                for (Map.Entry<String, JsonElement> boneEntry : anim.getAsJsonObject("bones").entrySet()) {
                     String boneName = boneEntry.getKey();
                     JsonObject boneAnim = boneEntry.getValue().getAsJsonObject();
-                    if (!boneAnim.has("rotation")) continue;
 
-                    List<Keyframe> frames = parseRotationChannel(boneAnim.get("rotation"));
-                    frames.sort((a, b) -> Double.compare(a.time(), b.time()));
-                    boneMap.put(boneName, frames);
+                    if (boneAnim.has("rotation")) {
+                        rotMap.put(boneName, parseChannel(boneAnim.get("rotation"), true));
+                    }
+                    if (boneAnim.has("position")) {
+                        posMap.put(boneName, parseChannel(boneAnim.get("position"), false));
+                    }
                 }
             }
-            rotationByAnimation.put(animName, boneMap);
+            rotationChannels.put(animName, rotMap);
+            positionChannels.put(animName, posMap);
         }
     }
 
-    private List<Keyframe> parseRotationChannel(JsonElement rotationEl) {
+    /**
+     * @param isRotation trueなら BakedAnimationsAdapter と同じ toRadians(-x,-y,+z) 変換を行う。
+     *                   位置チャンネルは変換せず生のピクセル値のまま保持する。
+     */
+    private List<Keyframe> parseChannel(JsonElement channelEl, boolean isRotation) {
         List<Keyframe> frames = new ArrayList<>();
-        if (rotationEl.isJsonArray()) {
-            // "rotation": [x, y, z] という短縮形式(定数)
-            frames.add(new Keyframe(0.0, readVec3(rotationEl.getAsJsonArray())));
+
+        if (channelEl.isJsonArray()) {
+            frames.add(new Keyframe(0.0, convert(readVec3(channelEl.getAsJsonArray()), isRotation)));
             return frames;
         }
 
-        JsonObject rotation = rotationEl.getAsJsonObject();
-        if (rotation.has("vector")) {
-            // "rotation": {"vector": [x,y,z]} という定数形式
-            frames.add(new Keyframe(0.0, readVec3(rotation.getAsJsonArray("vector"))));
+        JsonObject channel = channelEl.getAsJsonObject();
+        if (channel.has("vector")) {
+            frames.add(new Keyframe(0.0, convert(readVec3(channel.getAsJsonArray("vector")), isRotation)));
             return frames;
         }
 
-        // "rotation": {"0.0": {"vector":[..]}, "0.5": {"vector":[..]}, ...} というキーフレーム形式
-        for (Map.Entry<String, JsonElement> keyEntry : rotation.entrySet()) {
+        for (Map.Entry<String, JsonElement> keyEntry : channel.entrySet()) {
             double time;
             try {
                 time = Double.parseDouble(keyEntry.getKey());
@@ -212,12 +268,32 @@ public final class BoneRigData {
                 continue;
             }
             JsonElement valueEl = keyEntry.getValue();
-            JsonArray vecArr = valueEl.isJsonObject() && valueEl.getAsJsonObject().has("vector")
-                    ? valueEl.getAsJsonObject().getAsJsonArray("vector")
-                    : (valueEl.isJsonArray() ? valueEl.getAsJsonArray() : null);
+            JsonArray vecArr = null;
+            if (valueEl.isJsonArray()) {
+                vecArr = valueEl.getAsJsonArray();
+            } else if (valueEl.isJsonObject()) {
+                JsonObject valueObj = valueEl.getAsJsonObject();
+                // {"vector":[..]} / {"pre":{"vector":[..]}} / {"post":{"vector":[..]}}
+                if (valueObj.has("vector")) {
+                    vecArr = valueObj.getAsJsonArray("vector");
+                } else if (valueObj.has("post")) {
+                    JsonElement post = valueObj.get("post");
+                    vecArr = post.isJsonArray() ? post.getAsJsonArray()
+                            : post.getAsJsonObject().getAsJsonArray("vector");
+                }
+            }
             if (vecArr == null) continue;
-            frames.add(new Keyframe(time, readVec3(vecArr)));
+            frames.add(new Keyframe(time, convert(readVec3(vecArr), isRotation)));
         }
+        frames.sort((a, b) -> Double.compare(a.time(), b.time()));
         return frames;
+    }
+
+    private Vector3f convert(Vector3f raw, boolean isRotation) {
+        if (!isRotation) return raw;
+        return new Vector3f(
+                (float) Math.toRadians(-raw.x),
+                (float) Math.toRadians(-raw.y),
+                (float) Math.toRadians(raw.z));
     }
 }
