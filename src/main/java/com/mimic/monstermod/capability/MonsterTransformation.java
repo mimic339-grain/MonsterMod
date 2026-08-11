@@ -16,6 +16,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class MonsterTransformation {
 
     private boolean isTransformed = false;
@@ -26,9 +29,35 @@ public class MonsterTransformation {
     // クラス上部にフィールドを追加
     private CompoundTag deferredIdentityData = null;
 
+    // HPの実体はこのCapabilityインスタンスが直接保持する(1プレイヤー1インスタンス)。
+    // これによりserializeNBT/deserializeNBTだけでHPも含めて永続化される。
+    private double humanHP = -1; // -1 = 未設定（プレイヤーの最大HPを使う）
+    private final Map<String, Double> identityHpMap = new HashMap<>();
+
     public boolean isTransformed() { return isTransformed; }
     public ResourceLocation getMobId() { return transformedMobId; }
     public @Nullable BaseIdentity getIdentity() { return identity; }
+
+    // ======= HPの読み書き（MonsterTransformUtilから呼ばれる） =======
+    public double getHumanHP(double maxHealthFallback) {
+        return humanHP >= 0 ? humanHP : maxHealthFallback;
+    }
+
+    public void setHumanHP(double hp) {
+        this.humanHP = hp;
+    }
+
+    public double getIdentityHP(String identityId, double maxHealthFallback) {
+        return identityHpMap.getOrDefault(identityId, maxHealthFallback);
+    }
+
+    public void setIdentityHP(String identityId, double hp) {
+        identityHpMap.put(identityId, hp);
+    }
+
+    public void clearIdentityHpMap() {
+        identityHpMap.clear();
+    }
 
 // =====================================================================
 // 【仕組み：変身中のHP関係】
@@ -148,6 +177,16 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             // Identity内部の状態（クールダウン等）も保存
             tag.put("identity_data", identity.serializeNBT());
         }
+
+        // HP（人間時 / Identityごと）もここに含める。
+        // これによりForgeの標準セーブ処理(ICapabilitySerializable)経由で自動的に保存/復元される。
+        tag.putDouble("humanHP", humanHP);
+        CompoundTag idHpTag = new CompoundTag();
+        for (Map.Entry<String, Double> entry : identityHpMap.entrySet()) {
+            idHpTag.putDouble(entry.getKey(), entry.getValue());
+        }
+        tag.put("identity_hp_map", idHpTag);
+
         return tag;
     }
 
@@ -166,6 +205,15 @@ public void startTransformation(Player player, ResourceLocation mobId) {
             this.deferredIdentityData = tag.getCompound("identity_data");
         } else {
             this.deferredIdentityData = null;
+        }
+
+        this.humanHP = tag.contains("humanHP") ? tag.getDouble("humanHP") : -1;
+        this.identityHpMap.clear();
+        if (tag.contains("identity_hp_map")) {
+            CompoundTag idHpTag = tag.getCompound("identity_hp_map");
+            for (String key : idHpTag.getAllKeys()) {
+                this.identityHpMap.put(key, idHpTag.getDouble(key));
+            }
         }
     }
 

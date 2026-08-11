@@ -15,46 +15,41 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 
 public class MonsterTransformUtil {
 
     // ================================
-    // UUID ごとの HPMap保存用
-    // ================================
-    private static final Map<UUID, Double> PLAYER_HP_MAP = new HashMap<>();
-    // Identity の種類ごとに HP を保存
-    private static final Map<UUID, Map<String, Double>> IDENTITY_HP_MAP = new HashMap<>();
-
-    // ================================
     // Player / Identity HP 取得・設定
     // ================================
+    // HPの実体はMonsterTransformation Capabilityインスタンス自身が保持する。
+    // (以前はUUIDキーのstatic Mapに保持しており、Capabilityのserialize/deserializeに
+    //  含まれず永続化されない・保存タイミングに依存する不具合の原因になっていた)
     public static double getPlayerHP(Player player) {
-        return PLAYER_HP_MAP.getOrDefault(player.getUUID(), (double) player.getMaxHealth());
+        return player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                .map(t -> t.getHumanHP(player.getMaxHealth()))
+                .orElse((double) player.getMaxHealth());
     }
 
     // Identity の種類ごとのHP取得（変身中のEntity名を使う前提）
     public static double getIdentityHP(Player player, String identityName) {
-        Map<String, Double> map = IDENTITY_HP_MAP.getOrDefault(player.getUUID(), new HashMap<>());
-        return map.getOrDefault(identityName, getIdentityMaxHP(player));
+        double fallback = getIdentityMaxHP(player);
+        return player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                .map(t -> t.getIdentityHP(identityName, fallback))
+                .orElse(fallback);
     }
-
 
     // Identity HP 設定
     public static void setIdentityHP(Player player, String identityId, double hp) {
-        Map<String, Double> map = IDENTITY_HP_MAP.getOrDefault(player.getUUID(), new HashMap<>());
-        map.put(identityId, hp);
-        IDENTITY_HP_MAP.put(player.getUUID(), map);
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(transformation -> {
+            transformation.setIdentityHP(identityId, hp);
 
-        MonsterTransformation transformation = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
-        if (transformation != null && transformation.getEntity() != null &&
-                transformation.getIdentity() != null &&
-                transformation.getIdentity().getId().equals(identityId)) {
-            transformation.getEntity().setHealth((float) hp);
-        }
+            if (transformation.getEntity() != null &&
+                    transformation.getIdentity() != null &&
+                    transformation.getIdentity().getId().equals(identityId)) {
+                transformation.getEntity().setHealth((float) hp);
+            }
+        });
     }
 
     public static double getIdentityMaxHP(Player player) {
@@ -104,74 +99,30 @@ public class MonsterTransformUtil {
         }
     }
 
-    // ================================
-    // identity player両方のNBT 保存 / 復元
-    // ================================
-    public static CompoundTag saveHPToNBT(Player player, CompoundTag tag) {
-        tag.putDouble("player_hp", getPlayerHP(player));
-
-        Map<String, Double> identityMap = IDENTITY_HP_MAP.getOrDefault(player.getUUID(), new HashMap<>());
-        CompoundTag idTag = new CompoundTag();
-        for (Map.Entry<String, Double> entry : identityMap.entrySet()) {
-            idTag.putDouble(entry.getKey(), entry.getValue());
-        }
-        tag.put("identity_hp_map", idTag);
-
-        return tag;
-    }
-
-    public static void loadHPFromNBT(Player player, CompoundTag tag) {
-        if (tag.contains("player_hp"))
-            PLAYER_HP_MAP.put(player.getUUID(), tag.getDouble("player_hp"));
-
-        if (tag.contains("identity_hp_map")) {
-            CompoundTag idTag = tag.getCompound("identity_hp_map");
-            Map<String, Double> map = new HashMap<>();
-            for (String key : idTag.getAllKeys()) {
-                map.put(key, idTag.getDouble(key));
-            }
-            IDENTITY_HP_MAP.put(player.getUUID(), map);
-        }
-    }
     // =====================================
-    // すべて保存 (HP + Attribute)
+    // すべて保存 (Attribute)
+    // HP・変身状態自体はMonsterTransformation Capability(ICapabilitySerializable)が
+    // Forgeの標準セーブ処理で自動的に保存する。ここではCapabilityに乗らないAttributeの
+    // スナップショットのみを別途保存する。
     // =====================================
     public static void saveAllToNBT(Player player) {
         CompoundTag tag = new CompoundTag();
 
-        saveHPToNBT(player, tag);
         saveAttributesToNBT(player, tag);
 
-        // Capability(変身フラグやID)を hp_save NBT の中に含める
-        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            tag.put("transformation_data", trans.serializeNBT());
-        });
-
         player.getPersistentData().put("hp_save", tag);
-        MonsterMod.LOGGER.info("[Save] Player {}'s data (including Transformation) saved.", player.getName().getString());
+        MonsterMod.LOGGER.info("[Save] Player {}'s attribute snapshot saved.", player.getName().getString());
     }
 
     // =====================================
-    // すべて復元
+    // すべて復元 (Attribute)
+    // 変身状態/HPはCapabilityのdeserializeNBTで既に復元済みである前提。
+    // ここではAttributeスナップショットの復元のみ行う。
     // =====================================
     public static void loadAllFromNBT(Player player) {
         if (!player.getPersistentData().contains("hp_save")) return;
         CompoundTag tag = player.getPersistentData().getCompound("hp_save");
 
-        // 1. HPの復元
-        loadHPFromNBT(player, tag);
-
-        // 2. Capability(変身状態)の復元
-        if (tag.contains("transformation_data")) {
-            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                // ここで ID などの変数を復元
-                trans.deserializeNBT(tag.getCompound("transformation_data"));
-                // 復元したデータに基づきインスタンス(Entity/Identity)を生成
-                trans.onLoad(player);
-            });
-        }
-
-        // 3. 属性の復元 (これに HP セット処理が含まれている)
         loadAttributesFromNBT(player, tag);
     }
     // ================================
@@ -179,28 +130,27 @@ public class MonsterTransformUtil {
     // ================================
     public static void resetPlayerHP(Player player) {
         double maxHP = player.getMaxHealth();
-        PLAYER_HP_MAP.put(player.getUUID(), maxHP);
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(t -> t.setHumanHP(maxHP));
         player.setHealth((float) maxHP);
     }
 
     public static void resetIdentityHP(Player player) {
-        Map<String, Double> updatedMap = new HashMap<>();
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            trans.clearIdentityHpMap();
 
-        // IdentityType の全 ID をループ
-        for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
-            // Entity は null でも生成可能
-            BaseIdentity identity = IdentityType.createIdentity(id, null);
-            if (identity != null) {
-                BaseEntity entity = identity.getEntity();
-                if (entity != null && entity.getAttribute(Attributes.MAX_HEALTH) != null) {
-                    double maxHP = entity.getAttributeValue(Attributes.MAX_HEALTH);
-                    updatedMap.put(id.toString(), maxHP);
+            // IdentityType の全 ID をループ
+            for (ResourceLocation id : IdentityType.ID_MAP.keySet()) {
+                // Entity は null でも生成可能
+                BaseIdentity identity = IdentityType.createIdentity(id, null);
+                if (identity != null) {
+                    BaseEntity entity = identity.getEntity();
+                    if (entity != null && entity.getAttribute(Attributes.MAX_HEALTH) != null) {
+                        double maxHP = entity.getAttributeValue(Attributes.MAX_HEALTH);
+                        trans.setIdentityHP(id.toString(), maxHP);
+                    }
                 }
             }
-        }
-
-        // プレイヤー UUID に保存
-        IDENTITY_HP_MAP.put(player.getUUID(), updatedMap);
+        });
     }
     // =====================================
     // Attribute NBT 保存 / 復元
@@ -231,7 +181,7 @@ public class MonsterTransformUtil {
     }
 
     public static void setPlayerHP(Player player, double hp) {
-        PLAYER_HP_MAP.put(player.getUUID(), hp);
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(t -> t.setHumanHP(hp));
         // [バグログ] 属性が20の時に100をセットしようとしていないか確認
         if (hp > player.getMaxHealth()) {
             MonsterMod.LOGGER.warn("Attempted to set HP ({}) higher than MaxHP ({}) for player!", hp, player.getMaxHealth());

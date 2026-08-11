@@ -5,13 +5,16 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.util.LazyOptional;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class MonsterTransformationProvider implements ICapabilityProvider {
+// ICapabilitySerializableを実装することで、Forgeの標準プレイヤーセーブ処理から
+// serializeNBT/deserializeNBTが自動的に呼ばれるようになる(以前はICapabilityProviderのみで
+// 呼び出し経路が手動のPlayerHPEvents頼みだったため、保存タイミング漏れでHPが巻き戻る不具合があった)。
+public class MonsterTransformationProvider implements ICapabilitySerializable<CompoundTag> {
 
     // Capability 内部データの実体
     private final MonsterTransformation data = new MonsterTransformation();
@@ -31,10 +34,12 @@ public class MonsterTransformationProvider implements ICapabilityProvider {
     }
 
     // ======= NBT 保存 / 読み込み =======
+    @Override
     public CompoundTag serializeNBT() {
         return data.serializeNBT();
     }
 
+    @Override
     public void deserializeNBT(CompoundTag tag) {
         data.deserializeNBT(tag);  // ※Player は必要ない。内部で必要なら別途渡す
     }

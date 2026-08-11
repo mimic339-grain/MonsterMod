@@ -114,15 +114,19 @@ public class PlayerHPEvents {
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
 
-        // 1. NBT(hp_save) から Capability と HP を一括ロード
-        // これにより trans.onLoad() も内部で走り、ID: null が解消される
+        // 1. 変身状態・HPはMonsterTransformation Capability(ICapabilitySerializable)により
+        //    Forgeの標準プレイヤーロード処理で既に復元済み。Attributeスナップショットのみ別途復元する。
         MonsterTransformUtil.loadAllFromNBT(sp);
 
         sp.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-            // 2. ロードされたデータに基づき属性を再適用
+            // 2. deserializeNBTで復元済みのフラグ(isTransformed/mobId)を基に
+            //    Entity/Identityインスタンスを再構築する(ID: null 解消)
+            trans.onLoad(sp);
+
+            // 3. ロードされたデータに基づき属性を再適用
             MonsterTransformUtil.applyFullTransformation(sp, trans);
 
-            // 3. クライアント全体へ同期
+            // 4. クライアント全体へ同期
             trans.syncToClient(sp);
             trans.syncToAllClients(sp);
 

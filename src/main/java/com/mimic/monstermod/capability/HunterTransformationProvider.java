@@ -5,7 +5,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.util.LazyOptional;
 
 import javax.annotation.Nonnull;
@@ -15,8 +15,9 @@ import javax.annotation.Nullable;
  * Hunter 用 Capability Provider
  * - 中身は HunterTransformation（武器装備＆納刀/抜刀管理）
  * - Monster 用の PlayerTransformationProvider と同じ構造で実装
+ * - ICapabilitySerializable実装によりForgeの標準セーブ処理から自動的に永続化される
  */
-public class HunterTransformationProvider implements ICapabilityProvider {
+public class HunterTransformationProvider implements ICapabilitySerializable<CompoundTag> {
 
     // =====================================================================
     // 内部データ本体
@@ -44,10 +45,12 @@ public class HunterTransformationProvider implements ICapabilityProvider {
     // NBT 保存 / 読み込み
     // （AttachCapabilitiesEvent などから手動で呼ぶ想定）
     // =====================================================================
+    @Override
     public CompoundTag serializeNBT() {
         return data.serializeNBT();
     }
 
+    @Override
     public void deserializeNBT(CompoundTag tag) {
         data.deserializeNBT(tag);
     }

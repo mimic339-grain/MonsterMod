@@ -42,14 +42,10 @@ public class ResetHPCommand {
     private static void resetPlayers(Collection<ServerPlayer> players) {
         for (ServerPlayer player : players) {
 
-            // PlayerHP / IdentityHP を最大値に戻す
+            // PlayerHP / IdentityHP を最大値に戻す(Capability側に保持されるため、
+            // Forgeの標準セーブ処理で自動的に永続化される)
             MonsterTransformUtil.resetPlayerHP(player);
             MonsterTransformUtil.resetIdentityHP(player);
-
-            // NBTへ保存
-            player.getPersistentData().put("hp_save",
-                    MonsterTransformUtil.saveHPToNBT(player, player.getPersistentData().getCompound("hp_save"))
-            );
 
             // クライアント同期
             CapabilityRegistry.syncToClient(player);
