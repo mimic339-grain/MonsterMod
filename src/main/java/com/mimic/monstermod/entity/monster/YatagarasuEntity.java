@@ -5,6 +5,7 @@ import com.mimic.monstermod.entity.hitbox.BoneHitboxPart;
 import com.mimic.monstermod.entity.hitbox.BoneHitboxRegistry;
 import com.mimic.monstermod.entity.hitbox.BoneHitboxUpdater;
 import com.mimic.monstermod.entity.hitbox.BoneRigData;
+import com.mimic.monstermod.entity.hitbox.PhaseLockedAnimationController;
 import com.mimic.monstermod.entity.hitbox.YatagarasuHitboxProfile;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityDimensions;
@@ -123,9 +124,13 @@ public class YatagarasuEntity extends BaseEntity {
     protected float getCustomEyeHeight(EntityDimensions dimensions) {
         return 3.0f; // ここで固定値を返す
     }
+    // 位相を明示制御できるコントローラを使う(下の mainPredicate で forcePhase する)
+    private final PhaseLockedAnimationController<YatagarasuEntity> mainController =
+            new PhaseLockedAnimationController<>(this, "main", 5, this::mainPredicate);
+
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "main", 5, this::mainPredicate));
+        controllers.add(mainController);
     }
     // --- 1. スキルアニメーション再生 ---
     /**
@@ -162,6 +167,15 @@ public class YatagarasuEntity extends BaseEntity {
 
         controller.setAnimation(RawAnimation.begin().then(anim,
                 isSkillAnim ? Animation.LoopType.PLAY_ONCE : Animation.LoopType.LOOP));
+
+        // 【重要】モデルの再生位相を、当たり判定と同じ「共有絶対時刻から求めた位相」に強制する。
+        // これをしないとGeckoLibは「このクライアントが再生を始めた実時刻」を基準にしてしまい、
+        // ネットワーク遅延の分だけサーバー側の判定と位相がズレたまま回り続ける。
+        // updateActiveAnimation はここでも呼んでおく(描画は毎フレーム、tickより先に来ることがある)。
+        updateActiveAnimation();
+        if (BONE_RIG.isLoaded()) {
+            mainController.forcePhase(getTick(this), getAnimationPhaseTicks(BONE_RIG));
+        }
 
         // スキルアニメーションが終了したらスキル状態をリセットする（サーバー同期用）
         if (isSkillAnim && controller.getAnimationState() == AnimationController.State.STOPPED

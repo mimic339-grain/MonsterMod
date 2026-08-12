@@ -107,7 +107,9 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
     //   resolveAnimationName()が同期済みの状態から決定的に導出されるため、
     //   クライアント・サーバーがそれぞれ独立に同じ値を計算できる(同期不要)。
     private String activeAnim = "";
-    private int activeAnimAnchorTick = 0;
+    // 非ループ(スキル等)アニメーションの開始時刻。ループ用には使わない。
+    // 絶対時刻(level.getGameTime())で持つことで、クライアント・サーバーで同じ基準になる。
+    private long activeAnimStartGameTime = 0L;
 
     /**
      * 今再生されるべきアニメーション名。部位当たり判定を持つモンスターはこれをオーバーライドし、
@@ -127,8 +129,45 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
         String resolved = resolveAnimationName();
         if (!resolved.equals(activeAnim)) {
             activeAnim = resolved;
-            activeAnimAnchorTick = this.tickCount;
+            activeAnimStartGameTime = level().getGameTime();
         }
+    }
+
+    /**
+     * GeckoLibが参照する時刻を、サーバー・クライアントで共有される絶対時刻に差し替える。
+     *
+     * 既定は entity.tickCount だが、これはエンティティ個別のカウンタなので
+     * クライアントとサーバーで一致しない(特に変身プレイヤーの見た目用プロキシ)。
+     * level.getGameTime() はサーバーから同期されるワールド共通の時刻なので、
+     * これを基準にすることで遅延があっても両者が同じ時間軸に乗る。
+     * PhaseLockedAnimationController#forcePhase と組み合わせて位相を一致させる。
+     */
+    @Override
+    public double getTick(Object entity) {
+        return level().getGameTime();
+    }
+
+    /**
+     * 今のアニメーションの再生位相(tick単位)。描画と当たり判定の唯一の基準。
+     *
+     * ループアニメーションは gameTime % 長さ で求める。gameTime はサーバー同期済みの
+     * 絶対時刻なので、クライアントとサーバーが独立に計算しても必ず同じ値になり、
+     * ネットワーク遅延の影響を受けない(位相を通信で送る必要もない)。
+     *
+     * 非ループ(スキル等)は開始時刻からの経過。開始を知るのが遅延分遅れるが、
+     * 一度知れば絶対時刻基準なので以降はズレない。
+     */
+    public double getAnimationPhaseTicks(com.mimic.monstermod.entity.hitbox.BoneRigData rig) {
+        if (activeAnim.isEmpty()) return 0.0;
+
+        double lengthTicks = rig.getAnimationLength(activeAnim) * 20.0;
+        long gameTime = level().getGameTime();
+
+        if (rig.isLooping(activeAnim) && lengthTicks > 0) {
+            double phase = gameTime % lengthTicks;
+            return phase < 0 ? phase + lengthTicks : phase;
+        }
+        return Math.max(0.0, gameTime - activeAnimStartGameTime);
     }
 
     public String getActiveAnimation() {
@@ -156,12 +195,15 @@ public abstract class BaseEntity extends Mob implements GeoEntity {
     public double getAnimationElapsedSeconds(com.mimic.monstermod.entity.hitbox.BoneRigData rig, float partialTick) {
         if (activeAnim.isEmpty()) return 0.0;
 
-        double elapsed = Math.max(0.0, (this.tickCount - activeAnimAnchorTick) + partialTick) / 20.0;
-        double length = rig.getAnimationLength(activeAnim);
-        if (length > 0 && rig.isLooping(activeAnim)) {
-            elapsed = elapsed % length;
+        // 共有の絶対時刻から求めた位相を使う(遅延に影響されない)。
+        // partialTickを足すことで、毎フレーム更新されるモデルと滑らかに一致させる。
+        double phaseTicks = getAnimationPhaseTicks(rig) + partialTick;
+
+        double lengthTicks = rig.getAnimationLength(activeAnim) * 20.0;
+        if (lengthTicks > 0 && rig.isLooping(activeAnim)) {
+            phaseTicks = phaseTicks % lengthTicks;
         }
-        return elapsed;
+        return phaseTicks / 20.0;
     }
 
     public void setCurrentSkill(String name) {
