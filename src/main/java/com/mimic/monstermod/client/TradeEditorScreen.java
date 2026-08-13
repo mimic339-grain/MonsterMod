@@ -35,6 +35,13 @@ public class TradeEditorScreen extends Screen {
     private static final int SLOT = 18;
     private static final int MAX_SUGGEST = 6;
 
+    // アイテム一覧の描画レイアウト(1行8個・最大2段)
+    private static final int LIST_COLS = 8;
+    private static final int LIST_ROWS = 2;
+    private static final int LIST_STEP = 20;
+    private static final int INPUT_Y = 84;
+    private static final int OUTPUT_Y = INPUT_Y + LIST_ROWS * LIST_STEP + 4;
+
     private final Screen parent;
     private final List<NpcTrade> trades; // 親画面のリストを直接編集する
     private int index = 0;
@@ -94,8 +101,9 @@ public class TradeEditorScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("出力を消す"), b -> current().getOutputs().clear())
                 .bounds(x + 256, y, 84, 20).build());
 
-        // ここ(y+24 〜 y+70)に入力/出力の中身をアイコンで描画する
-        y += 74;
+        // この下(INPUT_Y 〜)に入力/出力の中身をアイコンで描画する。
+        // 1行8個で最大2段ずつ確保しているので、片側16個まで隠れずに見える
+        y += 100;
 
         maxUsesBox = new EditBox(this.font, x + 110, y, 50, 18, Component.empty());
         maxUsesBox.setValue(String.valueOf(current().getMaxUses()));
@@ -265,16 +273,20 @@ public class TradeEditorScreen extends Screen {
         g.drawCenteredString(this.font, "交渉設定  (" + (index + 1) + " / " + trades.size() + ")", cx, 14, 0xFFFFFF);
         g.drawString(this.font, "アイテム", x, 39, 0xC0C0C0, false);
 
-        int listY = 34 + 24 + 24;
-        g.drawString(this.font, "入力", x, listY + 5, 0xFFC0C0, false);
-        g.drawString(this.font, "出力", x, listY + 27, 0xC0FFC0, false);
-        g.drawString(this.font, "総回数(0=無制限)", x, 34 + 24 + 74 + 5, 0xC0C0C0, false);
+        g.drawString(this.font, "入力", x, INPUT_Y + 5, 0xFFC0C0, false);
+        g.drawString(this.font, "出力", x, OUTPUT_Y + 5, 0xC0FFC0, false);
+        g.drawString(this.font, "総回数(0=無制限)", x, 34 + 24 + 100 + 5, 0xC0C0C0, false);
 
         super.render(g, mouseX, mouseY, partialTick);
 
         // 中身は widget より後ろに描かないとツールチップが隠れるのでここで描く
-        drawStacks(g, current().getInputs(), x + 30, listY, mouseX, mouseY);
-        drawStacks(g, current().getOutputs(), x + 30, listY + 22, mouseX, mouseY);
+        ItemStack hovered = drawStacks(g, current().getInputs(), x + 30, INPUT_Y, mouseX, mouseY);
+        if (hovered.isEmpty()) {
+            hovered = drawStacks(g, current().getOutputs(), x + 30, OUTPUT_Y, mouseX, mouseY);
+        } else {
+            drawStacks(g, current().getOutputs(), x + 30, OUTPUT_Y, mouseX, mouseY);
+        }
+        if (!hovered.isEmpty()) g.renderTooltip(this.font, hovered, mouseX, mouseY);
 
         if (hasSuggestions()) {
             int sx = itemBox.getX();
@@ -292,21 +304,34 @@ public class TradeEditorScreen extends Screen {
                 cx, this.height - 12, 0xA0A0A0);
     }
 
-    private void drawStacks(GuiGraphics g, List<ItemStack> stacks, int x, int y, int mouseX, int mouseY) {
+    /**
+     * アイテム一覧を1行 LIST_COLS 個で折り返して描く。
+     * 1行に並べ続けると画面からはみ出して見えなくなるため、必ず折り返す。
+     * 入りきらないぶんは最後の枠に「+N」で出す。
+     */
+    private ItemStack drawStacks(GuiGraphics g, List<ItemStack> stacks, int baseX, int baseY,
+                                 int mouseX, int mouseY) {
         ItemStack hovered = ItemStack.EMPTY;
-        int hx = 0, hy = 0;
-        for (ItemStack s : stacks) {
+        int max = LIST_COLS * LIST_ROWS;
+        int shown = Math.min(stacks.size(), max);
+
+        for (int i = 0; i < shown; i++) {
+            ItemStack s = stacks.get(i);
             if (s.isEmpty()) continue;
+
+            int x = baseX + (i % LIST_COLS) * LIST_STEP;
+            int y = baseY + (i / LIST_COLS) * LIST_STEP;
+
+            g.fill(x - 1, y - 1, x + 17, y + 17, 0x40FFFFFF); // 枠(位置を分かりやすくするだけ)
             g.renderItem(s, x, y);
             g.renderItemDecorations(this.font, s, x, y);
-            if (mouseX >= x && mouseX < x + SLOT && mouseY >= y && mouseY < y + SLOT) {
-                hovered = s;
-                hx = mouseX;
-                hy = mouseY;
+
+            if (i == max - 1 && stacks.size() > max) {
+                g.drawString(this.font, "+" + (stacks.size() - max), x + 1, y - 5, 0xFFFF55, true);
             }
-            x += SLOT + 2;
+            if (mouseX >= x && mouseX < x + SLOT && mouseY >= y && mouseY < y + SLOT) hovered = s;
         }
-        if (!hovered.isEmpty()) g.renderTooltip(this.font, hovered, hx, hy);
+        return hovered;
     }
 
     @Override

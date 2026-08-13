@@ -45,11 +45,18 @@ public class NpcTradeScreen extends Screen {
 
     // 右パネルのスロット座標(バニラの MerchantMenu と同じ)
     private static final int SELL1_X = 136, SELL2_X = 162, BUY_X = 220, ROW_Y = 37;
-    private static final int SLOT_STEP_X = 26, SLOT_STEP_Y = 20;
-    private static final int MAX_SIDE_SLOTS = 4; // 右パネルに並べられる個数(2列×2段)
 
     // 空スロットの絵は背景テクスチャの支払いスロット部分をそのまま流用する
     private static final float SLOT_U = SELL1_X - 1, SLOT_V = ROW_Y - 1;
+
+    // 複数入力/複数出力のときに使う拡張レイアウト(3列×2段 = 片側6個まで)。
+    // バニラの結果スロットは枠が大きく、18x18のスロットを並べると重なってしまうため、
+    // このときだけ元の枠を背景色で覆い、均一なグリッドに置き換える
+    private static final int EXT_IN_X = 118, EXT_OUT_X = 214;
+    private static final int EXT_Y = 34, EXT_STEP = 18, EXT_ROW_STEP = 19;
+    private static final int EXT_COLS = 3, EXT_ROWS = 2;
+    private static final int EXT_MAX = EXT_COLS * EXT_ROWS;
+    private static final int PANEL_BG = 0xFFC6C6C6; // バニラGUIの地の色
 
     private final int npcEntityId;
     private final String npcName;
@@ -143,9 +150,23 @@ public class NpcTradeScreen extends Screen {
         return super.mouseDragged(mouseX, mouseY, button, dx, dy);
     }
 
+    /** 結果側(出力)のクリック範囲。レイアウトによって位置が変わるので合わせる */
     private boolean isOverResultArea(double mouseX, double mouseY) {
-        return mouseX >= leftPos + BUY_X - 1 && mouseX < leftPos + BUY_X + SLOT_STEP_X + 17
-                && mouseY >= topPos + ROW_Y - 1 && mouseY < topPos + ROW_Y + SLOT_STEP_Y + 17;
+        NpcTrade t = selectedTrade();
+        if (t == null) return false;
+
+        boolean vanillaLayout = t.getInputs().size() <= 2 && t.getOutputs().size() <= 1;
+        int x1, y1, x2, y2;
+        if (vanillaLayout) {
+            x1 = leftPos + BUY_X - 4;  y1 = topPos + ROW_Y - 4;
+            x2 = leftPos + BUY_X + 20; y2 = topPos + ROW_Y + 20;
+        } else {
+            x1 = leftPos + EXT_OUT_X - 1;
+            y1 = topPos + EXT_Y - 1;
+            x2 = x1 + EXT_COLS * EXT_STEP + 1;
+            y2 = y1 + EXT_ROWS * EXT_ROW_STEP + 1;
+        }
+        return mouseX >= x1 && mouseX < x2 && mouseY >= y1 && mouseY < y2;
     }
 
     private NpcTrade selectedTrade() {
@@ -265,17 +286,32 @@ public class NpcTradeScreen extends Screen {
     }
 
     /**
-     * 右パネル。選んだ交渉の中身を全部見せる。
-     * バニラでは支払い2枠+結果1枠だが、複数入力・複数出力に対応するため
-     * 同じ絵のスロットを2列×2段まで並べる。
+     * 右パネル。選んだ交渉の中身を見せる。
+     *
+     * 入力2個以下・出力1個以下ならバニラの枠(支払い2 + 結果1)をそのまま使うので
+     * 見た目は村人の取引と完全に同じになる。
+     * それ以上あるときだけ、バニラの枠を背景色で覆って均一な3列×2段のグリッドに置き換える。
+     * (バニラの結果スロットは枠が大きく、隣にスロットを並べると重なってしまうため)
      */
     private ItemStack drawDetailPanel(GuiGraphics g, int mouseX, int mouseY) {
         NpcTrade t = selectedTrade();
         if (t == null) return ItemStack.EMPTY;
 
+        List<ItemStack> in = t.getInputs();
+        List<ItemStack> out = t.getOutputs();
         ItemStack hovered = ItemStack.EMPTY;
-        hovered = drawSlotGrid(g, t.getInputs(), SELL1_X, SELL2_X, mouseX, mouseY, hovered);
-        hovered = drawSlotGrid(g, t.getOutputs(), BUY_X, BUY_X + SLOT_STEP_X, mouseX, mouseY, hovered);
+
+        if (in.size() <= 2 && out.size() <= 1) {
+            hovered = pickAndDraw(g, in, 0, leftPos + SELL1_X, topPos + ROW_Y, mouseX, mouseY, hovered);
+            hovered = pickAndDraw(g, in, 1, leftPos + SELL2_X, topPos + ROW_Y, mouseX, mouseY, hovered);
+            hovered = pickAndDraw(g, out, 0, leftPos + BUY_X, topPos + ROW_Y, mouseX, mouseY, hovered);
+        } else {
+            // 元の枠を消してからグリッドを敷き直す(ラベルより上だけを覆う)
+            g.fill(leftPos + 106, topPos + 30, leftPos + 180, topPos + 72, PANEL_BG);
+            g.fill(leftPos + 211, topPos + 30, leftPos + 270, topPos + 72, PANEL_BG);
+            hovered = drawExtGrid(g, in, EXT_IN_X, mouseX, mouseY, hovered);
+            hovered = drawExtGrid(g, out, EXT_OUT_X, mouseX, mouseY, hovered);
+        }
 
         // 売り切れなら中央の矢印を赤い×で塗り潰す(バニラと同じ位置・同じ絵)
         if (t.isSoldOut()) {
@@ -284,28 +320,20 @@ public class NpcTradeScreen extends Screen {
             // 矢印の真上。スロットが2段になっても被らない位置
             String label = "残り " + t.remaining() + " 回";
             g.drawString(this.font, label, leftPos + 196 - this.font.width(label) / 2,
-                    topPos + 26, 4210752, false);
+                    topPos + 21, 4210752, false);
         }
         return hovered;
     }
 
-    /** 2列×2段のスロットを描いてアイテムを並べる。スロットの絵は背景から切り出して使う */
-    private ItemStack drawSlotGrid(GuiGraphics g, List<ItemStack> items, int col1X, int col2X,
-                                   int mouseX, int mouseY, ItemStack current) {
-        int shown = Math.min(items.size(), MAX_SIDE_SLOTS);
-        for (int i = 0; i < MAX_SIDE_SLOTS; i++) {
-            int localX = (i % 2 == 0) ? col1X : col2X;
-            int localY = ROW_Y + (i / 2) * SLOT_STEP_Y;
-            int sx = leftPos + localX;
-            int sy = topPos + localY;
+    /** 拡張レイアウトの3列×2段グリッド。枠の絵は背景テクスチャの支払い枠をコピーして使う */
+    private ItemStack drawExtGrid(GuiGraphics g, List<ItemStack> items, int baseX,
+                                  int mouseX, int mouseY, ItemStack current) {
+        int shown = Math.min(items.size(), EXT_MAX);
 
-            // 背景テクスチャに元から枠が描かれている位置(支払い2枠と結果1枠)以外は、
-            // 同じ枠の絵を背景からコピーして足す
-            boolean vanillaSlot = localY == ROW_Y
-                    && (localX == SELL1_X || localX == SELL2_X || localX == BUY_X);
-            if (!vanillaSlot) {
-                g.blit(VILLAGER, sx - 1, sy - 1, 0, SLOT_U, SLOT_V, 18, 18, TEX_W, TEX_H);
-            }
+        for (int i = 0; i < EXT_MAX; i++) {
+            int sx = leftPos + baseX + (i % EXT_COLS) * EXT_STEP;
+            int sy = topPos + EXT_Y + (i / EXT_COLS) * EXT_ROW_STEP;
+            g.blit(VILLAGER, sx - 1, sy - 1, 0, SLOT_U, SLOT_V, 18, 18, TEX_W, TEX_H);
 
             if (i >= shown) continue;
             ItemStack stack = items.get(i);
@@ -313,6 +341,12 @@ public class NpcTradeScreen extends Screen {
 
             g.renderFakeItem(stack, sx, sy);
             g.renderItemDecorations(this.font, stack, sx, sy);
+
+            // 6個に収まらないぶんは最後の枠に「+N」で出す(中身はツールチップで確認できる)
+            if (i == EXT_MAX - 1 && items.size() > EXT_MAX) {
+                g.drawString(this.font, "+" + (items.size() - EXT_MAX), sx + 1, sy - 4, 0xFFFF55, true);
+            }
+
             if (current.isEmpty() && mouseX >= sx && mouseX < sx + 16 && mouseY >= sy && mouseY < sy + 16) {
                 current = stack;
             }
