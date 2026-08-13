@@ -3,6 +3,9 @@ package com.mimic.monstermod.client;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.client.C2S_SaveNpcSettingsPacket;
 import com.mimic.monstermod.npc.NpcSettings;
+import com.mimic.monstermod.npc.NpcTrade;
+import com.mimic.monstermod.npc.NpcTradeSet;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -35,10 +38,17 @@ public class NpcEditorScreen extends Screen {
     private boolean attacksPlayers, allowRetaliation, invulnerable;
     private NpcSettings.LookMode lookMode;
 
+    /**
+     * 2ページ目(交渉設定)の内容。TradeEditorScreen がこのリストを直接編集し、
+     * 「保存して閉じる」でここからまとめてサーバーへ送る。
+     */
+    private final List<NpcTrade> trades = new ArrayList<>();
+    private String savedTypeValue; // 2ページ目から戻ったときに入力欄を復元する
+
     private final List<String> suggestions = new ArrayList<>();
     private int suggestIndex = 0;
 
-    public NpcEditorScreen(String typeId, NpcSettings s) {
+    public NpcEditorScreen(String typeId, NpcSettings s, NpcTradeSet tradeSet) {
         super(Component.literal("NPC設定"));
         this.initialType = typeId == null ? "minecraft:villager" : typeId;
         this.movement = s.movement();
@@ -46,6 +56,7 @@ public class NpcEditorScreen extends Screen {
         this.allowRetaliation = s.allowRetaliation();
         this.invulnerable = s.invulnerable();
         this.lookMode = s.lookMode();
+        if (tradeSet != null) this.trades.addAll(tradeSet.getTrades());
     }
 
     @Override
@@ -56,7 +67,7 @@ public class NpcEditorScreen extends Screen {
 
         typeBox = new EditBox(this.font, x + 80, y, FIELD_W - 80, FIELD_H, Component.empty());
         typeBox.setMaxLength(128);
-        typeBox.setValue(initialType);
+        typeBox.setValue(savedTypeValue != null ? savedTypeValue : initialType);
         typeBox.setResponder(v -> updateSuggestions());
         addRenderableWidget(typeBox);
         y += 34;
@@ -64,7 +75,7 @@ public class NpcEditorScreen extends Screen {
         // 移動: 固定 か 自由に動き回るか
         moveBtn = Button.builder(moveLabel(), b -> {
             movement = movement == NpcSettings.Movement.FIXED
-                    ? NpcSettings.Movement.FREE : NpcSettings.Movement.FIXED;
+                    ? NpcSettings.Movement.WANDER : NpcSettings.Movement.FIXED;
             moveBtn.setMessage(moveLabel());
         }).bounds(x, y, FIELD_W, 20).build();
         addRenderableWidget(moveBtn); y += 24;
@@ -79,10 +90,31 @@ public class NpcEditorScreen extends Screen {
             lookBtn.setMessage(lookLabel());
         }).bounds(x, y, FIELD_W, 20).build();
         addRenderableWidget(lookBtn);
+        y += 26;
+
+        // 2ページ目へ。交渉(取引)の内容はここで組む
+        addRenderableWidget(Button.builder(
+                Component.literal("交渉設定へ >  (" + usableTradeCount() + "件)"),
+                b -> openTradeEditor()).bounds(x, y, FIELD_W, 20).build());
         y += 30;
 
         addRenderableWidget(Button.builder(Component.literal("保存して閉じる"), b -> saveAndClose())
                 .bounds(cx - 100, y, 200, 20).build());
+    }
+
+    /** 入力か出力が1つでも入っている交渉の数(空のひな形は数えない) */
+    private int usableTradeCount() {
+        int n = 0;
+        for (NpcTrade t : trades) {
+            if (!t.getInputs().isEmpty() || !t.getOutputs().isEmpty()) n++;
+        }
+        return n;
+    }
+
+    /** 交渉設定ページを開く。入力途中のモデル名は保持したまま戻れるようにする */
+    private void openTradeEditor() {
+        savedTypeValue = typeBox.getValue();
+        Minecraft.getInstance().setScreen(new TradeEditorScreen(this, trades));
     }
 
     private Component lookLabel() {
@@ -96,7 +128,7 @@ public class NpcEditorScreen extends Screen {
     private Component moveLabel() {
         return Component.literal(movement == NpcSettings.Movement.FIXED
                 ? "移動: 固定(水で流されず落ちない・押されない)"
-                : "移動: 自由に動き回る(元のAIのまま)");
+                : "移動: 歩き回る(攻撃AIを外して徘徊のみ)");
     }
 
     private Button addToggle(int x, int y, String label,
@@ -150,8 +182,15 @@ public class NpcEditorScreen extends Screen {
     private void saveAndClose() {
         String type = typeBox.getValue().trim();
         if (type.isEmpty()) return;
+
+        // 入力も出力も空の交渉は保存しない(誤って空欄が残っても在庫切れ表示にならないように)
+        NpcTradeSet set = new NpcTradeSet();
+        for (NpcTrade t : trades) {
+            if (!t.getInputs().isEmpty() || !t.getOutputs().isEmpty()) set.getTrades().add(t);
+        }
+
         ModMessages.sendToServer(new C2S_SaveNpcSettingsPacket(
-                type, movement, attacksPlayers, allowRetaliation, invulnerable, lookMode));
+                type, movement, attacksPlayers, allowRetaliation, invulnerable, lookMode, set));
         onClose();
     }
 

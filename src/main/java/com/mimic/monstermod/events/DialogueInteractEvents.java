@@ -60,11 +60,24 @@ public class DialogueInteractEvents {
             return;
         }
 
-        String dialogueId = DialogueBinding.get(event.getTarget());
-        if (dialogueId == null) return; // 会話が無いエンティティはバニラのまま
+        var target = event.getTarget();
+        boolean hasTrades = com.mimic.monstermod.npc.NpcTradeSet.has(target);
+        String dialogueId = DialogueBinding.get(target);
 
-        // Shift押下時はバニラへ通す(村人なら交渉が開く)
-        if (player.isShiftKeyDown()) return;
+        // Shift+右クリック: 独自の交渉を持っていればそれを開く。
+        // 持っていなければ何もせずバニラへ通す(村人なら通常の取引が開く)
+        if (player.isShiftKeyDown()) {
+            if (hasTrades) {
+                var set = com.mimic.monstermod.npc.NpcTradeSet.load(target);
+                ModMessages.sendToPlayer(new com.mimic.monstermod.network.server.S2C_OpenTradePacket(
+                        target.getId(), target.getName().getString(), set, false), player);
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.SUCCESS);
+            }
+            return;
+        }
+
+        if (dialogueId == null) return; // 会話が無いエンティティはバニラのまま
 
         DialogueStore store = DialogueStore.get(player.server);
         DialogueSet set = store.getDialogue(dialogueId);
@@ -136,6 +149,7 @@ public class DialogueInteractEvents {
         var target = event.getTarget();
         if (player.isShiftKeyDown()) {
             com.mimic.monstermod.npc.NpcTickEvents.release(target);
+            com.mimic.monstermod.npc.NpcTradeSet.clear(target);
             player.displayClientMessage(Component.literal("NPC化を解除しました")
                     .withStyle(ChatFormatting.YELLOW), true);
             return;
@@ -143,6 +157,8 @@ public class DialogueInteractEvents {
 
         var settings = com.mimic.monstermod.item.NpcToolItem.getSettings(held, target);
         com.mimic.monstermod.npc.NpcTickEvents.applyNow(target, settings);
+        // ツールに設定した交渉内容も一緒に焼き付ける(残り回数はここから減っていく)
+        com.mimic.monstermod.item.NpcToolItem.applyTrades(held, target);
         player.displayClientMessage(Component.literal(
                 target.getName().getString() + " をNPC化しました")
                 .withStyle(ChatFormatting.GREEN), true);

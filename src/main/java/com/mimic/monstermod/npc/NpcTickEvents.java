@@ -65,9 +65,15 @@ public class NpcTickEvents {
     /** 一度設定すれば済むもの(書き戻される場合に備えて毎tick確認する) */
     private static void applyStatic(LivingEntity entity, NpcSettings s) {
         if (entity instanceof Mob mob) {
-            // 固定NPCのみAIを止める。動き回るNPCは元のAIをそのまま活かす
-            boolean wantNoAi = s.isFixed();
-            if (mob.isNoAi() != wantNoAi) mob.setNoAi(wantNoAi);
+            if (s.isFixed()) {
+                // 固定NPCはAIごと止める
+                if (!mob.isNoAi()) mob.setNoAi(true);
+            } else {
+                // 徘徊NPCは元のAI(追跡・攻撃を含む)を捨てて、こちらの徘徊AIに差し替える。
+                // ターゲットを消すだけでは追いかけ回す挙動が残るため
+                if (mob.isNoAi()) mob.setNoAi(false);
+                NpcAiUtil.applyWanderAi(mob);
+            }
         }
         // 落下・押し出しを防ぐのは固定NPCのみ
         boolean wantNoGravity = s.isFixed();
@@ -133,6 +139,7 @@ public class NpcTickEvents {
         NpcSettings.save(entity, s);
         if (entity instanceof Mob mob) {
             mob.setNoAi(s.isFixed());
+            if (!s.isFixed()) NpcAiUtil.applyWanderAi(mob);
             if (!s.attacksPlayers()) mob.setTarget(null);
         }
         entity.setNoGravity(s.isFixed());
@@ -142,7 +149,10 @@ public class NpcTickEvents {
     /** NPC化を解除して元の挙動へ戻す */
     public static void release(Entity entity) {
         NpcSettings.clear(entity);
-        if (entity instanceof Mob mob) mob.setNoAi(false);
+        if (entity instanceof Mob mob) {
+            mob.setNoAi(false);
+            NpcAiUtil.clearMark(mob);
+        }
         entity.setNoGravity(false);
         entity.setInvulnerable(false);
     }

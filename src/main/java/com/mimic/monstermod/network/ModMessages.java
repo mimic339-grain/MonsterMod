@@ -57,6 +57,8 @@ public class ModMessages {
         registerMessage(C2S_SaveDialoguePacket.class, C2S_SaveDialoguePacket::encode, C2S_SaveDialoguePacket::decode, C2S_SaveDialoguePacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2C_OpenNpcEditorPacket.class, S2C_OpenNpcEditorPacket::encode, S2C_OpenNpcEditorPacket::decode, S2C_OpenNpcEditorPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(C2S_SaveNpcSettingsPacket.class, C2S_SaveNpcSettingsPacket::encode, C2S_SaveNpcSettingsPacket::decode, C2S_SaveNpcSettingsPacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(S2C_OpenTradePacket.class, S2C_OpenTradePacket::encode, S2C_OpenTradePacket::decode, S2C_OpenTradePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(C2S_ExecuteTradePacket.class, C2S_ExecuteTradePacket::encode, C2S_ExecuteTradePacket::decode, C2S_ExecuteTradePacket::handle, NetworkDirection.PLAY_TO_SERVER);
     }
 
 

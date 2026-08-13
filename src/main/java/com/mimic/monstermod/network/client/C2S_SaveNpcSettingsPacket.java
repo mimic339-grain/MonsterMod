@@ -2,6 +2,7 @@ package com.mimic.monstermod.network.client;
 
 import com.mimic.monstermod.item.NpcToolItem;
 import com.mimic.monstermod.npc.NpcSettings;
+import com.mimic.monstermod.npc.NpcTradeSet;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -22,16 +23,19 @@ public class C2S_SaveNpcSettingsPacket {
     private final NpcSettings.Movement movement;
     private final boolean attacksPlayers, allowRetaliation, invulnerable;
     private final NpcSettings.LookMode lookMode;
+    private final NpcTradeSet trades; // 2ページ目の交渉設定もまとめて保存する
 
     public C2S_SaveNpcSettingsPacket(String typeId, NpcSettings.Movement movement,
                                      boolean attacksPlayers, boolean allowRetaliation,
-                                     boolean invulnerable, NpcSettings.LookMode lookMode) {
+                                     boolean invulnerable, NpcSettings.LookMode lookMode,
+                                     NpcTradeSet trades) {
         this.typeId = typeId;
         this.movement = movement;
         this.attacksPlayers = attacksPlayers;
         this.allowRetaliation = allowRetaliation;
         this.invulnerable = invulnerable;
         this.lookMode = lookMode;
+        this.trades = trades == null ? new NpcTradeSet() : trades;
     }
 
     public static void encode(C2S_SaveNpcSettingsPacket m, FriendlyByteBuf buf) {
@@ -41,13 +45,15 @@ public class C2S_SaveNpcSettingsPacket {
         buf.writeBoolean(m.allowRetaliation);
         buf.writeBoolean(m.invulnerable);
         buf.writeEnum(m.lookMode);
+        m.trades.write(buf);
     }
 
     public static C2S_SaveNpcSettingsPacket decode(FriendlyByteBuf buf) {
         return new C2S_SaveNpcSettingsPacket(buf.readUtf(),
                 buf.readEnum(NpcSettings.Movement.class),
                 buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
-                buf.readEnum(NpcSettings.LookMode.class));
+                buf.readEnum(NpcSettings.LookMode.class),
+                NpcTradeSet.read(buf));
     }
 
     public static void handle(C2S_SaveNpcSettingsPacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -63,6 +69,7 @@ public class C2S_SaveNpcSettingsPacket {
                     NpcToolItem.setSettings(held, new NpcSettings(
                             msg.movement, msg.attacksPlayers, msg.allowRetaliation,
                             msg.invulnerable, msg.lookMode, 0f, 0, 0, 0));
+                    NpcToolItem.setTrades(held, msg.trades);
                     player.displayClientMessage(Component.literal("NPC設定を保存しました: " + msg.typeId)
                             .withStyle(ChatFormatting.GREEN), true);
                     break;

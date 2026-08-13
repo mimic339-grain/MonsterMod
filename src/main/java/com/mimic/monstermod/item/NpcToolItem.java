@@ -4,6 +4,7 @@ import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_OpenNpcEditorPacket;
 import com.mimic.monstermod.npc.NpcSettings;
 import com.mimic.monstermod.npc.NpcTickEvents;
+import com.mimic.monstermod.npc.NpcTradeSet;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -46,6 +47,7 @@ public class NpcToolItem extends Item {
     private static final String TAG_TYPE      = "npc_entity_type";
     private static final String TAG_SETTINGS  = "npc_settings";
     private static final String TAG_CONFIGURED = "npc_configured";
+    private static final String TAG_TRADES    = "npc_trades";
 
     public NpcToolItem() {
         super(new Item.Properties().stacksTo(1));
@@ -94,6 +96,19 @@ public class NpcToolItem extends Item {
         stack.getOrCreateTag().putBoolean(TAG_CONFIGURED, true);
     }
 
+    // ---- 交渉設定(NPC設定の2ページ目) ----
+    // ツール側に持たせておき、召喚/NPC化したときにそのエンティティへ焼き付ける。
+    // 残り回数はエンティティ側で減っていくため、ツールの内容は「初期在庫」にあたる。
+    public static NpcTradeSet getTrades(ItemStack stack) {
+        CompoundTag tag = stack.getOrCreateTag();
+        if (!tag.contains(TAG_TRADES)) return new NpcTradeSet();
+        return NpcTradeSet.fromTag(tag.getCompound(TAG_TRADES));
+    }
+
+    public static void setTrades(ItemStack stack, NpcTradeSet set) {
+        stack.getOrCreateTag().put(TAG_TRADES, set.toTag());
+    }
+
     /** 空中で右クリック: 設定画面 or その場に召喚 */
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
@@ -138,7 +153,21 @@ public class NpcToolItem extends Item {
 
     private void openEditor(ServerPlayer sp, ItemStack stack) {
         ModMessages.sendToPlayer(new S2C_OpenNpcEditorPacket(
-                getEntityTypeId(stack), getSettings(stack, sp)), sp);
+                getEntityTypeId(stack), getSettings(stack, sp), getTrades(stack)), sp);
+    }
+
+    /**
+     * ツールに設定した交渉内容をエンティティへ焼き付ける。
+     * 中身が空なら交渉自体を持たせない(Shift+右クリックはバニラの取引に戻る)。
+     * 呼び出し元: {@link #summon} と DialogueInteractEvents#handleNpcTool
+     */
+    public static void applyTrades(ItemStack stack, Entity entity) {
+        NpcTradeSet set = getTrades(stack);
+        if (set.hasAnyUsable()) {
+            NpcTradeSet.save(entity, set);
+        } else {
+            NpcTradeSet.clear(entity);
+        }
     }
 
     /** 設定したエンティティをNPCとして召喚する */
@@ -161,6 +190,7 @@ public class NpcToolItem extends Item {
         // 呼び出したプレイヤーの方を向いた状態で置き、その場所を固定位置にする
         spawned.setYRot(sp.getYRot() + 180.0F);
         NpcTickEvents.applyNow(spawned, getSettings(stack, spawned).anchoredAt(spawned));
+        applyTrades(stack, spawned);
 
         sp.displayClientMessage(Component.literal(
                 spawned.getName().getString() + " を召喚しました")
@@ -174,6 +204,11 @@ public class NpcToolItem extends Item {
             tooltip.add(Component.literal("未設定 — 右クリックで設定画面").withStyle(ChatFormatting.YELLOW));
         } else {
             tooltip.add(Component.literal("右クリック: 召喚").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        NpcTradeSet trades = getTrades(stack);
+        if (trades.hasAnyUsable()) {
+            tooltip.add(Component.literal("交渉: " + trades.getTrades().size() + "件")
+                    .withStyle(ChatFormatting.AQUA));
         }
         tooltip.add(Component.literal("Shift+右クリック: 設定画面").withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.literal("エンティティに右クリック: NPC化(他MODのMobも可)").withStyle(ChatFormatting.DARK_GRAY));

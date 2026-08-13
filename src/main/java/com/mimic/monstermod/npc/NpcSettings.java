@@ -29,10 +29,10 @@ public record NpcSettings(
         float fixedYaw,           // lookMode=FIXED のときの向き
         double anchorX, double anchorY, double anchorZ // movement=FIXED のときの固定位置
 ) {
-    /** 移動の扱い */
+    /** 移動の扱い。用途に応じてこの2つから選ぶ */
     public enum Movement {
-        FIXED, // その場に固定。水で流されず、足場が消えても落ちず、押されない
-        FREE   // 元のAIのまま歩き回る
+        FIXED,  // その場に固定。水で流されず、足場が消えても落ちず、押されない
+        WANDER  // こちらの徘徊AIに差し替えて、そのへんを歩くだけにする
     }
 
     /** 視点の扱い */
