@@ -14,7 +14,7 @@ import net.minecraftforge.registries.RegisterEvent;
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ModCreativeTabs {
 
-    public static CreativeModeTab WEAPON_TAB;
+
 
     @SubscribeEvent
     public static void registerTabs(RegisterEvent event) {
@@ -22,5 +22,16 @@ public class ModCreativeTabs {
         // CreativeModeTab を登録するタイミングか？
         if (!event.getRegistryKey().equals(Registries.CREATIVE_MODE_TAB)) return;
 
+        // MonsterMod用のタブ。会話設定アイテムなどの道具を入れる
+        event.register(Registries.CREATIVE_MODE_TAB,
+                helper -> helper.register(
+                        new ResourceLocation(MonsterMod.MOD_ID, "tools"),
+                        CreativeModeTab.builder()
+                                .title(Component.literal("MonsterMod"))
+                                .icon(() -> new ItemStack(ModItems.DIALOGUE_EDITOR.get()))
+                                .displayItems((params, output) -> output.accept(ModItems.DIALOGUE_EDITOR.get()))
+                                .build()
+                )
+        );
     }
 }

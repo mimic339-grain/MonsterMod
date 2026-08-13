@@ -52,6 +52,7 @@ public class ModMessages {
         registerMessage(S2C_PlayerRootPacket.class, S2C_PlayerRootPacket::encode, S2C_PlayerRootPacket::decode, S2C_PlayerRootPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SetEntityBindPacket.class, S2C_SetEntityBindPacket::encode, S2C_SetEntityBindPacket::decode, S2C_SetEntityBindPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(S2C_SkillCastRejectedPacket.class, S2C_SkillCastRejectedPacket::encode, S2C_SkillCastRejectedPacket::decode, S2C_SkillCastRejectedPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_StartDialoguePacket.class, S2C_StartDialoguePacket::encode, S2C_StartDialoguePacket::decode, S2C_StartDialoguePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
 
 

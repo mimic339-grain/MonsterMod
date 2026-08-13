@@ -1,5 +1,6 @@
 {
   "itemGroup.monstermod.monstermod_tab": "MonsterMod",
   "mod.monstermod.title": "MonsterMod",
-  "key.monstermod.transform": "Transform"
+  "key.monstermod.transform": "Transform",
+  "item.monstermod.dialogue_editor": "Dialogue Editor"
 }
