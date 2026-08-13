@@ -5,6 +5,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.entity.PartEntity;
 import org.jetbrains.annotations.Nullable;
@@ -68,7 +69,20 @@ public class BoneHitboxPart extends PartEntity<Entity> {
 
     @Override
     public boolean isPickable() {
-        return enabled && damageTarget != null && damageTarget.isAlive();
+        if (!enabled || damageTarget == null || !damageTarget.isAlive()) return false;
+
+        // 【重要】自分のクライアントでは、自分自身のパーツを照準の対象にしない。
+        // Level#getEntities(除外Entity, AABB, 条件) はパーツも結果に含めるが、
+        // 除外されるのは本体だけでそのパーツは除外されない。そのため変身中は
+        // 自分を取り囲む自分のパーツを常に照準が拾ってしまい、
+        // 他のエンティティを殴れない・ブロックを置けない状態になる。
+        //
+        // isLocalPlayer() はサーバー側では常にfalseなので、サーバーの判定
+        // (他プレイヤーからの攻撃)には影響しない。
+        // 他プレイヤーのパーツも damageTarget が自分ではないため通常通り狙える。
+        if (damageTarget instanceof Player p && p.isLocalPlayer()) return false;
+
+        return true;
     }
 
     @Override
