@@ -49,14 +49,26 @@ public class NpcTradeScreen extends Screen {
     // 空スロットの絵は背景テクスチャの支払いスロット部分をそのまま流用する
     private static final float SLOT_U = SELL1_X - 1, SLOT_V = ROW_Y - 1;
 
-    // 複数入力/複数出力のときに使う拡張レイアウト(3列×2段 = 片側6個まで)。
-    // バニラの結果スロットは枠が大きく、18x18のスロットを並べると重なってしまうため、
-    // このときだけ元の枠を背景色で覆い、均一なグリッドに置き換える
-    private static final int EXT_IN_X = 118, EXT_OUT_X = 214;
-    private static final int EXT_Y = 34, EXT_STEP = 18, EXT_ROW_STEP = 19;
-    private static final int EXT_COLS = 3, EXT_ROWS = 2;
-    private static final int EXT_MAX = EXT_COLS * EXT_ROWS;
+    // 複数入力/複数出力のときに使う拡張レイアウト。
+    //
+    // 【2列で下に伸ばす理由】
+    // 横に詰めると個数の数字が隣のアイテムに被って読めなくなる。
+    // 入力・出力とも2列に固定し、増えたぶんは下に段を足していく形にして、
+    // 画面に入りきらない段は右パネル専用のスクロールバーで送る。
+    // これなら条件がいくつあっても、個数を潰さずに表示できる。
+    //
+    // バニラの結果スロットは枠が大きく18x18を並べると重なるため、
+    // この表示のときだけ元の枠を背景色で覆ってグリッドを敷き直す。
+    private static final int EXT_IN_X = 136, EXT_OUT_X = 214;
+    private static final int EXT_Y = 35;
+    private static final int EXT_COL_STEP = 26, EXT_ROW_STEP = 19;
+    private static final int EXT_COLS = 2, EXT_VISIBLE_ROWS = 2;
     private static final int PANEL_BG = 0xFFC6C6C6; // バニラGUIの地の色
+
+    // 右パネル専用スクロールバー(左の取引一覧のものとは別)
+    private static final int DETAIL_BAR_X = 260, DETAIL_BAR_W = 6;
+    private static final int DETAIL_BAR_Y = EXT_Y - 2;
+    private static final int DETAIL_BAR_H = EXT_VISIBLE_ROWS * EXT_ROW_STEP;
 
     private final int npcEntityId;
     private final String npcName;
@@ -65,8 +77,10 @@ public class NpcTradeScreen extends Screen {
     private final Button[] offerButtons = new Button[OFFER_BUTTONS];
     private int leftPos, topPos;
     private int selected = 0;
-    private int scrollOff = 0;
-    private boolean dragging;
+    private int scrollOff = 0;        // 左の取引一覧のスクロール
+    private int detailScroll = 0;     // 右パネル(入力/出力)のスクロール
+    private boolean dragging;         // 左の一覧のバーをドラッグ中
+    private boolean draggingDetail;   // 右パネルのバーをドラッグ中
 
     public NpcTradeScreen(int npcEntityId, String npcName, NpcTradeSet set) {
         super(Component.literal(npcName));
@@ -79,6 +93,7 @@ public class NpcTradeScreen extends Screen {
     public void updateTrades(NpcTradeSet set) {
         this.tradeSet = set;
         if (selected >= set.getTrades().size()) selected = Math.max(0, set.getTrades().size() - 1);
+        detailScroll = Math.min(detailScroll, detailMaxScroll());
     }
 
     public int getNpcEntityId() { return npcEntityId; }
@@ -94,19 +109,48 @@ public class NpcTradeScreen extends Screen {
         for (int i = 0; i < OFFER_BUTTONS; i++) {
             final int index = i;
             offerButtons[i] = addRenderableWidget(
-                    Button.builder(Component.empty(), b -> selected = index + scrollOff)
+                    Button.builder(Component.empty(), b -> selectTrade(index + scrollOff))
                             .bounds(leftPos + 5, y, TRADE_BTN_W, TRADE_BTN_H).build());
             offerButtons[i].visible = false;
             y += 20;
         }
     }
 
+    private void selectTrade(int index) {
+        selected = index;
+        detailScroll = 0; // 別の交渉に切り替えたら右パネルのスクロールは先頭に戻す
+    }
+
     // ---------------- 入力 ----------------
 
     private boolean canScroll() { return trades().size() > OFFER_BUTTONS; }
 
+    /** 右パネルが何段必要か(入力・出力の多い方に合わせる) */
+    private int detailRows() {
+        NpcTrade t = selectedTrade();
+        if (t == null) return 0;
+        int in = (t.getInputs().size() + EXT_COLS - 1) / EXT_COLS;
+        int out = (t.getOutputs().size() + EXT_COLS - 1) / EXT_COLS;
+        return Math.max(in, out);
+    }
+
+    private int detailMaxScroll() {
+        return Math.max(0, detailRows() - EXT_VISIBLE_ROWS);
+    }
+
+    /** カーソルが右パネル(取引一覧より右)にあるか */
+    private boolean isOverDetailPanel(double mouseX, double mouseY) {
+        return mouseX >= leftPos + 100 && mouseX < leftPos + IMAGE_W
+                && mouseY >= topPos + 16 && mouseY < topPos + 80;
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        // 右パネルの上ではそちらを送る。左の一覧とは別々に動かせる
+        if (isOverDetailPanel(mouseX, mouseY)) {
+            detailScroll = Mth.clamp((int) (detailScroll - delta), 0, detailMaxScroll());
+            return true;
+        }
         if (canScroll()) {
             scrollOff = Mth.clamp((int) (scrollOff - delta), 0, trades().size() - OFFER_BUTTONS);
         }
@@ -116,15 +160,23 @@ public class NpcTradeScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragging = false;
+        draggingDetail = false;
 
-        // スクロールバーのつまみ(バニラと同じ判定範囲)
+        // 左の一覧のスクロールバー(バニラと同じ判定範囲)
         if (canScroll() && mouseX > leftPos + 94 && mouseX < leftPos + 94 + 6
                 && mouseY > topPos + 18 && mouseY <= topPos + 18 + 139 + 1) {
             dragging = true;
             return true;
         }
 
-        // 結果スロットをクリックしたら交換する(バニラで結果を取り出すのと同じ操作)
+        // 右パネルのスクロールバー
+        if (detailMaxScroll() > 0 && isOverDetailBar(mouseX, mouseY)) {
+            draggingDetail = true;
+            dragDetailTo(mouseY);
+            return true;
+        }
+
+        // 出力スロットをクリックしたら交換する(バニラで結果を取り出すのと同じ操作)
         if (button == 0 && isOverResultArea(mouseX, mouseY)) {
             NpcTrade t = selectedTrade();
             if (t != null && !t.isSoldOut()) {
@@ -147,24 +199,44 @@ public class NpcTradeScreen extends Screen {
             scrollOff = Mth.clamp((int) (f * (float) max + 0.5F), 0, max);
             return true;
         }
+        if (draggingDetail) {
+            dragDetailTo(mouseY);
+            return true;
+        }
         return super.mouseDragged(mouseX, mouseY, button, dx, dy);
     }
 
-    /** 結果側(出力)のクリック範囲。レイアウトによって位置が変わるので合わせる */
+    private boolean isOverDetailBar(double mouseX, double mouseY) {
+        return mouseX >= leftPos + DETAIL_BAR_X && mouseX < leftPos + DETAIL_BAR_X + DETAIL_BAR_W
+                && mouseY >= topPos + DETAIL_BAR_Y && mouseY < topPos + DETAIL_BAR_Y + DETAIL_BAR_H;
+    }
+
+    private void dragDetailTo(double mouseY) {
+        int max = detailMaxScroll();
+        if (max <= 0) { detailScroll = 0; return; }
+        float f = ((float) mouseY - (topPos + DETAIL_BAR_Y)) / DETAIL_BAR_H;
+        detailScroll = Mth.clamp(Math.round(f * max), 0, max);
+    }
+
+    /** そのレイアウトで「バニラの枠をそのまま使える」か */
+    private static boolean isVanillaLayout(NpcTrade t) {
+        return t.getInputs().size() <= 2 && t.getOutputs().size() <= 1;
+    }
+
+    /** 出力側のクリック範囲。レイアウトによって位置が変わるので合わせる */
     private boolean isOverResultArea(double mouseX, double mouseY) {
         NpcTrade t = selectedTrade();
         if (t == null) return false;
 
-        boolean vanillaLayout = t.getInputs().size() <= 2 && t.getOutputs().size() <= 1;
         int x1, y1, x2, y2;
-        if (vanillaLayout) {
+        if (isVanillaLayout(t)) {
             x1 = leftPos + BUY_X - 4;  y1 = topPos + ROW_Y - 4;
             x2 = leftPos + BUY_X + 20; y2 = topPos + ROW_Y + 20;
         } else {
             x1 = leftPos + EXT_OUT_X - 1;
-            y1 = topPos + EXT_Y - 1;
-            x2 = x1 + EXT_COLS * EXT_STEP + 1;
-            y2 = y1 + EXT_ROWS * EXT_ROW_STEP + 1;
+            y1 = topPos + EXT_Y - 2;
+            x2 = x1 + (EXT_COLS - 1) * EXT_COL_STEP + 19;
+            y2 = y1 + EXT_VISIBLE_ROWS * EXT_ROW_STEP;
         }
         return mouseX >= x1 && mouseX < x2 && mouseY >= y1 && mouseY < y2;
     }
@@ -301,16 +373,17 @@ public class NpcTradeScreen extends Screen {
         List<ItemStack> out = t.getOutputs();
         ItemStack hovered = ItemStack.EMPTY;
 
-        if (in.size() <= 2 && out.size() <= 1) {
+        if (isVanillaLayout(t)) {
             hovered = pickAndDraw(g, in, 0, leftPos + SELL1_X, topPos + ROW_Y, mouseX, mouseY, hovered);
             hovered = pickAndDraw(g, in, 1, leftPos + SELL2_X, topPos + ROW_Y, mouseX, mouseY, hovered);
             hovered = pickAndDraw(g, out, 0, leftPos + BUY_X, topPos + ROW_Y, mouseX, mouseY, hovered);
         } else {
             // 元の枠を消してからグリッドを敷き直す(ラベルより上だけを覆う)
-            g.fill(leftPos + 106, topPos + 30, leftPos + 180, topPos + 72, PANEL_BG);
-            g.fill(leftPos + 211, topPos + 30, leftPos + 270, topPos + 72, PANEL_BG);
+            g.fill(leftPos + 106, topPos + 30, leftPos + 181, topPos + 72, PANEL_BG);
+            g.fill(leftPos + 211, topPos + 30, leftPos + 269, topPos + 72, PANEL_BG);
             hovered = drawExtGrid(g, in, EXT_IN_X, mouseX, mouseY, hovered);
             hovered = drawExtGrid(g, out, EXT_OUT_X, mouseX, mouseY, hovered);
+            drawDetailScrollBar(g);
         }
 
         // 売り切れなら中央の矢印を赤い×で塗り潰す(バニラと同じ位置・同じ絵)
@@ -325,33 +398,50 @@ public class NpcTradeScreen extends Screen {
         return hovered;
     }
 
-    /** 拡張レイアウトの3列×2段グリッド。枠の絵は背景テクスチャの支払い枠をコピーして使う */
+    /**
+     * 2列のグリッドを EXT_VISIBLE_ROWS 段だけ描く。
+     * detailScroll ぶん下の段から表示するので、条件がいくつあっても全部たどれる。
+     * 枠の絵は背景テクスチャの支払い枠をコピーして使う。
+     */
     private ItemStack drawExtGrid(GuiGraphics g, List<ItemStack> items, int baseX,
                                   int mouseX, int mouseY, ItemStack current) {
-        int shown = Math.min(items.size(), EXT_MAX);
+        for (int row = 0; row < EXT_VISIBLE_ROWS; row++) {
+            for (int col = 0; col < EXT_COLS; col++) {
+                int sx = leftPos + baseX + col * EXT_COL_STEP;
+                int sy = topPos + EXT_Y + row * EXT_ROW_STEP;
+                g.blit(VILLAGER, sx - 1, sy - 1, 0, SLOT_U, SLOT_V, 18, 18, TEX_W, TEX_H);
 
-        for (int i = 0; i < EXT_MAX; i++) {
-            int sx = leftPos + baseX + (i % EXT_COLS) * EXT_STEP;
-            int sy = topPos + EXT_Y + (i / EXT_COLS) * EXT_ROW_STEP;
-            g.blit(VILLAGER, sx - 1, sy - 1, 0, SLOT_U, SLOT_V, 18, 18, TEX_W, TEX_H);
+                int idx = (detailScroll + row) * EXT_COLS + col;
+                if (idx >= items.size()) continue;
 
-            if (i >= shown) continue;
-            ItemStack stack = items.get(i);
-            if (stack.isEmpty()) continue;
+                ItemStack stack = items.get(idx);
+                if (stack.isEmpty()) continue;
 
-            g.renderFakeItem(stack, sx, sy);
-            g.renderItemDecorations(this.font, stack, sx, sy);
+                g.renderFakeItem(stack, sx, sy);
+                g.renderItemDecorations(this.font, stack, sx, sy);
 
-            // 6個に収まらないぶんは最後の枠に「+N」で出す(中身はツールチップで確認できる)
-            if (i == EXT_MAX - 1 && items.size() > EXT_MAX) {
-                g.drawString(this.font, "+" + (items.size() - EXT_MAX), sx + 1, sy - 4, 0xFFFF55, true);
-            }
-
-            if (current.isEmpty() && mouseX >= sx && mouseX < sx + 16 && mouseY >= sy && mouseY < sy + 16) {
-                current = stack;
+                if (current.isEmpty() && mouseX >= sx && mouseX < sx + 16
+                        && mouseY >= sy && mouseY < sy + 16) {
+                    current = stack;
+                }
             }
         }
         return current;
+    }
+
+    /** 右パネル専用のスクロールバー。段が2段に収まっていれば出さない */
+    private void drawDetailScrollBar(GuiGraphics g) {
+        int max = detailMaxScroll();
+        if (max <= 0) return;
+
+        int x = leftPos + DETAIL_BAR_X;
+        int y = topPos + DETAIL_BAR_Y;
+        g.fill(x, y, x + DETAIL_BAR_W, y + DETAIL_BAR_H, 0xFF8B8B8B);
+
+        int rows = detailRows();
+        int knobH = Math.max(6, DETAIL_BAR_H * EXT_VISIBLE_ROWS / rows);
+        int knobY = y + (DETAIL_BAR_H - knobH) * detailScroll / max;
+        g.fill(x, knobY, x + DETAIL_BAR_W, knobY + knobH, 0xFFFFFFFF);
     }
 
     /**
