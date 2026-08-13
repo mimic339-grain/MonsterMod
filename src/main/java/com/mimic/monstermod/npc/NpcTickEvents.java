@@ -1,13 +1,17 @@
 package com.mimic.monstermod.npc;
 
 import com.mimic.monstermod.MonsterMod;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -40,8 +44,36 @@ public class NpcTickEvents {
     }
 
     /**
-     * 攻撃対象の選定を制御する。
-     * ここを押さえることで「襲ってこないNPC」「殴られたら反撃するNPC」を作り分けられる。
+     * 「ダメージを受けない」設定のNPCへの攻撃を全て無効にする。
+     *
+     * 【setInvulnerable(true) だけでは足りない理由】
+     * バニラの Entity#isInvulnerableTo は
+     *   isInvulnerable() && !BYPASSES_INVULNERABILITY && !source.isCreativePlayer()
+     * という判定になっており、クリエイティブのプレイヤーからの攻撃だけは素通りする。
+     * そのため「マグマでは死なないのに殴ると死ぬ」という状態になっていた。
+     * ここで LivingAttackEvent を潰すことで、攻撃者が誰であっても効かなくする。
+     *
+     * ただし /kill やワールド外(奈落)は BYPASSES_INVULNERABILITY なので通す。
+     * これを塞ぐと消せないNPCができてしまうため。
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onNpcAttacked(LivingAttackEvent event) {
+        LivingEntity entity = event.getEntity();
+        if (entity.level().isClientSide) return;
+
+        NpcSettings s = NpcSettings.load(entity);
+        if (s == null || !s.invulnerable()) return;
+
+        DamageSource source = event.getSource();
+        if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) return; // /kill・奈落は通す
+
+        event.setCanceled(true);
+    }
+
+    /**
+     * NPCがプレイヤーを敵として狙わないようにする。
+     * 徘徊AIへの差し替え(NpcAiUtil)で攻撃目標は消しているが、
+     * 他MODのtick処理が直接 setTarget してくる場合に備えてここでも止める。
      */
     @SubscribeEvent
     public static void onChangeTarget(LivingChangeTargetEvent event) {
@@ -51,15 +83,7 @@ public class NpcTickEvents {
         NpcSettings s = NpcSettings.load(entity);
         if (s == null) return;
 
-        LivingEntity target = event.getNewTarget();
-        if (!(target instanceof Player)) return; // プレイヤー以外への敵対はそのまま
-
-        if (s.attacksPlayers()) return; // 自分から襲うNPCなら何もしない
-
-        // 反撃が許可されていて、実際にその相手から攻撃されている場合のみ許可する
-        if (s.allowRetaliation() && entity.getLastHurtByMob() == target) return;
-
-        event.setNewTarget(null);
+        if (event.getNewTarget() instanceof Player) event.setNewTarget(null);
     }
 
     /** 一度設定すれば済むもの(書き戻される場合に備えて毎tick確認する) */
@@ -79,15 +103,16 @@ public class NpcTickEvents {
         boolean wantNoGravity = s.isFixed();
         if (entity.isNoGravity() != wantNoGravity) entity.setNoGravity(wantNoGravity);
 
+        // バニラ側の無敵も立てておく(マグマ・落下などはこれだけで防げる)。
+        // プレイヤーからの攻撃は onNpcAttacked が受け持つ
         if (entity.isInvulnerable() != s.invulnerable()) entity.setInvulnerable(s.invulnerable());
     }
 
     /** 毎tick打ち消す必要があるもの */
     private static void applyPerTick(LivingEntity entity, NpcSettings s) {
-        // 襲わない設定のNPCが敵対状態のまま残らないようにする
-        if (!s.attacksPlayers() && entity instanceof Mob mob && mob.getTarget() instanceof Player p) {
-            boolean retaliating = s.allowRetaliation() && entity.getLastHurtByMob() == p;
-            if (!retaliating) mob.setTarget(null);
+        // NPCが敵対状態のまま残らないようにする
+        if (entity instanceof Mob mob && mob.getTarget() instanceof Player) {
+            mob.setTarget(null);
         }
 
         if (s.isFixed()) {
@@ -140,7 +165,7 @@ public class NpcTickEvents {
         if (entity instanceof Mob mob) {
             mob.setNoAi(s.isFixed());
             if (!s.isFixed()) NpcAiUtil.applyWanderAi(mob);
-            if (!s.attacksPlayers()) mob.setTarget(null);
+            mob.setTarget(null);
         }
         entity.setNoGravity(s.isFixed());
         entity.setInvulnerable(s.invulnerable());

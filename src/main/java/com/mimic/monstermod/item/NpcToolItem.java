@@ -81,15 +81,13 @@ public class NpcToolItem extends Item {
         catch (IllegalArgumentException e) { lm = NpcSettings.LookMode.LOOK_PLAYER; }
 
         return new NpcSettings(mv,
-                t.getBoolean("attacks"), t.getBoolean("retaliate"), t.getBoolean("invulnerable"),
+                t.getBoolean("invulnerable"),
                 lm, forEntity.getYRot(), forEntity.getX(), forEntity.getY(), forEntity.getZ());
     }
 
     public static void setSettings(ItemStack stack, NpcSettings s) {
         CompoundTag t = new CompoundTag();
         t.putString("movement", s.movement().name());
-        t.putBoolean("attacks", s.attacksPlayers());
-        t.putBoolean("retaliate", s.allowRetaliation());
         t.putBoolean("invulnerable", s.invulnerable());
         t.putString("look", s.lookMode().name());
         stack.getOrCreateTag().put(TAG_SETTINGS, t);

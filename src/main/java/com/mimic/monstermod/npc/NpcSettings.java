@@ -12,19 +12,20 @@ import net.minecraft.world.entity.Entity;
  * 会話できる魔物、動かない無機物など、用途ごとに挙動を組み合わせて作れるようにする。
  *
  * 【専用のNPCエンティティを作らない理由】
- * AI無効化(Mob#setNoAi)・重力(setNoGravity)・無敵(setInvulnerable)・
- * 向き(setYHeadRot)・ターゲット制御(LivingChangeTargetEvent)はいずれも
- * 特定クラスに依存しない共通の仕組みで行える。そのため
- * バニラのMobも他MODのMobも自作のMobも、そのままNPCとして使える。
+ * AI無効化(Mob#setNoAi)・重力(setNoGravity)・向き(setYHeadRot)・
+ * ターゲット制御(LivingChangeTargetEvent)はいずれも特定クラスに依存しない共通の仕組みで
+ * 行える。そのためバニラのMobも他MODのMobも自作のMobも、そのままNPCとして使える。
+ *
+ * 【攻撃設定を持たない理由】
+ * NPCは「襲ってこないもの」で固定する。襲うMobが欲しいならNPC化せず普通に出せばよく、
+ * 「襲う/反撃する」を残すとNPC化の意味が薄れるうえ設定項目だけ増えるため削除した。
  *
  * 設定はエンティティの persistentData に保存する(バニラが永続化してくれる)。
  * 実際の強制は NpcTickEvents が担当する。
  */
 public record NpcSettings(
         Movement movement,        // 移動: 固定 / 自由に動き回る
-        boolean attacksPlayers,   // 自分からプレイヤーを襲うか
-        boolean allowRetaliation, // 攻撃されたら反撃するか
-        boolean invulnerable,     // ダメージを受けないか
+        boolean invulnerable,     // ダメージを受けないか(プレイヤーの攻撃も含めて無効)
         LookMode lookMode,        // 視点: 固定 / プレイヤーを見続ける / 元のまま
         float fixedYaw,           // lookMode=FIXED のときの向き
         double anchorX, double anchorY, double anchorZ // movement=FIXED のときの固定位置
@@ -44,9 +45,9 @@ public record NpcSettings(
 
     private static final String KEY = "monstermod_npc";
 
-    /** 会話用NPCとして最も使いやすい既定値(固定・無害・死なない・プレイヤーを見る) */
+    /** 会話用NPCとして最も使いやすい既定値(固定・死なない・プレイヤーを見る) */
     public static NpcSettings defaults(Entity e) {
-        return new NpcSettings(Movement.FIXED, false, false, true,
+        return new NpcSettings(Movement.FIXED, true,
                 LookMode.LOOK_PLAYER, e.getYRot(), e.getX(), e.getY(), e.getZ());
     }
 
@@ -54,7 +55,7 @@ public record NpcSettings(
 
     /** 位置と向きだけを対象エンティティの現在値に合わせたものを返す(設置時に使う) */
     public NpcSettings anchoredAt(Entity e) {
-        return new NpcSettings(movement, attacksPlayers, allowRetaliation, invulnerable,
+        return new NpcSettings(movement, invulnerable,
                 lookMode, e.getYRot(), e.getX(), e.getY(), e.getZ());
     }
 
@@ -62,8 +63,6 @@ public record NpcSettings(
     public static void save(Entity e, NpcSettings s) {
         CompoundTag tag = new CompoundTag();
         tag.putString("movement", s.movement.name());
-        tag.putBoolean("attacks", s.attacksPlayers);
-        tag.putBoolean("retaliate", s.allowRetaliation);
         tag.putBoolean("invulnerable", s.invulnerable);
         tag.putString("look", s.lookMode.name());
         tag.putFloat("yaw", s.fixedYaw);
@@ -88,7 +87,6 @@ public record NpcSettings(
         catch (IllegalArgumentException ex) { lm = LookMode.FREE; }
 
         return new NpcSettings(mv,
-                tag.getBoolean("attacks"), tag.getBoolean("retaliate"),
                 tag.getBoolean("invulnerable"), lm, tag.getFloat("yaw"),
                 tag.getDouble("ax"), tag.getDouble("ay"), tag.getDouble("az"));
     }
@@ -100,8 +98,6 @@ public record NpcSettings(
     // ---- ネットワーク ----
     public void write(FriendlyByteBuf buf) {
         buf.writeEnum(movement);
-        buf.writeBoolean(attacksPlayers);
-        buf.writeBoolean(allowRetaliation);
         buf.writeBoolean(invulnerable);
         buf.writeEnum(lookMode);
         buf.writeFloat(fixedYaw);
@@ -111,7 +107,7 @@ public record NpcSettings(
     public static NpcSettings read(FriendlyByteBuf buf) {
         return new NpcSettings(
                 buf.readEnum(Movement.class),
-                buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
+                buf.readBoolean(),
                 buf.readEnum(LookMode.class), buf.readFloat(),
                 buf.readDouble(), buf.readDouble(), buf.readDouble());
     }

@@ -35,7 +35,7 @@ public class NpcEditorScreen extends Screen {
 
     private final String initialType;
     private NpcSettings.Movement movement;
-    private boolean attacksPlayers, allowRetaliation, invulnerable;
+    private boolean invulnerable;
     private NpcSettings.LookMode lookMode;
 
     /**
@@ -52,8 +52,6 @@ public class NpcEditorScreen extends Screen {
         super(Component.literal("NPC設定"));
         this.initialType = typeId == null ? "minecraft:villager" : typeId;
         this.movement = s.movement();
-        this.attacksPlayers = s.attacksPlayers();
-        this.allowRetaliation = s.allowRetaliation();
         this.invulnerable = s.invulnerable();
         this.lookMode = s.lookMode();
         if (tradeSet != null) this.trades.addAll(tradeSet.getTrades());
@@ -80,8 +78,6 @@ public class NpcEditorScreen extends Screen {
         }).bounds(x, y, FIELD_W, 20).build();
         addRenderableWidget(moveBtn); y += 24;
 
-        addToggle(x, y, "プレイヤーを襲う", () -> attacksPlayers, v -> attacksPlayers = v); y += 22;
-        addToggle(x, y, "反撃する", () -> allowRetaliation, v -> allowRetaliation = v); y += 22;
         addToggle(x, y, "ダメージを受けない", () -> invulnerable, v -> invulnerable = v); y += 26;
 
         lookBtn = Button.builder(lookLabel(), b -> {
@@ -190,7 +186,7 @@ public class NpcEditorScreen extends Screen {
         }
 
         ModMessages.sendToServer(new C2S_SaveNpcSettingsPacket(
-                type, movement, attacksPlayers, allowRetaliation, invulnerable, lookMode, set));
+                type, movement, invulnerable, lookMode, set));
         onClose();
     }
 

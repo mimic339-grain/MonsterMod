@@ -46,6 +46,9 @@ public class TradeEditorScreen extends Screen {
     private final List<String> suggestions = new ArrayList<>();
     private int suggestIndex = 0;
 
+    private ItemStack pendingPick;               // 選択画面で選ばれた直後のアイテム
+    private ItemStack pickedStack = ItemStack.EMPTY; // ID欄の内容と一致する間はこれを使う(NBTを保つため)
+
     public TradeEditorScreen(Screen parent, List<NpcTrade> trades) {
         super(Component.literal("交渉設定"));
         this.parent = parent;
@@ -74,7 +77,7 @@ public class TradeEditorScreen extends Screen {
         countBox.setFilter(s -> s.isEmpty() || s.chars().allMatch(Character::isDigit));
         addRenderableWidget(countBox);
 
-        addRenderableWidget(Button.builder(Component.literal("手持ち"), b -> takeFromHand())
+        addRenderableWidget(Button.builder(Component.literal("タブ"), b -> openPicker())
                 .bounds(x + 290, y, 50, 18).build());
         y += 24;
 
@@ -114,6 +117,8 @@ public class TradeEditorScreen extends Screen {
 
         addRenderableWidget(Button.builder(Component.literal("< NPC設定へ戻る"), b -> onClose())
                 .bounds(cx - 100, y, 200, 20).build());
+
+        consumePendingPick(); // アイテム選択画面から戻ってきた場合の反映
     }
 
     private Component showUsesLabel() {
@@ -133,24 +138,35 @@ public class TradeEditorScreen extends Screen {
         }
         if (item == null) return;
 
-        ItemStack stack = new ItemStack(item, readCount());
+        // 選択画面で選んだものと同じアイテムなら、そのStack(NBT付き)をそのまま使う
+        ItemStack stack = (!pickedStack.isEmpty() && pickedStack.is(item))
+                ? pickedStack.copy() : new ItemStack(item);
+        stack.setCount(readCount());
+
         (addingInput ? current().getInputs() : current().getOutputs()).add(stack);
     }
 
-    /** 手に持っているアイテムをそのまま取り込む(クリエイティブタブから掴めばよい) */
-    private void takeFromHand() {
-        var player = Minecraft.getInstance().player;
-        if (player == null) return;
+    /**
+     * クリエイティブのインベントリと同じ感覚でアイテムを選ぶ画面を開く。
+     * 選んだアイテムはID欄にセットされるので、個数を決めて「追加」を押せばよい。
+     * 選択画面の実装: {@link ItemPickerScreen}
+     */
+    private void openPicker() {
+        pendingPick = null;
+        Minecraft.getInstance().setScreen(new ItemPickerScreen(this, stack -> pendingPick = stack));
+    }
 
-        ItemStack held = player.getMainHandItem();
-        if (held.isEmpty()) return;
+    /**
+     * 選択画面から戻ってきたときに、選んだアイテムをID欄へ反映する。
+     * init() は画面が復帰した時点で走るため、ここで受け取るのが確実。
+     */
+    private void consumePendingPick() {
+        if (pendingPick == null || pendingPick.isEmpty()) return;
 
-        ItemStack copy = held.copy();
-        copy.setCount(readCount());
-        (addingInput ? current().getInputs() : current().getOutputs()).add(copy);
-
-        ResourceLocation id = ForgeRegistries.ITEMS.getKey(held.getItem());
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(pendingPick.getItem());
         if (id != null) itemBox.setValue(id.toString());
+        pickedStack = pendingPick.copy(); // NBT付き(エンチャント本など)はこちらを優先して使う
+        pendingPick = null;
     }
 
     private int readCount() {
@@ -272,7 +288,7 @@ public class TradeEditorScreen extends Screen {
             }
         }
 
-        g.drawCenteredString(this.font, "Tabで補完 / 「手持ち」で持っているアイテムを取り込み",
+        g.drawCenteredString(this.font, "「タブ」でクリエイティブの一覧から選択 / 直接入力ならTabで補完",
                 cx, this.height - 12, 0xA0A0A0);
     }
 
