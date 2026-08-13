@@ -28,10 +28,11 @@ public class NpcEditorScreen extends Screen {
     private static final int MAX_SUGGEST = 6;
 
     private EditBox typeBox;
-    private Button immobileBtn, gravityBtn, invulnBtn, fireBtn, lookBtn;
+    private Button lookBtn, moveBtn;
 
     private final String initialType;
-    private boolean immobile, noGravity, invulnerable, fireProof;
+    private NpcSettings.Movement movement;
+    private boolean attacksPlayers, allowRetaliation, invulnerable;
     private NpcSettings.LookMode lookMode;
 
     private final List<String> suggestions = new ArrayList<>();
@@ -40,10 +41,10 @@ public class NpcEditorScreen extends Screen {
     public NpcEditorScreen(String typeId, NpcSettings s) {
         super(Component.literal("NPC設定"));
         this.initialType = typeId == null ? "minecraft:villager" : typeId;
-        this.immobile = s.immobile();
-        this.noGravity = s.noGravity();
+        this.movement = s.movement();
+        this.attacksPlayers = s.attacksPlayers();
+        this.allowRetaliation = s.allowRetaliation();
         this.invulnerable = s.invulnerable();
-        this.fireProof = s.fireProof();
         this.lookMode = s.lookMode();
     }
 
@@ -60,10 +61,17 @@ public class NpcEditorScreen extends Screen {
         addRenderableWidget(typeBox);
         y += 34;
 
-        immobileBtn = addToggle(x, y, "動かない", () -> immobile, v -> immobile = v); y += 22;
-        gravityBtn  = addToggle(x, y, "落ちない", () -> noGravity, v -> noGravity = v); y += 22;
-        invulnBtn   = addToggle(x, y, "無敵", () -> invulnerable, v -> invulnerable = v); y += 22;
-        fireBtn     = addToggle(x, y, "燃えない", () -> fireProof, v -> fireProof = v); y += 26;
+        // 移動: 固定 か 自由に動き回るか
+        moveBtn = Button.builder(moveLabel(), b -> {
+            movement = movement == NpcSettings.Movement.FIXED
+                    ? NpcSettings.Movement.FREE : NpcSettings.Movement.FIXED;
+            moveBtn.setMessage(moveLabel());
+        }).bounds(x, y, FIELD_W, 20).build();
+        addRenderableWidget(moveBtn); y += 24;
+
+        addToggle(x, y, "プレイヤーを襲う", () -> attacksPlayers, v -> attacksPlayers = v); y += 22;
+        addToggle(x, y, "反撃する", () -> allowRetaliation, v -> allowRetaliation = v); y += 22;
+        addToggle(x, y, "ダメージを受けない", () -> invulnerable, v -> invulnerable = v); y += 26;
 
         lookBtn = Button.builder(lookLabel(), b -> {
             NpcSettings.LookMode[] vals = NpcSettings.LookMode.values();
@@ -78,12 +86,17 @@ public class NpcEditorScreen extends Screen {
     }
 
     private Component lookLabel() {
-        String s = switch (lookMode) {
-            case FREE -> "向き: 自由(元のまま)";
-            case LOOK_PLAYER -> "向き: プレイヤーを見continue続ける";
-            case FIXED -> "向き: 固定(設置時の向き)";
-        };
-        return Component.literal(s.replace("見continue続ける", "見続ける"));
+        return Component.literal(switch (lookMode) {
+            case FREE -> "視点: 元のまま";
+            case LOOK_PLAYER -> "視点: プレイヤーを見続ける";
+            case FIXED -> "視点: 固定";
+        });
+    }
+
+    private Component moveLabel() {
+        return Component.literal(movement == NpcSettings.Movement.FIXED
+                ? "移動: 固定(水で流されず落ちない・押されない)"
+                : "移動: 自由に動き回る(元のAIのまま)");
     }
 
     private Button addToggle(int x, int y, String label,
@@ -138,7 +151,7 @@ public class NpcEditorScreen extends Screen {
         String type = typeBox.getValue().trim();
         if (type.isEmpty()) return;
         ModMessages.sendToServer(new C2S_SaveNpcSettingsPacket(
-                type, immobile, noGravity, invulnerable, fireProof, lookMode));
+                type, movement, attacksPlayers, allowRetaliation, invulnerable, lookMode));
         onClose();
     }
 
@@ -147,7 +160,7 @@ public class NpcEditorScreen extends Screen {
         this.renderBackground(g);
         int cx = this.width / 2;
         g.drawCenteredString(this.font, "NPC設定", cx, 16, 0xFFFFFF);
-        g.drawString(this.font, "Mob", cx - FIELD_W / 2, 49, 0xC0C0C0, false);
+        g.drawString(this.font, "モデル", cx - FIELD_W / 2, 49, 0xC0C0C0, false);
 
         super.render(g, mouseX, mouseY, partialTick);
 
@@ -164,7 +177,7 @@ public class NpcEditorScreen extends Screen {
         }
 
         g.drawCenteredString(this.font,
-                "Tabで候補を補完 / 設定後、ブロックを右クリックで設置・エンティティを右クリックでNPC化",
+                "Tabで候補を補完 / 保存後に右クリックで召喚・エンティティに右クリックでNPC化",
                 cx, this.height - 12, 0xA0A0A0);
     }
 

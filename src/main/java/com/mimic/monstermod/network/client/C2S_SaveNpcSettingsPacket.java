@@ -19,32 +19,35 @@ import java.util.function.Supplier;
 public class C2S_SaveNpcSettingsPacket {
 
     private final String typeId;
-    private final boolean immobile, noGravity, invulnerable, fireProof;
+    private final NpcSettings.Movement movement;
+    private final boolean attacksPlayers, allowRetaliation, invulnerable;
     private final NpcSettings.LookMode lookMode;
 
-    public C2S_SaveNpcSettingsPacket(String typeId, boolean immobile, boolean noGravity,
-                                     boolean invulnerable, boolean fireProof,
-                                     NpcSettings.LookMode lookMode) {
+    public C2S_SaveNpcSettingsPacket(String typeId, NpcSettings.Movement movement,
+                                     boolean attacksPlayers, boolean allowRetaliation,
+                                     boolean invulnerable, NpcSettings.LookMode lookMode) {
         this.typeId = typeId;
-        this.immobile = immobile;
-        this.noGravity = noGravity;
+        this.movement = movement;
+        this.attacksPlayers = attacksPlayers;
+        this.allowRetaliation = allowRetaliation;
         this.invulnerable = invulnerable;
-        this.fireProof = fireProof;
         this.lookMode = lookMode;
     }
 
     public static void encode(C2S_SaveNpcSettingsPacket m, FriendlyByteBuf buf) {
         buf.writeUtf(m.typeId);
-        buf.writeBoolean(m.immobile);
-        buf.writeBoolean(m.noGravity);
+        buf.writeEnum(m.movement);
+        buf.writeBoolean(m.attacksPlayers);
+        buf.writeBoolean(m.allowRetaliation);
         buf.writeBoolean(m.invulnerable);
-        buf.writeBoolean(m.fireProof);
         buf.writeEnum(m.lookMode);
     }
 
     public static C2S_SaveNpcSettingsPacket decode(FriendlyByteBuf buf) {
-        return new C2S_SaveNpcSettingsPacket(buf.readUtf(), buf.readBoolean(), buf.readBoolean(),
-                buf.readBoolean(), buf.readBoolean(), buf.readEnum(NpcSettings.LookMode.class));
+        return new C2S_SaveNpcSettingsPacket(buf.readUtf(),
+                buf.readEnum(NpcSettings.Movement.class),
+                buf.readBoolean(), buf.readBoolean(), buf.readBoolean(),
+                buf.readEnum(NpcSettings.LookMode.class));
     }
 
     public static void handle(C2S_SaveNpcSettingsPacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -58,8 +61,8 @@ public class C2S_SaveNpcSettingsPacket {
                 if (held.getItem() instanceof NpcToolItem) {
                     NpcToolItem.setEntityTypeId(held, msg.typeId);
                     NpcToolItem.setSettings(held, new NpcSettings(
-                            msg.immobile, msg.noGravity, msg.invulnerable, msg.fireProof,
-                            msg.lookMode, 0f, 0, 0, 0));
+                            msg.movement, msg.attacksPlayers, msg.allowRetaliation,
+                            msg.invulnerable, msg.lookMode, 0f, 0, 0, 0));
                     player.displayClientMessage(Component.literal("NPC設定を保存しました: " + msg.typeId)
                             .withStyle(ChatFormatting.GREEN), true);
                     break;
