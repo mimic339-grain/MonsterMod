@@ -29,7 +29,10 @@ public class ModCreativeTabs {
                         CreativeModeTab.builder()
                                 .title(Component.literal("MonsterMod"))
                                 .icon(() -> new ItemStack(ModItems.DIALOGUE_EDITOR.get()))
-                                .displayItems((params, output) -> output.accept(ModItems.DIALOGUE_EDITOR.get()))
+                                .displayItems((params, output) -> {
+                                    output.accept(ModItems.DIALOGUE_EDITOR.get());
+                                    output.accept(ModItems.NPC_TOOL.get());
+                                })
                                 .build()
                 )
         );

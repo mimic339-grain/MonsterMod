@@ -2,5 +2,6 @@
   "itemGroup.monstermod.monstermod_tab": "MonsterMod",
   "mod.monstermod.title": "MonsterMod",
   "key.monstermod.transform": "Transform",
-  "item.monstermod.dialogue_editor": "Dialogue Editor"
+  "item.monstermod.dialogue_editor": "Dialogue Editor",
+  "item.monstermod.npc_tool": "NPC Tool"
 }

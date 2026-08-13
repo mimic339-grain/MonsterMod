@@ -54,6 +54,11 @@ public class DialogueInteractEvents {
             handleBinding(player, held, event);
             return;
         }
+        // NPCツールも同じ理由(村人の交渉が先に消費する)でここで処理する
+        if (held.getItem() instanceof com.mimic.monstermod.item.NpcToolItem) {
+            handleNpcTool(player, held, event);
+            return;
+        }
 
         String dialogueId = DialogueBinding.get(event.getTarget());
         if (dialogueId == null) return; // 会話が無いエンティティはバニラのまま
@@ -110,6 +115,36 @@ public class DialogueInteractEvents {
         DialogueBinding.set(event.getTarget(), id);
         player.displayClientMessage(Component.literal(
                 event.getTarget().getName().getString() + " に会話 '" + id + "' を設定しました")
+                .withStyle(ChatFormatting.GREEN), true);
+    }
+
+    /**
+     * NPCツールでエンティティをNPC化する/解除する。
+     * バニラ・他MODを問わず任意のMobに適用できる(AI無効化などが共通メソッドのため)。
+     */
+    private static void handleNpcTool(ServerPlayer player, ItemStack held,
+                                      PlayerInteractEvent.EntityInteract event) {
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+
+        if (!player.hasPermissions(2)) {
+            player.displayClientMessage(Component.literal("NPCの設定には権限が必要です")
+                    .withStyle(ChatFormatting.RED), true);
+            return;
+        }
+
+        var target = event.getTarget();
+        if (player.isShiftKeyDown()) {
+            com.mimic.monstermod.npc.NpcTickEvents.release(target);
+            player.displayClientMessage(Component.literal("NPC化を解除しました")
+                    .withStyle(ChatFormatting.YELLOW), true);
+            return;
+        }
+
+        var settings = com.mimic.monstermod.item.NpcToolItem.getSettings(held, target);
+        com.mimic.monstermod.npc.NpcTickEvents.applyNow(target, settings);
+        player.displayClientMessage(Component.literal(
+                target.getName().getString() + " をNPC化しました")
                 .withStyle(ChatFormatting.GREEN), true);
     }
 }

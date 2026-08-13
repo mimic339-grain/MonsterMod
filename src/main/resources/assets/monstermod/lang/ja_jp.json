@@ -1,5 +1,6 @@
 {
   "item.monstermod.simple_sword": "シンプルソード",
   "creativetab.monstermod.weapon": "モンスターMOD 武器",
-  "item.monstermod.dialogue_editor": "会話設定アイテム"
+  "item.monstermod.dialogue_editor": "会話設定アイテム",
+  "item.monstermod.npc_tool": "NPC作成ツール"
 }

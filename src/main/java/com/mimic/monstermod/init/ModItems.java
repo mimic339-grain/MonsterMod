@@ -2,6 +2,7 @@ package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.item.DialogueEditorItem;
+import com.mimic.monstermod.item.NpcToolItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -18,6 +19,10 @@ public class ModItems {
     // 会話設定アイテム(ゲーム内で会話を作り、エンティティに紐付ける道具)
     public static final RegistryObject<Item> DIALOGUE_EDITOR =
             ITEMS.register("dialogue_editor", DialogueEditorItem::new);
+
+    // NPC作成ツール(任意のMobをNPC化・設置する)
+    public static final RegistryObject<Item> NPC_TOOL =
+            ITEMS.register("npc_tool", NpcToolItem::new);
 
 
     // 登録処理
