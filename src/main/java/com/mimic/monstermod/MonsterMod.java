@@ -51,7 +51,6 @@ public class MonsterMod {
         event.enqueueWork(() -> {
             // すべての RegistryObject が get() 可能になった状態で初期化
             com.mimic.monstermod.identity.monster.YatagarasuIdentity.initSkillRegistry();
-            com.mimic.monstermod.skill.hunter.HunterSkillRegistry.init();
             com.mimic.monstermod.identity.util.MimicSkillLeads.registerAll();
             LOGGER.info("MonsterMod: Skills and Leads have been initialized.");
         });

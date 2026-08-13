@@ -3,7 +3,6 @@ package com.mimic.monstermod.init;
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.render.OnibiRenderer;
 import com.mimic.monstermod.entity.render.TornadoRenderer;
-import com.mimic.monstermod.geo.renderer.HunterRenderer;
 import com.mimic.monstermod.geo.renderer.MimicRenderer;
 import com.mimic.monstermod.geo.renderer.YatagarasuRenderer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -17,7 +16,6 @@ public class EntityRendererRegister {
     public static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntitieType.MIMIC.get(), MimicRenderer::new);
         event.registerEntityRenderer(ModEntitieType.YATAGARASU.get(), YatagarasuRenderer::new); // これでエラーが消えるはず
-        event.registerEntityRenderer(ModEntitieType.HUNTER.get(), HunterRenderer::new);
         event.registerEntityRenderer(ModEntitieType.ONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.SPIRALONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.TORNADO.get(), TornadoRenderer::new);

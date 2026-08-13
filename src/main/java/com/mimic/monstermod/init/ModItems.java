@@ -1,7 +1,6 @@
 package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.item.weapon.SimpleSwordItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -15,8 +14,6 @@ public class ModItems {
             DeferredRegister.create(ForgeRegistries.ITEMS, MonsterMod.MOD_ID);
 
     // アイテム登録
-    public static final RegistryObject<Item> SIMPLE_SWORD =
-            ITEMS.register("simple_sword", SimpleSwordItem::new);
 
     // 登録処理
     public static void register(IEventBus eventBus) {

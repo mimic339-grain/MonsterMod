@@ -94,15 +94,6 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         return;
     }
 
-    // 1.5 モンスターとハンターは排他。モンスター化するならハンター状態は解除する。
-    // (変身が確定した後に行う。上のHPチェックで失敗した場合にハンターを
-    //  解除してしまわないよう、必ずチェックより後に置くこと)
-    player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
-        if (hunter.isActive()) {
-            hunter.stopHunter(player);
-        }
-    });
-
     // 2. [重要] 現在のHPを保存（現在のIdentityがあればそれを使い、なければ人間用HPとして保存）
     double currentHP = player.getHealth();
     if (currentHP > 0) {

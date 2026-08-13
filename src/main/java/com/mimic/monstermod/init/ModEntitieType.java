@@ -2,7 +2,6 @@ package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.BaseEntity;
-import com.mimic.monstermod.entity.HunterEntity;
 import com.mimic.monstermod.entity.monster.*;
 import com.mimic.monstermod.entity.obj.*;
 import net.minecraft.resources.ResourceLocation;
@@ -36,11 +35,6 @@ public class ModEntitieType {
                             .build(MonsterMod.MOD_ID + ":yatagarasu")
             );
 
-    public static final RegistryObject<EntityType<HunterEntity>> HUNTER =
-            ENTITY_TYPES.register("hunter",
-                    () -> EntityType.Builder.of(HunterEntity::new, MobCategory.MISC)
-                            .sized(0.6F, 1.8F)
-                            .build(new ResourceLocation(MonsterMod.MOD_ID, "hunter").toString()));
 
     public static final RegistryObject<EntityType<OnibiEntity>> ONIBI =
             ENTITY_TYPES.register("onibi",
@@ -67,7 +61,6 @@ public class ModEntitieType {
         if (ENTITY_MAP.isEmpty()) {
             ENTITY_MAP.put(MIMIC.getId(), MIMIC.get());
             ENTITY_MAP.put(YATAGARASU.getId(), YATAGARASU.get()); // ★八咫烏を追加
-            ENTITY_MAP.put(HUNTER.getId(), HUNTER.get());
             ENTITY_MAP.put(TORNADO.getId(), (EntityType<? extends BaseEntity>) (Object) TORNADO.get());
         }
         return ENTITY_MAP.get(id);

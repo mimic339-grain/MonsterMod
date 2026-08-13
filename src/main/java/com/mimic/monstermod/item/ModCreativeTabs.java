@@ -22,17 +22,5 @@ public class ModCreativeTabs {
         // CreativeModeTab を登録するタイミングか？
         if (!event.getRegistryKey().equals(Registries.CREATIVE_MODE_TAB)) return;
 
-        event.register(Registries.CREATIVE_MODE_TAB,
-                helper -> helper.register(
-                        new ResourceLocation(MonsterMod.MOD_ID, "weapon"),
-                        CreativeModeTab.builder()
-                                .title(Component.translatable("creativetab.monstermod.weapon"))
-                                .icon(() -> new ItemStack(ModItems.SIMPLE_SWORD.get()))
-                                .displayItems((params, output) -> {
-                                    output.accept(ModItems.SIMPLE_SWORD.get());
-                                })
-                                .build()
-                )
-        );
     }
 }

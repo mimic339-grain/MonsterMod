@@ -42,19 +42,12 @@ public class S2C_SkillCastRejectedPacket {
             Player player = Minecraft.getInstance().player;
             if (player == null) return;
 
-            // ハンターが優先(processSkillCastの優先順位と合わせる)、なければ通常変身側
-            player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
-                if (hunter.isActive() && hunter.getIdentity() != null
-                        && hunter.getIdentity().findSkillIndex(msg.skillId) != -1) {
-                    hunter.getIdentity().clearLock(hunter.getIdentity().findSkillIndex(msg.skillId));
-                    return;
+            // モンスター変身のIdentityの仮ロックを解除する
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                if (trans.getIdentity() != null) {
+                    int idx = trans.getIdentity().findSkillIndex(msg.skillId);
+                    if (idx != -1) trans.getIdentity().clearLock(idx);
                 }
-                player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                    if (trans.getIdentity() != null) {
-                        int idx = trans.getIdentity().findSkillIndex(msg.skillId);
-                        if (idx != -1) trans.getIdentity().clearLock(idx);
-                    }
-                });
             });
         });
         context.setPacketHandled(true);

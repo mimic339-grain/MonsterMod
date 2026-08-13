@@ -37,18 +37,10 @@ public class C2S_SkillCastRequestPacket {
             ServerPlayer player = context.getSender();
             if (player == null) return;
 
-            // 1. まずはハンターのCapabilityを確認
-            player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
-                if (hunter.isActive() && hunter.getIdentity() != null) {
-                    // ハンターがアクティブなら、ハンターのIdentityで実行
-                    processSkillCast(player, hunter.getIdentity(), msg.skillId);
-                } else {
-                    // ハンターでないなら、従来の変身Capabilityを確認
-                    player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                        if (trans.getIdentity() != null) {
-                            processSkillCast(player, trans.getIdentity(), msg.skillId);
-                        }
-                    });
+            // モンスター変身のIdentityでスキルを実行する
+            player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+                if (trans.getIdentity() != null) {
+                    processSkillCast(player, trans.getIdentity(), msg.skillId);
                 }
             });
         });

@@ -1,7 +1,6 @@
 package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
-import com.mimic.monstermod.entity.HunterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.entity.monster.YatagarasuEntity;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
@@ -21,7 +20,6 @@ public class ModEntityAttributes {
         event.put(ModEntitieType.YATAGARASU.get(), YatagarasuEntity.createAttributes().build());
 
 
-        event.put(ModEntitieType.HUNTER.get(), HunterEntity.createAttributes().build());
 
 
 

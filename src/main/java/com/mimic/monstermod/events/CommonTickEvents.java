@@ -39,18 +39,10 @@ public final class CommonTickEvents {
         if (event.phase != TickEvent.Phase.END) return;
         Player player = event.player;
 
-        // ハンターCapabilityを優先的にチェック
-        player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
-            if (hunter.isActive() && hunter.getIdentity() != null) {
-                tickIdentity(player, hunter.getIdentity());
-            }
-            else {
-                // ハンターでない場合のみ、通常の変身をチェック
-                player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                    if (trans.getIdentity() != null) {
-                        tickIdentity(player, trans.getIdentity());
-                    }
-                });
+        // モンスター変身中のみIdentityを進める
+        player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
+            if (trans.getIdentity() != null) {
+                tickIdentity(player, trans.getIdentity());
             }
         });
 

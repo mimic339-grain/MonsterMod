@@ -13,17 +13,12 @@
     "player.ClientPlayerEntityTickMixin",
     "player.EntityRenderDispatcherMixin",
     "player.ForgeGuiMixin",
-    "player.HeldItemLayerHunterMixin",
-    "player.AbstractContainerScreenMixin",
     "player.EntityMixin",
-    "player.AttackIndicatorMixin",
     "player.MixinFoodData",
     "player.AbstractWidgetMixin",
     "player.VideoSettingsScreenMixin",
-    "player.PlayerAttackMixin",
     "accessor.EntityAccessor",
-    "accessor.RenderStateShardAccessor",
-    "accessor.AbstractContainerMenuAccessor"
+    "accessor.RenderStateShardAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

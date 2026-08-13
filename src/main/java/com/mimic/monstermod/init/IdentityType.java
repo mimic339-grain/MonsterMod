@@ -1,7 +1,6 @@
 package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.entity.BaseEntity;
-import com.mimic.monstermod.entity.HunterEntity;
 import com.mimic.monstermod.entity.monster.MimicEntity;
 import com.mimic.monstermod.entity.monster.YatagarasuEntity;
 import com.mimic.monstermod.identity.BaseIdentity;
@@ -99,11 +98,6 @@ public class IdentityType {
                 new ResourceLocation("monstermod", "yatagarasu"),
                 YatagarasuEntity.class,
                 YatagarasuIdentity::new
-        );
-        register(
-                new ResourceLocation("monstermod", "hunter"),
-                HunterEntity.class,
-                (entity) -> new com.mimic.monstermod.identity.HunterIdentity(entity, 3)
         );
     }
 

@@ -118,15 +118,6 @@ public final class SkillUtil {
                 }
 // 2.5 【追加】効果時間の終了判定 (ActiveTicks が終わった瞬間)
                 // recoveryStart (後隙開始) と同じタイミングが「効果終了」の瞬間です
-                if (active.ticksLeft == recoveryStart) {
-                    if (caster instanceof ServerPlayer sp) {
-                        com.mimic.monstermod.skill.hunter.HunterSkill hunterSkill =
-                                com.mimic.monstermod.skill.hunter.HunterSkillRegistry.get(active.lead.skillId());
-                        if (hunterSkill != null) {
-                            hunterSkill.onEffectEnd(sp); // ここで飛行解除や無敵解除を行う
-                        }
-                    }
-                }
                 // 3. 後隙開始 (効果時間が終了し、recovery 期間に入る瞬間)
                 if (!active.rootDisabled && active.lead.autoRoot && active.ticksLeft == recoveryStart) {
                     if (active.lead.recoveryTicks > 0) {
@@ -175,15 +166,6 @@ public final class SkillUtil {
         else if (active.lead.skillType == SkillType.MOVEMENT) {
             // JSON側のEffectSpecを実行
             active.spec.apply(caster, null);
-
-            // ★【追加】HunterSkill クラスの applyEffect (Javaコード側) を実行
-            if (caster instanceof ServerPlayer sp) {
-                com.mimic.monstermod.skill.hunter.HunterSkill hunterSkill =
-                        com.mimic.monstermod.skill.hunter.HunterSkillRegistry.get(active.lead.skillId());
-                if (hunterSkill != null) {
-                    hunterSkill.applyEffect(sp);
-                }
-            }
         }
     }
 

@@ -80,24 +80,11 @@ public final class S2C_SpawnSkillLeadPacket {
             if (lead == null) return;
 
             if (caster instanceof Player player) {
-                // 優先順位：ハンター変身中ならハンター、そうでなければ通常変身
-// S2C_SpawnSkillLeadPacket.java の handle メソッド内
-                player.getCapability(CapabilityRegistry.HUNTER_TRANSFORMATION).ifPresent(hunter -> {
-                    // 自身のidentityにあるか確認
-                    if (hunter.isActive() && hunter.getIdentity() != null) {
-                        int idx = hunter.getIdentity().findSkillIndex(msg.skillId);
-                        if (idx != -1) {
-                            hunter.getIdentity().applyCastResult(lead);
-                            return; // 成功したら終了
-                        }
+                // モンスター変身のIdentityにクールダウン等の結果を反映する
+                player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(cap -> {
+                    if (cap.getIdentity() != null && cap.getIdentity().findSkillIndex(msg.skillId) != -1) {
+                        cap.getIdentity().applyCastResult(lead);
                     }
-
-                    // 見つからない場合のみ通常変身を確認
-                    player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(cap -> {
-                        if (cap.getIdentity() != null && cap.getIdentity().findSkillIndex(msg.skillId) != -1) {
-                            cap.getIdentity().applyCastResult(lead);
-                        }
-                    });
                 });
             }
 

@@ -21,7 +21,7 @@ import net.minecraftforge.fml.common.Mod;
 
 /**
  * Capability を一括管理する巨大レジストリ
- * HunterCombatState まで追加した完全版
+ * Monster変身用のCapabilityを集約する
  */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID)
 public class CapabilityRegistry {
@@ -30,13 +30,6 @@ public class CapabilityRegistry {
     // CAPABILITIES
     // ==========================================================
     public static final Capability<MonsterTransformation> PLAYER_TRANSFORMATION =
-            CapabilityManager.get(new CapabilityToken<>() {});
-
-    public static final Capability<HunterTransformation> HUNTER_TRANSFORMATION =
-            CapabilityManager.get(new CapabilityToken<>() {});
-
-    // ★ 新規追加：ハンター戦闘状態
-    public static final Capability<HunterCombatState> HUNTER_COMBAT_STATE =
             CapabilityManager.get(new CapabilityToken<>() {});
 
     public static final Capability<IPlayerData> PLAYER_CAPABILITY =
@@ -49,14 +42,6 @@ public class CapabilityRegistry {
         return player.getCapability(PLAYER_TRANSFORMATION);
     }
 
-    public static LazyOptional<HunterTransformation> getHunterTransformation(Player player) {
-        return player.getCapability(HUNTER_TRANSFORMATION);
-    }
-
-    // ★ 新規追加 Getter
-    public static LazyOptional<HunterCombatState> getHunterCombatState(Player player) {
-        return player.getCapability(HUNTER_COMBAT_STATE);
-    }
     public static LazyOptional<IPlayerData> getPlayerData(Player player) {
         return player.getCapability(PLAYER_CAPABILITY);
     }
@@ -67,9 +52,7 @@ public class CapabilityRegistry {
     @SubscribeEvent
     public static void registerCaps(RegisterCapabilitiesEvent event) {
         event.register(MonsterTransformation.class);
-        event.register(HunterTransformation.class);
         event.register(IPlayerData.class);
-        event.register(HunterCombatState.class);
     }
 
 
@@ -88,16 +71,6 @@ public class CapabilityRegistry {
                     new MonsterTransformationProvider()
             );
 
-            event.addCapability(
-                    new ResourceLocation(MonsterMod.MOD_ID, "hunter_transformation"),
-                    new HunterTransformationProvider()
-            );
-
-            // ★ 新規追加：CombatState
-            event.addCapability(
-                    new ResourceLocation(MonsterMod.MOD_ID, "hunter_combat_state"),
-                    new HunterCombatStateProvider()
-            );
             event.addCapability(PlayerCapabilityProvider.ID, new PlayerCapabilityProvider(player));
         }
     }
@@ -115,19 +88,6 @@ public class CapabilityRegistry {
                     newCap.deserializeNBT(tag);
 
                 })
-        );
-        oldPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(oldCap ->
-                newPlayer.getCapability(HUNTER_TRANSFORMATION).ifPresent(newCap -> {
-                    newCap.deserializeNBT(oldCap.serializeNBT());
-                    newCap.onLoad(newPlayer);
-                })
-        );
-
-        // ★ 新規追加：CombatState コピー
-        oldPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(oldCap ->
-                newPlayer.getCapability(HUNTER_COMBAT_STATE).ifPresent(newCap ->
-                        newCap.deserializeNBT(oldCap.serializeNBT())
-                )
         );
         oldPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(oldCap ->
                 newPlayer.getCapability(PLAYER_CAPABILITY).ifPresent(newCap ->
@@ -151,10 +111,5 @@ public class CapabilityRegistry {
         });
 
         // -------- transformation --------
-        getPlayerTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
-        getHunterTransformation(player).ifPresent(trans -> trans.syncToClient(sp));
-
-        // -------- combat state --------
-        getHunterCombatState(player).ifPresent(combat -> combat.syncToClient(sp));
-    }
+        getPlayerTransformation(player).ifPresent(trans -> trans.syncToClient(sp));    }
 }
