@@ -11,6 +11,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.ChatFormatting;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -39,8 +41,19 @@ public class DialogueInteractEvents {
         if (event.getLevel().isClientSide) return;
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
-        // 設定アイテムを持っているときは紐付け操作を優先する(会話は開かない)
-        if (player.getMainHandItem().getItem() instanceof DialogueEditorItem) return;
+        // --- 設定アイテムを持っている場合は「紐付け操作」を行う ---
+        // 【重要】この処理をアイテム側(Item#interactLivingEntity)に置いてはいけない。
+        // Player#interactOn の呼び出し順序は
+        //   1. ForgeHooks.onInteractEntity (このイベント)
+        //   2. Entity#interact            ← 村人はここで交渉GUIを開き consumesAction で終了
+        //   3. ItemStack#interactLivingEntity
+        // となっており、村人相手では 3 に到達しないため紐付けが一切できなかった。
+        // 最初に発火するこのイベントで処理してキャンセルする必要がある。
+        ItemStack held = player.getMainHandItem();
+        if (held.getItem() instanceof DialogueEditorItem) {
+            handleBinding(player, held, event);
+            return;
+        }
 
         String dialogueId = DialogueBinding.get(event.getTarget());
         if (dialogueId == null) return; // 会話が無いエンティティはバニラのまま
@@ -61,5 +74,42 @@ public class DialogueInteractEvents {
         // バニラの処理(交渉GUIなど)を止める
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
+    }
+
+    /**
+     * 設定アイテムでエンティティに会話を紐付ける/解除する。
+     * 村人の交渉GUIより先に処理してキャンセルする必要があるため、ここで行う。
+     */
+    private static void handleBinding(ServerPlayer player, ItemStack held,
+                                      PlayerInteractEvent.EntityInteract event) {
+        // バニラの処理(村人の交渉など)を必ず止める
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+
+        if (!player.hasPermissions(2)) {
+            player.displayClientMessage(Component.literal("会話の設定には権限が必要です")
+                    .withStyle(ChatFormatting.RED), true);
+            return;
+        }
+
+        if (player.isShiftKeyDown()) {
+            DialogueBinding.set(event.getTarget(), null);
+            player.displayClientMessage(Component.literal("会話の紐付けを解除しました")
+                    .withStyle(ChatFormatting.YELLOW), true);
+            return;
+        }
+
+        String id = DialogueEditorItem.getDialogueId(held);
+        if (id.isEmpty()) {
+            player.displayClientMessage(Component.literal(
+                    "先に空中で右クリックして会話を作成・保存してください")
+                    .withStyle(ChatFormatting.RED), true);
+            return;
+        }
+
+        DialogueBinding.set(event.getTarget(), id);
+        player.displayClientMessage(Component.literal(
+                event.getTarget().getName().getString() + " に会話 '" + id + "' を設定しました")
+                .withStyle(ChatFormatting.GREEN), true);
     }
 }

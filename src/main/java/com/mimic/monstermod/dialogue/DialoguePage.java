@@ -15,7 +15,8 @@ public record DialoguePage(
         String text,          // 本文。改行(\n)可
         PortraitSpec portrait,
         String soundId,       // 効果音のID。空なら鳴らさない
-        TextStyle style
+        TextStyle style,
+        int typewriterCps     // 1秒あたりの表示文字数。0なら最初から全文表示
 ) {
     /** 文体。表示時の演出を切り替える */
     public enum TextStyle {
@@ -25,8 +26,11 @@ public record DialoguePage(
     }
 
     public static DialoguePage simple(String name, String text) {
-        return new DialoguePage(name, text, PortraitSpec.NONE, "", TextStyle.NORMAL);
+        return new DialoguePage(name, text, PortraitSpec.NONE, "", TextStyle.NORMAL, 0);
     }
+
+    /** タイプライター表示を使うか */
+    public boolean isTypewriter() { return typewriterCps > 0; }
 
     // ---- NBT(ワールド保存用) ----
     public CompoundTag save() {
@@ -36,6 +40,7 @@ public record DialoguePage(
         tag.put("portrait", portrait.save());
         tag.putString("sound", soundId);
         tag.putString("style", style.name());
+        tag.putInt("cps", typewriterCps);
         return tag;
     }
 
@@ -51,7 +56,8 @@ public record DialoguePage(
                 tag.getString("text"),
                 PortraitSpec.load(tag.getCompound("portrait")),
                 tag.getString("sound"),
-                st);
+                st,
+                tag.getInt("cps"));
     }
 
     // ---- ネットワーク ----
@@ -61,6 +67,7 @@ public record DialoguePage(
         portrait.write(buf);
         buf.writeUtf(soundId);
         buf.writeEnum(style);
+        buf.writeVarInt(typewriterCps);
     }
 
     public static DialoguePage read(FriendlyByteBuf buf) {
@@ -69,7 +76,8 @@ public record DialoguePage(
         PortraitSpec p = PortraitSpec.read(buf);
         String sound = buf.readUtf();
         TextStyle style = buf.readEnum(TextStyle.class);
-        return new DialoguePage(name, text, p, sound, style);
+        int cps = buf.readVarInt();
+        return new DialoguePage(name, text, p, sound, style, cps);
     }
 
     /** 効果音のResourceLocation。未指定ならnull */

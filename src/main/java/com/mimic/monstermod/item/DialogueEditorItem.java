@@ -1,6 +1,5 @@
 package com.mimic.monstermod.item;
 
-import com.mimic.monstermod.dialogue.DialogueBinding;
 import com.mimic.monstermod.dialogue.DialogueSet;
 import com.mimic.monstermod.dialogue.DialogueStore;
 import com.mimic.monstermod.network.ModMessages;
@@ -9,9 +8,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -76,37 +73,9 @@ public class DialogueEditorItem extends Item {
         return InteractionResultHolder.success(stack);
     }
 
-    /**
-     * エンティティを右クリック: そのエンティティに会話を紐付ける。
-     * 以後、その村人/プレイヤーを右クリックすると会話が始まる
-     * (村人の場合は Shift+右クリックが交渉になる)。
-     */
-    @Override
-    public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
-        if (player.level().isClientSide) return InteractionResult.SUCCESS;
-        if (!player.hasPermissions(2)) return InteractionResult.FAIL;
-
-        if (player.isShiftKeyDown()) {
-            DialogueBinding.set(target, null);
-            player.displayClientMessage(Component.literal("会話の紐付けを解除しました")
-                    .withStyle(ChatFormatting.YELLOW), false);
-            return InteractionResult.SUCCESS;
-        }
-
-        String id = getDialogueId(stack);
-        if (id.isEmpty()) {
-            player.displayClientMessage(Component.literal(
-                    "先に空中で右クリックして会話を作成・保存してください")
-                    .withStyle(ChatFormatting.RED), false);
-            return InteractionResult.FAIL;
-        }
-
-        DialogueBinding.set(target, id);
-        player.displayClientMessage(Component.literal(
-                target.getName().getString() + " に会話 '" + id + "' を設定しました")
-                .withStyle(ChatFormatting.GREEN), false);
-        return InteractionResult.SUCCESS;
-    }
+    // エンティティへの紐付けは DialogueInteractEvents で行う。
+    // Player#interactOn では村人の交渉(Entity#interact)がアイテム処理より先に走って
+    // 消費してしまうため、Item#interactLivingEntity では村人に紐付けできない。
 
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {

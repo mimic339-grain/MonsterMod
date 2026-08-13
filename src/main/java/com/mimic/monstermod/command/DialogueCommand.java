@@ -100,11 +100,11 @@ public class DialogueCommand {
         set.addPage(new DialoguePage("八咫烏",
                 "我が名は八咫烏。この地を統べる者なり。\nここから先へ進みたくば、我を退けてみせよ。",
                 PortraitSpec.entity(new ResourceLocation("monstermod", "yatagarasu")),
-                "", DialoguePage.TextStyle.NORMAL));
+                "", DialoguePage.TextStyle.NORMAL, 0));
         set.addPage(new DialoguePage("八咫烏",
                 "……ならば、死ぬがよい。",
                 PortraitSpec.entity(new ResourceLocation("monstermod", "yatagarasu")),
-                "", DialoguePage.TextStyle.SHAKE));
+                "", DialoguePage.TextStyle.SHAKE, 30));
         set.addPage(DialoguePage.simple("",
                 "(立ち絵と名前が無い場合。テキストが左まで詰まって表示される。)"));
         ModMessages.sendToPlayer(new S2C_StartDialoguePacket(set), p);
