@@ -11,7 +11,11 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Optional;
 
 /**
  * ビームの描画。
@@ -48,6 +52,27 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static final float TEX_BLOCKS = 4.0F;
     /** 着弾点から伸びる光の筋の本数 */
     private static final int BURST_RAYS = 14;
+    /** 着弾点から飛び散る粒の数 */
+    private static final int BURST_SPARKS = 34;
+
+    // 粒ごとのばらつき。毎フレーム同じ動きになるよう固定の種から先に作っておく
+    private static final float[] SPARK_ANG = new float[BURST_SPARKS];
+    private static final float[] SPARK_REACH = new float[BURST_SPARKS];
+    private static final float[] SPARK_SIZE = new float[BURST_SPARKS];
+    private static final float[] SPARK_PHASE = new float[BURST_SPARKS];
+    private static final float[] SPARK_SPEED = new float[BURST_SPARKS];
+
+    static {
+        java.util.Random rng = new java.util.Random(20260820L);
+        for (int i = 0; i < BURST_SPARKS; i++) {
+            SPARK_ANG[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
+            // 飛ぶ距離をばらけさせる。揃えると輪に見えてしまう
+            SPARK_REACH[i] = 4.0F + rng.nextFloat() * rng.nextFloat() * 18.0F;
+            SPARK_SIZE[i] = 0.5F + rng.nextFloat() * 1.3F;
+            SPARK_PHASE[i] = rng.nextFloat();
+            SPARK_SPEED[i] = 0.6F + rng.nextFloat() * 0.9F;
+        }
+    }
 
     public BeamRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -110,8 +135,37 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
                 1.0F, 0.85F, 0.55F, 0.85F * fade);
 
         // 着弾点。壁で途切れるだけだと当たった感じがしないので、そこで弾けるようにする
-        Vec3 hitPos = origin.add(dir.scale(length)).subtract(entityPos);
-        drawImpactBurst(pose, glow, hitPos, radius, time, baseR, baseG, baseB, fade);
+        Vec3 end = origin.add(dir.scale(length));
+        drawImpactBurst(pose, glow, end.subtract(entityPos), radius, time, baseR, baseG, baseB, fade);
+
+        // 貫いている相手の位置でも弾けさせる。壁だけだと人に当たった手応えが無い
+        drawEntityHits(entity, pose, glow, origin, end, entityPos, radius, time,
+                baseR, baseG, baseB, fade);
+    }
+
+    /**
+     * 射線が通っている相手の位置に、小さめの弾けを出す。
+     *
+     * どこに当たっているかはサーバーから送らず、クライアント側で同じ射線を引き直して求めている。
+     * 見た目だけの話なので、当たり判定と厳密に一致していなくても問題はなく、
+     * 通信を増やさずに済む。
+     */
+    private void drawEntityHits(BeamEntity beam, PoseStack pose, VertexConsumer vc,
+                                Vec3 origin, Vec3 end, Vec3 entityPos, float radius,
+                                float time, float r, float g, float b, float fade) {
+        Entity owner = beam.getOwnerEntity();
+        AABB area = new AABB(origin, end).inflate(1.0);
+
+        for (Entity target : beam.level().getEntities(beam, area,
+                e -> e != owner && e.isAlive() && e.isPickable())) {
+
+            Optional<Vec3> hit = target.getBoundingBox().inflate(radius).clip(origin, end);
+            if (hit.isEmpty()) continue;
+
+            // 壁より控えめにする。人を貫くたびに壁と同じ大きさで光ると画面が埋まる
+            drawImpactBurst(pose, vc, hit.get().subtract(entityPos), radius * 0.7F,
+                    time, r, g, b, fade * 0.85F);
+        }
     }
 
     /**
@@ -130,14 +184,11 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
 
         PoseStack.Pose last = pose.last();
 
-        // 中心の塊。ここだけ白く飛ばして「焼けている」感じにする
-        float coreSize = radius * 7.0F;
-        float h = coreSize * 0.5F;
-        VfxRenderUtil.quad(last, vc, 1.0F, 0.95F, 0.85F, 0.95F * fade,
-                -h, -h, 0, 0, 0,
-                 h, -h, 0, 1, 0,
-                 h,  h, 0, 1, 1,
-                -h,  h, 0, 0, 1);
+        // 玉。外側に色の付いた光、内側に白い芯を重ねて「焼けている玉」にする
+        float halo = radius * 11.0F * (1.0F + 0.05F * Mth.sin(time * 1.3F));
+        drawFlatQuad(last, vc, halo, r, g * 0.55F, b * 0.25F, 0.55F * fade);
+        drawFlatQuad(last, vc, radius * 6.5F, 1.0F, 0.9F, 0.6F, 0.85F * fade);
+        drawFlatQuad(last, vc, radius * 3.2F, 1.0F, 0.99F, 0.95F, 1.0F * fade);
 
         // 放射状の筋
         for (int i = 0; i < BURST_RAYS; i++) {
@@ -157,7 +208,60 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
             drawRay(last, vc, px, py, ex, ey, r, g, b, 0.8F * fade * variance);
         }
 
+        // 飛び散る粒
+        drawSparks(last, vc, radius, time, r, g, b, fade);
+
         pose.popPose();
+    }
+
+    /**
+     * 着弾点から飛び散る粒。
+     *
+     * 外へ向かって飛びながら薄れ、消えるとまた中心から現れる。
+     * これを粒ごとにずれた周期で回しているので、当たっている間ずっと弾け続けて見える。
+     * 飛ぶ距離をばらけさせてあるので、外周に輪ができない。
+     */
+    private static void drawSparks(PoseStack.Pose pose, VertexConsumer vc, float radius,
+                                   float time, float r, float g, float b, float fade) {
+        for (int i = 0; i < BURST_SPARKS; i++) {
+            float t = (SPARK_PHASE[i] + time * 0.045F * SPARK_SPEED[i]) % 1.0F;
+            if (t < 0) t += 1.0F;
+
+            // 出だしが速く、そこから減速する
+            float travel = 1.0F - (1.0F - t) * (1.0F - t);
+            float d = radius * SPARK_REACH[i] * travel;
+
+            float x = Mth.cos(SPARK_ANG[i]) * d;
+            float y = Mth.sin(SPARK_ANG[i]) * d;
+
+            // 現れるところと消えるところで急に出入りしないようにする
+            float alpha = Mth.clamp(t * 8.0F, 0.0F, 1.0F) * (1.0F - t) * fade;
+            if (alpha <= 0.02F) continue;
+
+            // 飛ぶほどビームの色に寄っていく。根元は白熱している
+            float mix = travel;
+            float sr = 1.0F + (r - 1.0F) * mix;
+            float sg = 0.98F + (g - 0.98F) * mix;
+            float sb = 0.92F + (b - 0.92F) * mix;
+
+            float h = radius * SPARK_SIZE[i] * (1.0F - travel * 0.4F);
+            VfxRenderUtil.quad(pose, vc, sr, sg, sb, alpha,
+                    x - h, y - h, 0, 0, 0,
+                    x + h, y - h, 0, 1, 0,
+                    x + h, y + h, 0, 1, 1,
+                    x - h, y + h, 0, 0, 1);
+        }
+    }
+
+    /** カメラを向いた面に、中心ぞろえの四角を1枚 */
+    private static void drawFlatQuad(PoseStack.Pose pose, VertexConsumer vc, float size,
+                                     float r, float g, float b, float a) {
+        float h = size * 0.5F;
+        VfxRenderUtil.quad(pose, vc, r, g, b, a,
+                -h, -h, 0, 0, 0,
+                 h, -h, 0, 1, 0,
+                 h,  h, 0, 1, 1,
+                -h,  h, 0, 0, 1);
     }
 
     /** 中心から外へ伸びる1本の筋。根元が太く、先が尖った形にする */
