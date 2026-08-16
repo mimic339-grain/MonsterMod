@@ -41,8 +41,11 @@ public class MegiddoEntity extends Entity {
     private static final EntityDataAccessor<Integer> DATA_BLAST_RADIUS =
             SynchedEntityData.defineId(MegiddoEntity.class, EntityDataSerializers.INT);
 
-    /** はじけている時間 */
-    public static final int BANG_TICKS = 40;
+    /**
+     * はじけている時間。
+     * 飛び散った光が粉雪のように落ちて消えるところまで見せたいので、長めに取っている。
+     */
+    public static final int BANG_TICKS = 90;
 
     private float damage = 40.0F;
 
@@ -73,7 +76,18 @@ public class MegiddoEntity extends Entity {
 
     /** 円盤の半径。球より一回り大きくして土星のような見た目にする */
     public float getRingRadius() {
-        return getSphereRadius() * 3.2F;
+        return getSphereRadius() * 3.4F;
+    }
+
+    /**
+     * 見た目の中心を、足元からどれだけ持ち上げるか。
+     *
+     * 円盤は傾いているぶん下へ張り出すので、低い位置に出すと地面に食い込んで
+     * 輪が途中で切れて見えてしまう。それを避けるだけの高さを確保している。
+     * 描画とダメージの中心がずれないよう、両方でこの値を使う。
+     */
+    public double getCenterOffset() {
+        return getRingRadius() * 0.30 + getSphereRadius() + 1.0;
     }
 
     /** ための進み具合(0〜1)。1になった瞬間にはじける */
@@ -125,34 +139,38 @@ public class MegiddoEntity extends Entity {
         if (!(this.level() instanceof ServerLevel level)) return;
 
         int r = getBlastRadius();
+        // 見た目の中心から飛び散るので、判定の中心も同じ高さに合わせる
+        Vec3 center = this.position().add(0.0, getCenterOffset(), 0.0);
 
-        level.playSound(null, getX(), getY(), getZ(),
+        level.playSound(null, center.x, center.y, center.z,
                 SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE, 4.0F, 0.5F);
-        level.playSound(null, getX(), getY(), getZ(),
+        level.playSound(null, center.x, center.y, center.z,
                 SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 3.0F, 0.7F);
 
-        AABB area = this.getBoundingBox().inflate(r);
+        AABB area = new AABB(center.x - r, center.y - r, center.z - r,
+                center.x + r, center.y + r, center.z + r);
         List<LivingEntity> targets = level.getEntitiesOfClass(LivingEntity.class, area,
-                e -> e.isAlive() && e.distanceToSqr(this) <= (double) r * r);
+                e -> e.isAlive() && e.position().distanceToSqr(center) <= (double) r * r);
 
         for (LivingEntity target : targets) {
             // 中心ほど痛い。外周でも最低限は入る
-            double dist = target.distanceTo(this);
+            double dist = target.position().distanceTo(center);
             float falloff = 1.0F - (float) (dist / r) * 0.7F;
             target.hurt(level.damageSources().explosion(null, null), damage * falloff);
 
             // 外へ吹き飛ばす。放出されている見た目と動きを合わせる
-            Vec3 push = target.position().subtract(this.position()).normalize().scale(2.0);
+            Vec3 push = target.position().subtract(center).normalize().scale(2.0);
             target.setDeltaMovement(push.x, Math.max(0.6, push.y), push.z);
             target.hurtMarked = true;
         }
     }
 
-    /** 円盤まで含めた大きさで描画対象にする */
+    /** 円盤や飛び散る光まで含めた大きさで描画対象にする */
     @Override
     public AABB getBoundingBoxForCulling() {
-        double r = Math.max(getRingRadius(), getBlastRadius()) + 4.0;
-        return new AABB(getX() - r, getY() - r, getZ() - r, getX() + r, getY() + r, getZ() + r);
+        double r = Math.max(getRingRadius(), getBlastRadius() * 1.6) + 8.0;
+        double cy = getY() + getCenterOffset();
+        return new AABB(getX() - r, cy - r, getZ() - r, getX() + r, cy + r, getZ() + r);
     }
 
     @Override
