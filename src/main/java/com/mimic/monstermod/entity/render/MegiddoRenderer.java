@@ -29,16 +29,15 @@ import java.util.Random;
  * 【円盤を細かい四角の集まりで作る理由】
  * 大きな面を数枚並べる方式では手前半分が描かれなかったのに対し、
  * 同じ場所に出していた小さな板は問題なく描けていた。
- * そこで円盤も、粒と同じくらいの大きさの四角を全周・内外に敷き詰めて作っている。
- * その上にザラつきの粒をまぶすことで、土星の環のような質感を出している。
+ * そこで円盤も、細かい四角を全周・内外に敷き詰めて1枚のなめらかな面として作っている。
  *
  * 【構成】
  *  黒い球   … 光を通さない不透明の球。背景より暗くなり、穴が空いているように見える。
- *  星       … 球の表面すれすれに散らした細かい光。エンドの星空のような見え方。
- *  円盤     … 浅く傾けた輪。つながった面に、ザラつきの粒をまぶしてある。
- *  黒い粒   … 円盤の面に沿って外から球へ流れ込む砂粒。
- *  黒い粒(全方向) … 全方向(360度)から球へ集まってくる。ためが進むほど増えて速くなる。
- *  はじける … 集めた光が一気に外へばらまかれ、減速しながら粉雪のように落ちて消える。
+ *  円盤     … 浅く傾けた輪。濃淡の帯を持つ、つながった面。
+ *  黒いチリ … 円盤の面に沿って外から球へ流れ込む細かい粒。
+ *  黒いチリ(全方向) … 全方向(360度)から球へ集まってくる。ためが進むほど増えて速くなる。
+ *  はじける … 集めたものが光となって一気に外へばらまかれ、
+ *             減速しながら粉雪のように落ちて消える。色が出るのはこの瞬間だけ。
  */
 public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
@@ -98,9 +97,9 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             { 0.60F, 1.00F, 0.78F }  // 緑
     };
 
-    private static final int DUST = 200;    // 円盤沿いに流れ込む黒い粒
-    private static final int LIGHTS = 420;  // 全方向から集まる黒い粒
-    private static final int STARS = 300;   // 球の表面の星
+    // 粒はチリのように細かくしてあるので、数を多めに取らないと流れとして見えない
+    private static final int DUST = 520;    // 円盤沿いに流れ込む黒いチリ
+    private static final int LIGHTS = 950;  // 全方向から集まる黒いチリ
     private static final int BANG = 2600;   // はじけたときにばらまく光
 
     // --- 黒い粒(円盤沿い) ---
@@ -118,12 +117,6 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private static final float[] LIGHT_START = new float[LIGHTS];
     private static final float[] LIGHT_SIZE = new float[LIGHTS];
 
-    // --- 表面の星 ---
-    private static final float[] STAR_YAW = new float[STARS];
-    private static final float[] STAR_PITCH = new float[STARS];
-    private static final float[] STAR_BLINK = new float[STARS];
-    private static final float[] STAR_SIZE = new float[STARS];
-
     // --- はじけたときの粒 ---
     private static final float[] BANG_YAW = new float[BANG];
     private static final float[] BANG_PITCH = new float[BANG];
@@ -140,7 +133,8 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             DUST_HEIGHT[i] = (rng.nextFloat() - 0.5F) * 0.35F;
             DUST_PHASE[i] = rng.nextFloat();
             DUST_SPEED[i] = 0.6F + rng.nextFloat() * 0.8F;
-            DUST_SIZE[i] = 0.08F + rng.nextFloat() * 0.14F;
+            // チリなので、ひと粒はごく小さくする
+            DUST_SIZE[i] = 0.04F + rng.nextFloat() * 0.07F;
         }
         for (int i = 0; i < LIGHTS; i++) {
             LIGHT_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
@@ -149,13 +143,8 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             LIGHT_PHASE[i] = rng.nextFloat();
             LIGHT_SPEED[i] = 0.7F + rng.nextFloat() * 0.7F;
             LIGHT_START[i] = 3.6F + rng.nextFloat() * 3.4F;
-            LIGHT_SIZE[i] = 0.16F + rng.nextFloat() * 0.24F;
-        }
-        for (int i = 0; i < STARS; i++) {
-            STAR_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            STAR_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
-            STAR_BLINK[i] = rng.nextFloat() * 20.0F;
-            STAR_SIZE[i] = 0.06F + rng.nextFloat() * 0.14F;
+            // チリなので、ひと粒はごく小さくする
+            LIGHT_SIZE[i] = 0.035F + rng.nextFloat() * 0.055F;
         }
         for (int i = 0; i < BANG; i++) {
             BANG_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
@@ -198,7 +187,6 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             drawBlackSphere(p, vc, radius);
             drawRingDisc(p, vc, radius, time);
             drawDust(p, vc, radius, charge, time, right, up);
-            drawStars(p, vc, radius, charge, time, right, up);
             drawIncomingDust(p, vc, radius, charge, time, right, up);
         } else {
             drawBigBang(p, vc, entity, radius, bang, time, right, up);
@@ -328,31 +316,6 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             float alpha = Mth.clamp((1.0F - t) * 3.0F, 0.0F, 1.0F) * 0.9F;
             spark(pose, vc, x, y, fz, DUST_SIZE[i] * radius * 0.5F, right, up,
                     0.02F, 0.02F, 0.04F, alpha);
-        }
-    }
-
-    /**
-     * 球の表面の星。
-     *
-     * 球の少し外側に置いているので手前側だけが見え、裏側は球に隠れる。
-     * これでエンドの星空のように「黒い球の中で瞬いている」ように見える。
-     * 表面に近づけすぎると奥行きの精度負けで消えるため、少し余裕を取っている。
-     */
-    private static void drawStars(PoseStack.Pose pose, VertexConsumer vc, float radius,
-                                  float charge, float time, Vector3f right, Vector3f up) {
-        // 最初から結構な数が瞬いていないと、ただの黒い玉にしか見えない
-        int count = Mth.clamp(Mth.floor(STARS * (0.30F + charge * charge * 0.70F)), 60, STARS);
-        float d = radius * 1.06F;
-
-        for (int i = 0; i < count; i++) {
-            float cy = Mth.cos(STAR_PITCH[i]);
-            float x = Mth.cos(STAR_YAW[i]) * cy * d;
-            float y = Mth.sin(STAR_PITCH[i]) * d;
-            float z = Mth.sin(STAR_YAW[i]) * cy * d;
-
-            float blink = 0.45F + 0.55F * Mth.sin(time * 0.18F + STAR_BLINK[i]);
-            spark(pose, vc, x, y, z, STAR_SIZE[i] * radius, right, up,
-                    1.0F, 0.97F, 0.9F, blink);
         }
     }
 
