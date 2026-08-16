@@ -52,10 +52,11 @@ public class VortexEntity extends Entity {
 
     @Override
     protected void defineSynchedData() {
-        this.entityData.define(DATA_HEIGHT, 6.0F);
-        this.entityData.define(DATA_TOP_RADIUS, 2.6F);
-        this.entityData.define(DATA_BOTTOM_RADIUS, 0.45F);
-        this.entityData.define(DATA_COLOR, 0xBFE8FF); // 参考画像に近い白〜水色
+        this.entityData.define(DATA_HEIGHT, 14.0F);
+        this.entityData.define(DATA_TOP_RADIUS, 6.5F);
+        this.entityData.define(DATA_BOTTOM_RADIUS, 3.0F);
+        // 白のままだと加算合成で飛びやすいので、少し落ち着いた青灰色を既定にする
+        this.entityData.define(DATA_COLOR, 0x9CC4DE);
         this.entityData.define(DATA_LIFE, 600);
     }
 
@@ -92,12 +93,15 @@ public class VortexEntity extends Entity {
         }
     }
 
-    /** 上に伸びる形なので、当たり判定の箱も上方向へ広げておく(描画の判定に使われる) */
+    /**
+     * 上に伸びる形なので、当たり判定の箱も上方向へ広げておく(描画の判定に使われる)。
+     * 風切りの弧は本体より外へはみ出すので、その分も見込んで1.5倍にしている。
+     */
     @Override
     public AABB getBoundingBoxForCulling() {
-        float r = getTopRadius() + 1.0F;
+        float r = getTopRadius() * 1.5F + 2.0F;
         return new AABB(getX() - r, getY(), getZ() - r,
-                getX() + r, getY() + getVortexHeight() + 1.0F, getZ() + r);
+                getX() + r, getY() + getVortexHeight() + 2.0F, getZ() + r);
     }
 
     @Override

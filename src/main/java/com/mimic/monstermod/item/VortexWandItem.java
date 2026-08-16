@@ -34,19 +34,20 @@ public class VortexWandItem extends Item {
     private static final String TAG_COLOR = "vortex_color";
     private static final String TAG_SIZE = "vortex_size";
 
+    // 加算合成なので明るい色ほど白飛びしやすい。全体的に彩度を落とした色にしてある
     private static final int[] COLORS = {
-            0xBFE8FF, // 白〜水色(参考画像)
-            0xFFFFFF, // 真っ白
-            0xFFC060, // 砂ぼこり
-            0xC0A0FF, // 紫
-            0x80FFC0  // 緑
+            0x9CC4DE, // 青灰(参考画像に近い)
+            0x8C96A0, // 灰(砂ぼこり寄り。一番地味でリアル)
+            0xC0A87C, // 土色
+            0x9C86C0, // 紫
+            0x86C0A0  // 緑
     };
 
-    /** 高さ / 下の半径 / 上の半径 */
+    /** 高さ / 下の半径 / 上の半径。下でも半径3前後、上へ向かって大きくする */
     private static final float[][] SIZES = {
-            { 4.0F, 0.30F, 1.6F },  // 小
-            { 6.5F, 0.45F, 2.6F },  // 中
-            { 11.0F, 0.80F, 4.5F }  // 大
+            { 8.0F,  1.6F, 3.5F },   // 小
+            { 14.0F, 3.0F, 6.5F },   // 中
+            { 22.0F, 5.0F, 11.0F }   // 大
     };
 
     private static final String[] SIZE_NAMES = { "小", "中", "大" };
