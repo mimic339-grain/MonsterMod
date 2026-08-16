@@ -110,9 +110,13 @@ public class PlacedBombBlockEntity extends BlockEntity {
         }
     }
 
-    /** 残り時間に応じて間隔が詰まる点滅音 */
+    /**
+     * 残り時間に応じて間隔が詰まる点滅音。
+     * 残り10秒を切るまでは鳴らさない(最初から鳴っていると気付かれるし、長く鳴り続けてうるさい)。
+     */
     private static boolean shouldBeep(PlacedBombBlockEntity be) {
-        float progress = 1.0F - (float) be.fuseTicks / Math.max(1, be.totalTicks);
+        if (be.fuseTicks > BombInstance.BEEP_START_TICKS) return false;
+        float progress = 1.0F - (float) be.fuseTicks / (float) BombInstance.BEEP_START_TICKS;
         int interval = Math.max(2, Math.round(20 - progress * 18));
         return be.fuseTicks % interval == 0;
     }

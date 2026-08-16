@@ -46,9 +46,24 @@ public class BombItemDecorator implements IItemDecorator {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || BomberIdentity.of(mc.player) == null) return false;
 
-        // 左上に赤い四角。個数表示(右下)や耐久バー(下)と重ならない位置にする
-        graphics.fill(x + 1, y + 1, x + 5, y + 5, 0xFFFF2020);
-        graphics.fill(x + 2, y + 2, x + 4, y + 4, 0xFFFFC0C0);
+        // アイテムより手前に描く。
+        // ブロックのアイテムは絵が立体で四隅まで埋まっているため、
+        // 奥に描くと模様に紛れて見えなくなる
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 250.0F);
+
+        // スロット全体を赤枠で囲う。中身が何であっても輪郭は必ず見える
+        int x2 = x + 16, y2 = y + 16;
+        graphics.fill(x, y, x2, y + 1, 0xFFFF2020);         // 上
+        graphics.fill(x, y2 - 1, x2, y2, 0xFFFF2020);       // 下
+        graphics.fill(x, y, x + 1, y2, 0xFFFF2020);         // 左
+        graphics.fill(x2 - 1, y, x2, y2, 0xFFFF2020);       // 右
+
+        // 左上の印。個数表示(右下)や耐久バー(下)と重ならない位置にする
+        graphics.fill(x + 1, y + 1, x + 6, y + 6, 0xFFFF2020);
+        graphics.fill(x + 2, y + 2, x + 5, y + 5, 0xFFFFE0E0);
+
+        graphics.pose().popPose();
         return false;
     }
 }

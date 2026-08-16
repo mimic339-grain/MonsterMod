@@ -25,6 +25,8 @@ public class BombInstance {
     private static final int MIN_BEEP_INTERVAL = 2;
     /** 点滅音の最長間隔(tick)。仕掛けた直後はこの間隔 */
     private static final int MAX_BEEP_INTERVAL = 20;
+    /** 音が鳴り始める残り時間。ここから間隔が詰まっていく */
+    public static final int BEEP_START_TICKS = 10 * 20;
 
     private final BombKind kind;
     /** 仕掛けた人。爆発のダメージ元と、味方判定に使う */
@@ -85,14 +87,18 @@ public class BombInstance {
      */
     public boolean shouldBeep() {
         if (!armed) return false;
-        float progress = 1.0F - (float) fuseTicks / Math.max(1, totalTicks);
+        // 残り10秒を切るまでは鳴らさない。
+        // 最初から鳴っていると気付かれるうえ、何分も鳴り続けてうるさいため
+        if (fuseTicks > BEEP_START_TICKS) return false;
+
+        float progress = 1.0F - (float) fuseTicks / (float) BEEP_START_TICKS;
         int interval = Math.round(Mth.lerp(progress, MAX_BEEP_INTERVAL, MIN_BEEP_INTERVAL));
         return fuseTicks % Math.max(1, interval) == 0;
     }
 
     /** 音の高さ。終盤ほど高くして焦りを煽る */
     public float beepPitch() {
-        float progress = 1.0F - (float) fuseTicks / Math.max(1, totalTicks);
+        float progress = 1.0F - (float) Math.min(fuseTicks, BEEP_START_TICKS) / (float) BEEP_START_TICKS;
         return 0.8F + progress * 1.2F;
     }
 

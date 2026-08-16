@@ -55,8 +55,8 @@ public final class BombTiming {
     /** 残り時間から爆発半径を決める(設置ボム用)。長く待つほど大きく爆発する */
     public static float radiusForFuse(int fuseTicks) {
         float seconds = fuseTicks / (float) TICKS_PER_SECOND;
-        // 30秒で半径4、60秒で6、120秒で9 くらいになる緩やかな伸び方
-        return 4.0F + (float) Math.sqrt(Math.max(0.0F, seconds - 30.0F)) * 0.55F;
+        // 30秒で半径12、60秒で約17、120秒で約27 くらいになる緩やかな伸び方
+        return 12.0F + (float) Math.sqrt(Math.max(0.0F, seconds - 30.0F)) * 1.65F;
     }
 
     /** 残り時間を「1分23秒」のような表示にする */

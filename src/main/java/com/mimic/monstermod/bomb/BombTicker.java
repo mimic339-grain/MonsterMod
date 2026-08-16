@@ -1,8 +1,12 @@
 package com.mimic.monstermod.bomb;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.identity.bomber.BomberIdentity;
+import com.mimic.monstermod.network.ModMessages;
+import com.mimic.monstermod.network.server.S2C_BlockBombMarksPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
@@ -33,6 +37,10 @@ public class BombTicker {
 
     /** 導火線の音に切り替える残り時間 */
     private static final int FINAL_WARNING_TICKS = 20;
+    /** 仕掛けた場所をボマーへ送る間隔。数が少ないので一覧をそのまま送る */
+    private static final int MARK_SYNC_INTERVAL = 20;
+    /** 前回この人に目印を送ったか。ボマーでなくなったとき、消す指示を1回だけ送るために持つ */
+    private static final String TAG_HAD_MARKS = "monstermod_bomb_marks";
 
     // ---------------- エンティティに付いたボム ----------------
 
@@ -80,7 +88,10 @@ public class BombTicker {
         if (!(event.level instanceof ServerLevel level)) return;
 
         BombStore store = BombStore.get(level);
-        if (store.all().isEmpty()) return;
+        if (store.all().isEmpty()) {
+            sendMarksToBombers(level, store); // 全部消えたことも伝える必要がある
+            return;
+        }
 
         List<BlockPos> toExplode = new ArrayList<>();
 
@@ -108,5 +119,28 @@ public class BombTicker {
             if (bomb != null) BombExplosion.explodeAt(level, pos, bomb);
         }
         if (!toExplode.isEmpty()) store.setDirty();
+
+        sendMarksToBombers(level, store);
+    }
+
+    /**
+     * 仕掛けた場所をボマーにだけ知らせる。
+     *
+     * 見た目が普通のブロックのままなので、仕掛けた側も忘れると自分で踏む。
+     * かといって全員に送ると罠にならないので、送る相手をここで絞っている。
+     * 数が少ないので、差分ではなく一覧をそのまま定期的に送っている。
+     */
+    private static void sendMarksToBombers(ServerLevel level, BombStore store) {
+        if (level.getGameTime() % MARK_SYNC_INTERVAL != 0) return;
+
+        List<BlockPos> positions = new ArrayList<>(store.all().keySet());
+        for (ServerPlayer player : level.players()) {
+            boolean bomber = BomberIdentity.of(player) != null;
+            if (!bomber && !player.getPersistentData().getBoolean(TAG_HAD_MARKS)) continue;
+
+            ModMessages.sendToPlayer(new S2C_BlockBombMarksPacket(
+                    bomber ? positions : List.of()), player);
+            player.getPersistentData().putBoolean(TAG_HAD_MARKS, bomber);
+        }
     }
 }

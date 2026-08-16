@@ -55,9 +55,9 @@ public final class BomberSkills {
     public static final int VANISH_TICKS = 30 * BombTiming.TICKS_PER_SECOND;
 
     /** 殴って付けるボムの爆発半径 */
-    public static final float TOUCH_RADIUS = 5.0F;
+    public static final float TOUCH_RADIUS = 15.0F;
     /** アイテム・ブロックに仕込むボムの爆発半径 */
-    public static final float TRAP_RADIUS = 4.5F;
+    public static final float TRAP_RADIUS = 13.5F;
 
     /**
      * ボマーのスキルは全て予兆なしの即時発動で、効果は自分に付く。
@@ -128,9 +128,9 @@ public final class BomberSkills {
         return new ArmSkill(BomberIdentity.SLOT_TOUCH, "起爆装置: 次に殴った相手に仕掛ける", true);
     }
 
-    /** 3: ブロックにボムを仕掛ける(武装) */
+    /** 3: ブロックにボムを仕掛ける(武装)。右クリックだと箱を開くなどと衝突するので殴って仕掛ける */
     public static SkillEffectSpec blockTrap() {
-        return new ArmSkill(BomberIdentity.SLOT_BLOCK, "仕掛け: 次に右クリックしたブロックに仕掛ける", false);
+        return new ArmSkill(BomberIdentity.SLOT_BLOCK, "仕掛け: 次に殴ったブロックに仕掛ける", false);
     }
 
     /** 6: 受け渡しボム(武装) */
@@ -154,6 +154,15 @@ public final class BomberSkills {
                 if (!BomberIdentity.canBombItem(target)) {
                     player.displayClientMessage(Component.literal(
                                     "左手に、まだ仕掛けていないアイテムを持ってください")
+                            .withStyle(ChatFormatting.RED), true);
+                    return;
+                }
+
+                // まとめて仕掛けられないようにする。
+                // 複数個に一度で付けられると、配って回るだけで無差別に撒けてしまう
+                if (target.getCount() > 1) {
+                    player.displayClientMessage(Component.literal(
+                                    "1個ずつしか仕掛けられない（今 " + target.getCount() + " 個）")
                             .withStyle(ChatFormatting.RED), true);
                     return;
                 }

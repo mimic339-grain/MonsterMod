@@ -75,6 +75,17 @@ public class BombDefuserItem extends Item {
         if (player == null) return InteractionResult.PASS;
         if (!(level instanceof ServerLevel serverLevel)) return InteractionResult.SUCCESS;
 
+        // 設置ボム(ブロックそのものがボム)は、ブロックごと取り除いて残骸に変える。
+        // 壊せない設定にしてあるので、解除キットが唯一の撤去手段になる
+        if (level.getBlockState(ctx.getClickedPos())
+                .is(com.mimic.monstermod.init.ModBlocks.PLACED_BOMB.get())) {
+            level.removeBlock(ctx.getClickedPos(), false);
+            finishDefuse(player, List.of(
+                    new BombInstance(BombKind.PLACED, null, 1, 0.0F, false)));
+            player.getCooldowns().addCooldown(this, COOLDOWN_TICKS);
+            return InteractionResult.SUCCESS;
+        }
+
         BombStore store = BombStore.get(serverLevel);
         BombInstance bomb = store.remove(ctx.getClickedPos());
         if (bomb == null) {

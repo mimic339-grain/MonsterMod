@@ -97,11 +97,15 @@ public class BomberEvents {
     }
 
     /**
-     * ブロックを右クリックしたとき。
+     * ブロックを殴ったとき。
      * 武装していればそのブロックに仕掛ける。仕掛けただけでは動かず、踏まれると動き出す。
+     *
+     * 右クリックではなく殴る操作にしているのは、
+     * 右クリックだとチェストを開く・ドアを使うといった操作と衝突して、
+     * 仕掛けたいのに箱が開いてしまう事故が起きるため。
      */
     @SubscribeEvent
-    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+    public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
         Player player = event.getEntity();
         if (player.level().isClientSide) return;
         if (!(player.level() instanceof ServerLevel level)) return;
