@@ -31,8 +31,16 @@ public class BaseIdentity {
     protected int[] defaultCooldowns;
 
     public BaseIdentity(@Nullable BaseEntity entity, int abilityCount) {
+        this(entity, abilityCount, entity != null ? entity.getType().toString() : "unknown");
+    }
+
+    /**
+     * 実体を持たない Identity(ボマーなど)用。
+     * 実体から取れないので、IDを直接渡す。
+     */
+    public BaseIdentity(@Nullable BaseEntity entity, int abilityCount, String id) {
         this.entity = entity;
-        this.id = entity != null ? entity.getType().toString() : "unknown";
+        this.id = id;
 
         // 全ての配列をここで確実に abilityCount の数だけ確保する
         this.abilityCooldowns = new int[abilityCount];
@@ -50,6 +58,23 @@ public class BaseIdentity {
     @Nullable
     public BaseEntity getEntity() {
         return entity;
+    }
+
+    /**
+     * 変身先の体(モデル・当たり判定)を持つ Identity かどうか。
+     *
+     * false を返すと「見た目はプレイヤーのまま、能力だけが変わる」種類になる。
+     * ボマーや人狼のように、固定スキルだけを与えたい役職はこちら。
+     *
+     * false のとき除外されるもの:
+     *   ・モンスター用HPバーの表示({@link com.mimic.monstermod.gui.MonsterHpOverlay})
+     *   ・影を消す処理(EntityRenderDispatcherMixin)
+     *   ・炎上表示を消す処理(EntityMixin)
+     * 当たり判定・目線の高さ・段差の自動上りは元から
+     * 「変身先の実体があるか」で判定しているため、実体を持たないこの種類では自動的に除外される。
+     */
+    public boolean hasOwnBody() {
+        return true;
     }
 
     public SkillId[] getSkillIds() {

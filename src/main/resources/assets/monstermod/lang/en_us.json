@@ -6,6 +6,8 @@
   "item.monstermod.npc_tool": "NPC Tool",
   "item.monstermod.beam_wand": "Beam Wand",
   "item.monstermod.vortex_wand": "Vortex Wand",
+  "item.monstermod.bomb_defuser": "Bomb Defuser",
+  "item.monstermod.bomb_remnant": "Defused Bomb Remnant",
   "entity.monstermod.beam": "Beam",
   "entity.monstermod.vortex": "Vortex"
 }

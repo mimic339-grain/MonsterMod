@@ -5,6 +5,8 @@
   "item.monstermod.npc_tool": "NPC作成ツール",
   "item.monstermod.beam_wand": "ビームの杖",
   "item.monstermod.vortex_wand": "竜巻の杖",
+  "item.monstermod.bomb_defuser": "ボム解除キット",
+  "item.monstermod.bomb_remnant": "解除したボムの残骸",
   "entity.monstermod.beam": "ビーム",
   "entity.monstermod.vortex": "竜巻"
 }

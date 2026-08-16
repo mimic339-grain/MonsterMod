@@ -2,6 +2,7 @@ package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.item.BeamWandItem;
+import com.mimic.monstermod.item.BombDefuserItem;
 import com.mimic.monstermod.item.DialogueEditorItem;
 import com.mimic.monstermod.item.NpcToolItem;
 import com.mimic.monstermod.item.VortexWandItem;
@@ -33,6 +34,14 @@ public class ModItems {
     // 竜巻確認用の杖
     public static final RegistryObject<Item> VORTEX_WAND =
             ITEMS.register("vortex_wand", VortexWandItem::new);
+
+    // ボムの解除キット(付けられたボムを外す)
+    public static final RegistryObject<Item> BOMB_DEFUSER =
+            ITEMS.register("bomb_defuser", BombDefuserItem::new);
+
+    // 解除したボムの残骸。今は素材として持たせるだけで、用途は後で決める
+    public static final RegistryObject<Item> BOMB_REMNANT =
+            ITEMS.register("bomb_remnant", () -> new Item(new Item.Properties()));
 
 
     // 登録処理

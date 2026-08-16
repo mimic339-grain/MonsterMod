@@ -35,6 +35,10 @@ public class MonsterHpOverlay {
             // 変身中かつIdentityが存在する場合のみ表示
             if (!trans.isTransformed() || trans.getIdentity() == null) return;
 
+            // ボマーのように見た目が変わらない役職は、バニラの体力表示をそのまま使う。
+            // ここで消すと「バニラのハートも消え、モンスター用バーも出ない」状態になってしまう
+            if (!trans.getIdentity().hasOwnBody()) return;
+
             // HP情報の取得。
             // 【重要】バニラの player.getHealth()/getMaxHealth() を使うこと。
             // 変身中はプレイヤーの最大HP属性が変身先の値(八咫烏なら300)になっており、

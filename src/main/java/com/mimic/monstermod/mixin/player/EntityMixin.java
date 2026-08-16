@@ -29,7 +29,10 @@ public abstract class EntityMixin {
 
             // 3. 変身中かどうかをチェック
             player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).ifPresent(trans -> {
-                if (trans.isTransformed()) {
+                // 変身先の体を持つ場合のみ隠す。
+                // ボマーのように見た目がプレイヤーのままの役職は、普通に燃えて見えるべき
+                if (trans.isTransformed()
+                        && (trans.getIdentity() == null || trans.getIdentity().hasOwnBody())) {
                     // ★ 描画システムに対して「燃えてないよ」と嘘を吐く
                     cir.setReturnValue(false);
                 }

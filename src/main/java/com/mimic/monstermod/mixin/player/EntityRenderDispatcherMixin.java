@@ -19,10 +19,14 @@ public class EntityRenderDispatcherMixin {
     @Inject(method = "renderShadow", at = @At("HEAD"), cancellable = true)
     private static void cancelPlayerShadow(PoseStack p_114458_, MultiBufferSource p_114459_, Entity p_114460_, float p_114461_, float p_114462_, LevelReader p_114463_, float p_114464_, CallbackInfo ci) {
         if (p_114460_ instanceof Player player) {
-            boolean transformed = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                    .map(MonsterTransformation::isTransformed)
+            // 変身先の体を持つ場合のみ影を消す。
+            // ボマーのように見た目がプレイヤーのままの役職では影を残す
+            // (影だけ消えると本人にも他人にも不自然に見えるため)
+            boolean hideShadow = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                    .map(trans -> trans.isTransformed()
+                            && (trans.getIdentity() == null || trans.getIdentity().hasOwnBody()))
                     .orElse(false);
-            if (transformed) {
+            if (hideShadow) {
                 ci.cancel(); // 影描画をスキップ
             }
         }
