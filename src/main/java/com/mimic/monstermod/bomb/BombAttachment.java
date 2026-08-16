@@ -40,6 +40,14 @@ public final class BombAttachment {
         return !get(entity).isEmpty();
     }
 
+    /** その種類のボムを背負っているか。受け渡しを持っている人かどうかの判定に使う */
+    public static boolean hasKind(Entity entity, BombKind kind) {
+        for (BombInstance b : get(entity)) {
+            if (b.getKind() == kind) return true;
+        }
+        return false;
+    }
+
     public static void add(Entity entity, BombInstance bomb) {
         List<BombInstance> list = get(entity);
         list.add(bomb);

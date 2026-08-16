@@ -21,8 +21,11 @@ import java.util.UUID;
  */
 public class BombInstance {
 
-    /** 1回の点滅音の最短間隔(tick)。これ以上は速くならない */
-    private static final int MIN_BEEP_INTERVAL = 2;
+    /**
+     * 1回の点滅音の最短間隔(tick)。これ以上は速くならない。
+     * 1にすると毎tick鳴り、最後は「チチチチ」と繋がって聞こえる
+     */
+    private static final int MIN_BEEP_INTERVAL = 1;
     /** 点滅音の最長間隔(tick)。仕掛けた直後はこの間隔 */
     private static final int MAX_BEEP_INTERVAL = 20;
     /** 音が鳴り始める残り時間。ここから間隔が詰まっていく */

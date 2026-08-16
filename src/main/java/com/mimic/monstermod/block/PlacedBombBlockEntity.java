@@ -104,7 +104,7 @@ public class PlacedBombBlockEntity extends BlockEntity {
         // 音は残りが減るほど詰まっていく。BombInstance と同じ間隔の決め方を使う
         BombInstance view = new BombInstance(BombKind.PLACED, be.owner, be.fuseTicks, be.radius, true);
         if (be.fuseTicks == 20) {
-            BombExplosion.playFinalWarning(level, at);
+            BombExplosion.playFinalWarning(level, at, be.radius);
         } else if (shouldBeep(be)) {
             BombExplosion.playBeep(level, at, view);
         }
@@ -117,7 +117,8 @@ public class PlacedBombBlockEntity extends BlockEntity {
     private static boolean shouldBeep(PlacedBombBlockEntity be) {
         if (be.fuseTicks > BombInstance.BEEP_START_TICKS) return false;
         float progress = 1.0F - (float) be.fuseTicks / (float) BombInstance.BEEP_START_TICKS;
-        int interval = Math.max(2, Math.round(20 - progress * 18));
+        // 最後は毎tick鳴らして「チチチチ」と繋がって聞こえるようにする
+        int interval = Math.max(1, Math.round(20 - progress * 19));
         return be.fuseTicks % interval == 0;
     }
 

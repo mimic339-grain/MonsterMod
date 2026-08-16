@@ -283,6 +283,18 @@ public class BaseIdentity {
      * (handleAbility が応答を待たずに lockCooldowns を仮セットするため、
      *  拒否された場合はこれを呼ばないと連打時に再入力できなくなる)
      */
+    /**
+     * クールダウンを直接書き換える。
+     *
+     * ボマーのように「押した時点では何も起きず、次の行動で初めて効果が出る」スキルは、
+     * 押しただけでクールダウンが始まると、仕掛けられずに終わったときに丸損になる。
+     * そのため、押した直後に一度0へ戻し、実際に仕掛けた瞬間に改めて設定している。
+     */
+    public void setCooldown(int index, int ticks) {
+        if (index < 0 || index >= abilityCooldowns.length) return;
+        abilityCooldowns[index] = Math.max(0, ticks);
+    }
+
     public void clearLock(int index) {
         if (index < 0 || index >= lockCooldowns.length) return;
         this.lockCooldowns[index] = 0;

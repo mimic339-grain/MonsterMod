@@ -36,49 +36,60 @@ public final class BlockBombMarks {
 
     private BlockBombMarks() {}
 
-    /** サーバーから届いた位置。ボマーでなければ空のまま */
-    private static final List<BlockPos> MARKS = new ArrayList<>();
+    /** 仕掛けてある場所。ボマーにしか届かないので、ボマーでなければ空のまま */
+    private static final List<BlockPos> SECRET = new ArrayList<>();
+    /** 踏まれて起動した場所。証拠として全員に届く */
+    private static final List<BlockPos> REVEALED = new ArrayList<>();
 
-    public static void replaceAll(List<BlockPos> positions) {
-        MARKS.clear();
-        MARKS.addAll(positions);
+    public static void replaceAll(List<BlockPos> secret, List<BlockPos> revealed) {
+        SECRET.clear();
+        SECRET.addAll(secret);
+        REVEALED.clear();
+        REVEALED.addAll(revealed);
     }
 
     public static void clear() {
-        MARKS.clear();
+        SECRET.clear();
+        REVEALED.clear();
     }
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
-        if (MARKS.isEmpty()) return;
+        if (SECRET.isEmpty() && REVEALED.isEmpty()) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
-
-        // 念のため、描く側でもボマーかどうかを確認する
-        if (BomberIdentity.of(mc.player) == null) return;
 
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffer = mc.renderBuffers().bufferSource();
         VertexConsumer vc = buffer.getBuffer(RenderType.lines());
 
-        for (BlockPos pos : MARKS) {
-            // 遠すぎるものは描かない(線が画面を埋めるため)
-            if (pos.distToCenterSqr(cam.x, cam.y, cam.z) > 64.0 * 64.0) continue;
-
-            pose.pushPose();
-            pose.translate(pos.getX() - cam.x, pos.getY() - cam.y, pos.getZ() - cam.z);
-            drawCage(pose.last(), vc);
-            pose.popPose();
+        // 仕掛けてある場所。念のため描く側でもボマーかどうかを確認する
+        if (BomberIdentity.of(mc.player) != null) {
+            for (BlockPos pos : SECRET) drawAt(pose, vc, pos, cam, 1.0F, 0.15F, 0.15F);
         }
+
+        // 踏まれた場所。誰にでも見える証拠なので、少し明るい色にして区別する
+        for (BlockPos pos : REVEALED) drawAt(pose, vc, pos, cam, 1.0F, 0.55F, 0.10F);
 
         buffer.endBatch(RenderType.lines());
     }
 
-    /** ブロックを囲う赤い枠 */
-    private static void drawCage(PoseStack.Pose pose, VertexConsumer vc) {
+    private static void drawAt(PoseStack pose, VertexConsumer vc, BlockPos pos, Vec3 cam,
+                               float r, float g, float b) {
+        // 遠すぎるものは描かない(線が画面を埋めるため)
+        if (pos.distToCenterSqr(cam.x, cam.y, cam.z) > 64.0 * 64.0) return;
+
+        pose.pushPose();
+        pose.translate(pos.getX() - cam.x, pos.getY() - cam.y, pos.getZ() - cam.z);
+        drawCage(pose.last(), vc, r, g, b);
+        pose.popPose();
+    }
+
+    /** ブロックを囲う枠 */
+    private static void drawCage(PoseStack.Pose pose, VertexConsumer vc, float r, float g, float b) {
         Matrix4f m = pose.pose();
         Matrix3f n = pose.normal();
 
@@ -93,19 +104,20 @@ public final class BlockBombMarks {
                 {0,4},{1,5},{2,6},{3,7}
         };
         for (int[] e : edges) {
-            float[] a = c[e[0]], b = c[e[1]];
-            line(m, n, vc, a[0], a[1], a[2], b[0], b[1], b[2]);
+            float[] p1 = c[e[0]], p2 = c[e[1]];
+            line(m, n, vc, p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], r, g, b);
         }
     }
 
     private static void line(Matrix4f m, Matrix3f n, VertexConsumer vc,
-                             float x1, float y1, float z1, float x2, float y2, float z2) {
+                             float x1, float y1, float z1, float x2, float y2, float z2,
+                             float r, float g, float b) {
         float dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
         float len = Mth.sqrt(dx * dx + dy * dy + dz * dz);
         if (len <= 0.0F) return;
         dx /= len; dy /= len; dz /= len;
 
-        vc.vertex(m, x1, y1, z1).color(1.0F, 0.15F, 0.15F, 0.9F).normal(n, dx, dy, dz).endVertex();
-        vc.vertex(m, x2, y2, z2).color(1.0F, 0.15F, 0.15F, 0.9F).normal(n, dx, dy, dz).endVertex();
+        vc.vertex(m, x1, y1, z1).color(r, g, b, 0.9F).normal(n, dx, dy, dz).endVertex();
+        vc.vertex(m, x2, y2, z2).color(r, g, b, 0.9F).normal(n, dx, dy, dz).endVertex();
     }
 }

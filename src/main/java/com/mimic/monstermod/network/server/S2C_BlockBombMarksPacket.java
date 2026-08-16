@@ -23,29 +23,42 @@ import java.util.function.Supplier;
  */
 public class S2C_BlockBombMarksPacket {
 
-    private final List<BlockPos> positions;
+    /** 仕掛けてある場所。ボマーにしか送らない */
+    private final List<BlockPos> secret;
+    /** 踏まれて起動した場所。証拠として全員に送る */
+    private final List<BlockPos> revealed;
 
-    public S2C_BlockBombMarksPacket(List<BlockPos> positions) {
-        this.positions = positions;
+    public S2C_BlockBombMarksPacket(List<BlockPos> secret, List<BlockPos> revealed) {
+        this.secret = secret;
+        this.revealed = revealed;
     }
 
     public static void encode(S2C_BlockBombMarksPacket msg, FriendlyByteBuf buf) {
-        buf.writeVarInt(msg.positions.size());
-        for (BlockPos pos : msg.positions) buf.writeBlockPos(pos);
+        writeList(buf, msg.secret);
+        writeList(buf, msg.revealed);
     }
 
     public static S2C_BlockBombMarksPacket decode(FriendlyByteBuf buf) {
+        return new S2C_BlockBombMarksPacket(readList(buf), readList(buf));
+    }
+
+    private static void writeList(FriendlyByteBuf buf, List<BlockPos> list) {
+        buf.writeVarInt(list.size());
+        for (BlockPos pos : list) buf.writeBlockPos(pos);
+    }
+
+    private static List<BlockPos> readList(FriendlyByteBuf buf) {
         int n = buf.readVarInt();
         List<BlockPos> list = new ArrayList<>(n);
         for (int i = 0; i < n; i++) list.add(buf.readBlockPos());
-        return new S2C_BlockBombMarksPacket(list);
+        return list;
     }
 
     public static void handle(S2C_BlockBombMarksPacket msg, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
         // クライアント専用クラスに触れるためDistExecutorで隔離する
         context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
-                BlockBombMarks.replaceAll(msg.positions)));
+                BlockBombMarks.replaceAll(msg.secret, msg.revealed)));
         context.setPacketHandled(true);
     }
 }

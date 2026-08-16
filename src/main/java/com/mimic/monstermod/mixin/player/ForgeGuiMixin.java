@@ -19,11 +19,23 @@ public abstract class ForgeGuiMixin {
     @Shadow
     public int leftHeight;
 
+    /**
+     * 変身中はバニラのハートを消し、代わりにモンスター用のHPバーを出している。
+     * ただしボマーのように見た目が変わらない役職は、モンスター用バーも出さないので
+     * ここで消すと「ハートも無い・バーも無い」状態になってしまう。
+     * そのため体を持つ役職のときだけ消す。
+     */
     @Inject(method = "renderHealth", at = @At("HEAD"), cancellable = true)
     private void cancelHealth(CallbackInfo ci) {
         LocalPlayer player = Minecraft.getInstance().player;
-        if (player != null && player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                .map(MonsterTransformation::isTransformed).orElse(false)) {
+        if (player == null) return;
+
+        boolean hideHearts = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                .map(trans -> trans.isTransformed()
+                        && (trans.getIdentity() == null || trans.getIdentity().hasOwnBody()))
+                .orElse(false);
+
+        if (hideHearts) {
             ci.cancel();
             this.leftHeight += 10;
         }

@@ -20,8 +20,11 @@ import net.minecraft.network.chat.Component;
  */
 public class BombTimerScreen extends Screen {
 
-    /** 選べる時間(秒) */
-    private static final int[] CHOICES = { 10, 30, 60, 120, 300 };
+    /**
+     * 選べる時間(秒)。0は即爆。
+     * 半径は BombTiming が決めており、即爆6 / 10秒12 / 30秒25 / 1分50 になる。
+     */
+    private static final int[] CHOICES = { 0, 10, 30, 60 };
 
     private final BlockPos pos;
 
@@ -37,8 +40,8 @@ public class BombTimerScreen extends Screen {
 
         for (int seconds : CHOICES) {
             float radius = BombTiming.radiusForFuse(seconds * BombTiming.TICKS_PER_SECOND);
-            String label = BombTiming.format(seconds * BombTiming.TICKS_PER_SECOND)
-                    + "   （半径 " + String.format("%.1f", radius) + "）";
+            String time = seconds <= 0 ? "即爆" : BombTiming.format(seconds * BombTiming.TICKS_PER_SECOND);
+            String label = time + "   （半径 " + String.format("%.0f", radius) + "）";
 
             final int sec = seconds;
             addRenderableWidget(Button.builder(Component.literal(label), b -> choose(sec))

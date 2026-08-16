@@ -129,18 +129,37 @@ public final class BombExplosion {
                 SoundEvents.RESPAWN_ANCHOR_CHARGE, SoundSource.BLOCKS, 1.0F, 0.7F);
     }
 
-    /** 起爆間近の警告音。誰の足元で鳴っているかが分かるよう、その場から鳴らす */
+    /**
+     * 起爆間近の警告音。誰の足元で鳴っているかが分かるよう、その場から鳴らす。
+     *
+     * 音は「ピッ」と短く鳴る音ブロック(PLING)を高い音程で鳴らして作っている。
+     * 外部の音源を持ち込まずに済むので、配布の手間もライセンスの心配も要らない。
+     */
     public static void playBeep(Level level, Vec3 at, BombInstance bomb) {
-        // ピピピという電子音はバニラの音ブロックで作れる。外部素材が要らないのでこれを使う
         level.playSound(null, at.x, at.y, at.z,
-                SoundEvents.NOTE_BLOCK_BIT.get(), SoundSource.PLAYERS,
-                0.8F, bomb.beepPitch());
+                SoundEvents.NOTE_BLOCK_PLING.get(), SoundSource.PLAYERS,
+                volumeForRadius(bomb.getRadius()), bomb.beepPitch());
     }
 
     /** 起爆直前の合図。導火線の音に切り替えて「もう手遅れ」を伝える */
-    public static void playFinalWarning(Level level, Vec3 at) {
+    public static void playFinalWarning(Level level, Vec3 at, float radius) {
         level.playSound(null, at.x, at.y, at.z,
-                SoundEvents.CREEPER_PRIMED, SoundSource.PLAYERS, 1.2F, 1.0F);
+                SoundEvents.CREEPER_PRIMED, SoundSource.PLAYERS,
+                volumeForRadius(radius), 1.0F);
+    }
+
+    /**
+     * 爆発が大きいほど遠くまで音を届かせる。
+     *
+     * バニラは「音量 × 16ブロック」まで聞こえるので、そこから逆算している。
+     * 巻き込まれる範囲より少し広く聞こえないと、逃げる判断ができないため
+     * 半径の1.5倍を目安にした(半径50なら75mまで)。
+     * 人に付いたボムのように範囲が小さいものでも、
+     * 30mくらい離れた所から「遠くで鳴っているな」と分かる下限を設けている。
+     */
+    public static float volumeForRadius(float radius) {
+        float byRadius = radius * 1.5F / 16.0F;
+        return Math.max(30.0F / 16.0F, byRadius);
     }
 
     /** 仕掛けた本人にだけ分かるよう、対象へメッセージを出す用の判定 */

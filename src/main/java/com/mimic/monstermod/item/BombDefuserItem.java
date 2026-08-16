@@ -171,7 +171,9 @@ public class BombDefuserItem extends Item {
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.literal("右クリック: 自分のボムを外す").withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.literal("相手に右クリック: その人のボムを外す").withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.literal("ブロックに右クリック: 仕掛けを外す").withStyle(ChatFormatting.DARK_GRAY));
+        // 設置ボムは素の右クリックだと時間設定画面が開いてしまうので、スニークが要る
+        tooltip.add(Component.literal("Shift+ブロックに右クリック: 仕掛け・設置ボムを外す")
+                .withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.literal("2重に掛かっていても一度で全部外れる").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

@@ -52,11 +52,26 @@ public final class BombTiming {
         return MIN_FUSE_TICKS + rng.nextInt(MAX_FUSE_TICKS - MIN_FUSE_TICKS + 1);
     }
 
-    /** 残り時間から爆発半径を決める(設置ボム用)。長く待つほど大きく爆発する */
+    /**
+     * 残り時間から爆発半径を決める(設置ボム用)。長く待つほど大きく爆発する。
+     *
+     * 即爆6 / 10秒12 / 30秒25 / 1分50 を基準にして、その間は直線でつないでいる。
+     * 待つほど割に合うようにしてあるので、
+     * 「すぐ起爆して仕留めるか、長く仕掛けて広く巻き込むか」の選択になる。
+     */
     public static float radiusForFuse(int fuseTicks) {
         float seconds = fuseTicks / (float) TICKS_PER_SECOND;
-        // 30秒で半径12、60秒で約17、120秒で約27 くらいになる緩やかな伸び方
-        return 12.0F + (float) Math.sqrt(Math.max(0.0F, seconds - 30.0F)) * 1.65F;
+
+        if (seconds <= 0.0F) return 6.0F;
+        if (seconds <= 10.0F) return lerp(seconds, 0.0F, 10.0F, 6.0F, 12.0F);
+        if (seconds <= 30.0F) return lerp(seconds, 10.0F, 30.0F, 12.0F, 25.0F);
+        if (seconds <= 60.0F) return lerp(seconds, 30.0F, 60.0F, 25.0F, 50.0F);
+        return 50.0F; // 1分より長く待っても、これ以上は大きくならない
+    }
+
+    private static float lerp(float v, float inMin, float inMax, float outMin, float outMax) {
+        float t = (v - inMin) / (inMax - inMin);
+        return outMin + (outMax - outMin) * t;
     }
 
     /** 残り時間を「1分23秒」のような表示にする */

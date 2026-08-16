@@ -20,8 +20,8 @@ import java.util.function.Supplier;
  */
 public class C2S_SetBombTimerPacket {
 
-    /** 受け付ける時間の範囲(秒)。画面の選択肢もこの中に収まっている */
-    private static final int MIN_SECONDS = 5;
+    /** 受け付ける時間の範囲(秒)。0は即爆。画面の選択肢もこの中に収まっている */
+    private static final int MIN_SECONDS = 0;
     private static final int MAX_SECONDS = 600;
     /** 遠くのボムを勝手に設定できないようにする距離 */
     private static final double MAX_DISTANCE_SQR = 64.0D;
@@ -60,7 +60,8 @@ public class C2S_SetBombTimerPacket {
             be.startTimer(msg.seconds);
 
             player.level().playSound(null, msg.pos, SoundEvents.TNT_PRIMED, SoundSource.BLOCKS, 1.0F, 0.8F);
-            player.displayClientMessage(Component.literal(msg.seconds + "秒後に爆発する")
+            player.displayClientMessage(Component.literal(
+                            msg.seconds <= 0 ? "すぐ爆発する" : (msg.seconds + "秒後に爆発する"))
                     .withStyle(ChatFormatting.RED), true);
         });
         context.setPacketHandled(true);

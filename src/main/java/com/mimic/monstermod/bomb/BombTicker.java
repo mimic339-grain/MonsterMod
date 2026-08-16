@@ -74,7 +74,7 @@ public class BombTicker {
     private static void announce(Entity carrier, BombInstance bomb) {
         Vec3 at = carrier.position().add(0.0, carrier.getBbHeight() * 0.5, 0.0);
         if (bomb.getFuseTicks() == FINAL_WARNING_TICKS) {
-            BombExplosion.playFinalWarning(carrier.level(), at);
+            BombExplosion.playFinalWarning(carrier.level(), at, bomb.getRadius());
         } else if (bomb.shouldBeep()) {
             BombExplosion.playBeep(carrier.level(), at, bomb);
         }
@@ -108,7 +108,7 @@ public class BombTicker {
             }
             Vec3 at = Vec3.atCenterOf(pos);
             if (bomb.getFuseTicks() == FINAL_WARNING_TICKS) {
-                BombExplosion.playFinalWarning(level, at);
+                BombExplosion.playFinalWarning(level, at, bomb.getRadius());
             } else if (bomb.shouldBeep()) {
                 BombExplosion.playBeep(level, at, bomb);
             }
@@ -131,16 +131,21 @@ public class BombTicker {
      * 数が少ないので、差分ではなく一覧をそのまま定期的に送っている。
      */
     private static void sendMarksToBombers(ServerLevel level, BombStore store) {
+        store.tickRevealed();
         if (level.getGameTime() % MARK_SYNC_INTERVAL != 0) return;
 
-        List<BlockPos> positions = new ArrayList<>(store.all().keySet());
+        List<BlockPos> secret = new ArrayList<>(store.all().keySet());
+        List<BlockPos> revealed = new ArrayList<>(store.revealed().keySet());
+
+        // 全員が対象なのは「踏まれた証拠」だけ。仕掛けの位置はボマーにしか送らない
         for (ServerPlayer player : level.players()) {
             boolean bomber = BomberIdentity.of(player) != null;
-            if (!bomber && !player.getPersistentData().getBoolean(TAG_HAD_MARKS)) continue;
+            boolean hadMarks = player.getPersistentData().getBoolean(TAG_HAD_MARKS);
+            if (!bomber && !hadMarks && revealed.isEmpty()) continue;
 
             ModMessages.sendToPlayer(new S2C_BlockBombMarksPacket(
-                    bomber ? positions : List.of()), player);
-            player.getPersistentData().putBoolean(TAG_HAD_MARKS, bomber);
+                    bomber ? secret : List.of(), revealed), player);
+            player.getPersistentData().putBoolean(TAG_HAD_MARKS, bomber || !revealed.isEmpty());
         }
     }
 }

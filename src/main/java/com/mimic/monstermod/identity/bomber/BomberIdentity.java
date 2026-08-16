@@ -52,6 +52,12 @@ public class BomberIdentity extends BaseIdentity {
     /** 武装中のスキル。次の行動で消費される */
     private final boolean[] armed = new boolean[SKILLS.length];
 
+    /** ブロックへ仕掛けている最中の進み具合(tick)。ゲージ表示に使う */
+    private int plantProgress;
+
+    public int getPlantProgress() { return plantProgress; }
+    public void setPlantProgress(int ticks) { this.plantProgress = Math.max(0, ticks); }
+
     public BomberIdentity(@Nullable BaseEntity entity) {
         super(entity, SKILLS.length, ID);
         this.skillIds = SKILLS;
@@ -114,12 +120,14 @@ public class BomberIdentity extends BaseIdentity {
         byte[] flags = new byte[armed.length];
         for (int i = 0; i < armed.length; i++) flags[i] = (byte) (armed[i] ? 1 : 0);
         tag.putByteArray("armed", flags);
+        tag.putInt("plant", plantProgress);
         return tag;
     }
 
     @Override
     public void deserializeNBT(CompoundTag tag) {
         super.deserializeNBT(tag);
+        plantProgress = tag.getInt("plant");
         if (!tag.contains("armed")) return;
         byte[] flags = tag.getByteArray("armed");
         for (int i = 0; i < armed.length && i < flags.length; i++) armed[i] = flags[i] != 0;

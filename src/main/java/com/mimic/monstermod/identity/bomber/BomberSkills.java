@@ -115,6 +115,10 @@ public final class BomberSkills {
             // 殴る系(1と6)は同時に武装できない。どちらが出るか分からないと事故るため
             if (melee) bomber.armExclusiveMelee(slot);
             else bomber.setArmed(slot, true);
+
+            // 武装しただけでは何も起きていないので、クールダウンはまだ始めない。
+            // 実際に仕掛けた瞬間に BomberEvents 側で改めて設定する
+            bomber.setCooldown(slot, 0);
             BomberIdentity.sync(player); // 送らないとHUDの枠が青に変わらない
 
             player.displayClientMessage(Component.literal(message).withStyle(ChatFormatting.AQUA), true);
@@ -128,9 +132,22 @@ public final class BomberSkills {
         return new ArmSkill(BomberIdentity.SLOT_TOUCH, "起爆装置: 次に殴った相手に仕掛ける", true);
     }
 
-    /** 3: ブロックにボムを仕掛ける(武装)。右クリックだと箱を開くなどと衝突するので殴って仕掛ける */
+    /**
+     * 3: ブロックにボムを仕掛ける(武装)。
+     * 殴る操作は「壊す」と紛らわしく、右クリックは箱を開くなどと衝突するため、
+     * 見ているブロックへスニークし続けて仕掛ける形にしている(BomberEvents が進行を見る)。
+     */
     public static SkillEffectSpec blockTrap() {
-        return new ArmSkill(BomberIdentity.SLOT_BLOCK, "仕掛け: 次に殴ったブロックに仕掛ける", false);
+        return new ArmSkill(BomberIdentity.SLOT_BLOCK,
+                "仕掛け: 設置したいブロックを見てスニークし続ける", false);
+    }
+
+    /** 仕掛けられなかったときにクールダウンを返す。押し損を作らないため */
+    static void refund(BomberIdentity bomber, Player player, int slot) {
+        if (bomber == null) return;
+        bomber.setArmed(slot, false);
+        bomber.setCooldown(slot, 0);
+        BomberIdentity.sync(player);
     }
 
     /** 6: 受け渡しボム(武装) */
@@ -150,8 +167,12 @@ public final class BomberSkills {
                 if (!(attacker.level() instanceof ServerLevel level)) return;
                 if (!(attacker instanceof Player player)) return;
 
+                BomberIdentity bomber = BomberIdentity.of(player);
+
                 ItemStack target = player.getOffhandItem();
                 if (!BomberIdentity.canBombItem(target)) {
+                    // 仕掛けられなかったので、押した分のクールダウンは返す
+                    refund(bomber, player, BomberIdentity.SLOT_ITEM);
                     player.displayClientMessage(Component.literal(
                                     "左手に、まだ仕掛けていないアイテムを持ってください")
                             .withStyle(ChatFormatting.RED), true);
@@ -161,6 +182,7 @@ public final class BomberSkills {
                 // まとめて仕掛けられないようにする。
                 // 複数個に一度で付けられると、配って回るだけで無差別に撒けてしまう
                 if (target.getCount() > 1) {
+                    refund(bomber, player, BomberIdentity.SLOT_ITEM);
                     player.displayClientMessage(Component.literal(
                                     "1個ずつしか仕掛けられない（今 " + target.getCount() + " 個）")
                             .withStyle(ChatFormatting.RED), true);

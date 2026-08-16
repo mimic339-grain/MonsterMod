@@ -31,6 +31,31 @@ public class BombStore extends SavedData {
      */
     private int fixedFuse = 0;
 
+    /**
+     * 踏まれて起動した場所と、それを見せておく残り時間(tick)。
+     *
+     * 踏まれた場所は10秒間だけ全員に赤く見せて「ここに仕掛けてあった」証拠を残す。
+     * 一時的な演出でしかないので、ワールドには保存しない。
+     */
+    private final Map<BlockPos, Integer> revealed = new HashMap<>();
+
+    /** 全員に見せておく時間 */
+    public static final int REVEAL_TICKS = 10 * 20;
+
+    public void reveal(BlockPos pos) {
+        revealed.put(pos.immutable(), REVEAL_TICKS);
+    }
+
+    public Map<BlockPos, Integer> revealed() { return revealed; }
+
+    /** 見せている時間を進める。0になったものは消える */
+    public void tickRevealed() {
+        revealed.entrySet().removeIf(e -> {
+            e.setValue(e.getValue() - 1);
+            return e.getValue() <= 0;
+        });
+    }
+
     public int getFixedFuse() { return fixedFuse; }
 
     public void setFixedFuse(int ticks) {

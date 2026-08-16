@@ -163,6 +163,10 @@ public class MonsterSkillOverlay {
         String cdText = null;
         int color = 0xFFFFFFFF; // デフォルトは白
 
+        // 武装中のスキルは「次の行動まで待つ」だけなので、残り時間という概念がない。
+        // 数字を出すと勝手に切れるように見えるため、青枠だけにする
+        if (identity.isArmed(index)) return;
+
         int lockTime = identity.getLockTime(index);
         SkillLead lead = SkillLeadRegistry.getNullable(skillId);
 
