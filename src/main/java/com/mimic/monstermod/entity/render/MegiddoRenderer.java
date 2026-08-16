@@ -26,24 +26,37 @@ import java.util.Random;
  * その切り替えが絡むと再現しづらい取りこぼしが起きるため、
  * 切り替えを一切行わない形に作り直した。
  *
- * 【円盤を面ではなく粒で作る理由】
- * 大きな面を並べる方式で手前半分が消えていたのに対し、
- * 同じ場所に出していた粒(板)は問題なく描けていた。
- * 粒で作れば確実に描けるうえ、土星の環のようなザラついた質感にも合う。
+ * 【円盤を細かい四角の集まりで作る理由】
+ * 大きな面を数枚並べる方式では手前半分が描かれなかったのに対し、
+ * 同じ場所に出していた小さな板は問題なく描けていた。
+ * そこで円盤も、粒と同じくらいの大きさの四角を全周・内外に敷き詰めて作っている。
+ * その上にザラつきの粒をまぶすことで、土星の環のような質感を出している。
  *
  * 【構成】
  *  黒い球   … 光を通さない不透明の球。背景より暗くなり、穴が空いているように見える。
  *  星       … 球の表面すれすれに散らした細かい光。エンドの星空のような見え方。
- *  円盤     … 浅く傾けた輪。細かい粒の集まりで、内外に濃淡の帯がある。
+ *  円盤     … 浅く傾けた輪。つながった面に、ザラつきの粒をまぶしてある。
  *  黒い粒   … 円盤の面に沿って外から球へ流れ込む砂粒。
  *  光の粒   … 全方向(360度)から球へ集まってくる光。ためが進むほど増えて速くなる。
  *  はじける … 集めた光が一気に外へばらまかれ、減速しながら粉雪のように落ちて消える。
  */
 public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
-    /** 粒1つぶんの絵。中心が白く外へ向かって消える丸 */
+    /**
+     * 粒1つぶんの絵。
+     *
+     * 【専用のものを用意した理由】
+     * ビームで使っている絵はぼかしを色(RGB)側に持たせてあり、加算合成でしか正しく出ない。
+     * 通常の半透明で貼ると、ぼけた部分が「黒」としてそのまま出るため四角い板に見えてしまう。
+     * こちらはぼかしをアルファに持たせてあるので、半透明で貼っても丸い粒になる。
+     * さらに中心の数ピクセルだけ完全な不透明にしてあり、
+     * 球や円盤の「面」はその一点だけを貼って塗りつぶしとして使っている。
+     */
     private static final ResourceLocation TEX =
-            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
+            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/spark.png");
+
+    /** 面を塗りつぶすときに使う、絵の中心(完全な不透明)のUV */
+    private static final float FILL_U0 = 0.48F, FILL_U1 = 0.52F;
 
     /** 円盤の傾き。土星のように地面に近い浅い角度にする */
     private static final float RING_TILT = (float) Math.toRadians(14.0);
@@ -52,10 +65,27 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private static final int SPHERE_LON = 30;
     private static final int SPHERE_LAT = 16;
 
-    /** 円盤の粒の数と、内側/外側の半径(球の半径に対する倍率) */
-    private static final int RING_GRAINS = 3000;
+    /** 円盤の内側/外側の半径(球の半径に対する倍率) */
     private static final float RING_INNER = 1.6F;
     private static final float RING_OUTER = 3.4F;
+    /** 円盤の面の分割数。細かい四角を敷き詰めて1枚の円盤にする */
+    private static final int RING_SEGMENTS = 96;
+    private static final int RING_BANDS = 18;
+    /** 面の上にまぶすザラつきの粒 */
+    private static final int RING_GRAINS = 1600;
+
+    /**
+     * 光の粒の色。
+     * 1色だと寂しいので、白を基準にしつつ金・水色・紫・桃・緑を混ぜている。
+     */
+    private static final float[][] LIGHT_COLORS = {
+            { 1.00F, 0.97F, 0.90F }, // 白
+            { 1.00F, 0.82F, 0.35F }, // 金
+            { 0.55F, 0.88F, 1.00F }, // 水色
+            { 0.78F, 0.60F, 1.00F }, // 紫
+            { 1.00F, 0.58F, 0.72F }, // 桃
+            { 0.60F, 1.00F, 0.78F }  // 緑
+    };
 
     private static final int DUST = 200;    // 円盤沿いに流れ込む黒い粒
     private static final int LIGHTS = 420;  // 全方向から集まる光
@@ -83,6 +113,7 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private static final float[] LIGHT_SPEED = new float[LIGHTS];
     private static final float[] LIGHT_START = new float[LIGHTS];
     private static final float[] LIGHT_SIZE = new float[LIGHTS];
+    private static final int[] LIGHT_COLOR = new int[LIGHTS];
 
     // --- 表面の星 ---
     private static final float[] STAR_YAW = new float[STARS];
@@ -96,6 +127,7 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private static final float[] BANG_DIST = new float[BANG];
     private static final float[] BANG_SIZE = new float[BANG];
     private static final float[] BANG_FALL = new float[BANG];
+    private static final int[] BANG_COLOR = new int[BANG];
 
     static {
         Random rng = new Random(20260819L);
@@ -123,6 +155,8 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             LIGHT_SPEED[i] = 0.7F + rng.nextFloat() * 0.7F;
             LIGHT_START[i] = 3.6F + rng.nextFloat() * 3.4F;
             LIGHT_SIZE[i] = 0.16F + rng.nextFloat() * 0.24F;
+            // 白を多めにしつつ、他の色も混ぜて鮮やかにする
+            LIGHT_COLOR[i] = rng.nextFloat() < 0.35F ? 0 : rng.nextInt(LIGHT_COLORS.length);
         }
         for (int i = 0; i < STARS; i++) {
             STAR_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
@@ -137,6 +171,7 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             BANG_DIST[i] = 0.25F + rng.nextFloat() * rng.nextFloat() * 1.35F;
             BANG_SIZE[i] = 0.12F + rng.nextFloat() * 0.30F;
             BANG_FALL[i] = 0.5F + rng.nextFloat() * 1.2F;
+            BANG_COLOR[i] = rng.nextFloat() < 0.30F ? 0 : rng.nextInt(LIGHT_COLORS.length);
         }
     }
 
@@ -168,6 +203,7 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
         if (!banging) {
             drawBlackSphere(p, vc, radius);
+            drawRingDisc(p, vc, radius, time);
             drawRingGrains(p, vc, radius, time, right, up);
             drawDust(p, vc, radius, charge, time, right, up);
             drawStars(p, vc, radius, charge, time, right, up);
@@ -203,26 +239,85 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
                 // 真っ黒。粒用の絵の中心(不透明な部分)だけを使う
                 VfxRenderUtil.quadLit(pose, vc, 0.015F, 0.015F, 0.025F, 1.0F,
                         VfxRenderUtil.FULL_BRIGHT,
-                        x00, y0, z00, 0.45F, 0.45F,
-                        x10, y0, z10, 0.55F, 0.45F,
-                        x11, y1, z11, 0.55F, 0.55F,
-                        x01, y1, z01, 0.45F, 0.55F);
+                        x00, y0, z00, FILL_U0, FILL_U0,
+                        x10, y0, z10, FILL_U1, FILL_U0,
+                        x11, y1, z11, FILL_U1, FILL_U1,
+                        x01, y1, z01, FILL_U0, FILL_U1);
             }
         }
     }
 
     /**
-     * 土星の環のような円盤。細かい粒の集まりで作る。
+     * 土星の環のような円盤。ちゃんと1枚の面としてつながった輪にする。
      *
-     * 半径によって明るさに濃淡を付け、暗い帯(カッシーニの間隙のようなもの)も入れている。
-     * 粒の集まりなので、近くで見るとザラついた質感になる。
+     * 細かい四角を全周・内外に敷き詰めて作っている。
+     * 大きな面を数枚で済ませると描き漏らしが起きたため、
+     * 確実に出せている粒と同じくらいの大きさの面を並べる形にした。
+     * 濃淡の帯(カッシーニの間隙のようなもの)は面の不透明度で表している。
+     */
+    private static void drawRingDisc(PoseStack.Pose pose, VertexConsumer vc, float radius,
+                                     float time) {
+        float inner = radius * RING_INNER;
+        float outer = radius * RING_OUTER;
+        float spin = time * 0.004F;
+        float sinT = Mth.sin(RING_TILT), cosT = Mth.cos(RING_TILT);
+
+        for (int b = 0; b < RING_BANDS; b++) {
+            float t0 = (float) b / RING_BANDS;
+            float t1 = (float) (b + 1) / RING_BANDS;
+            float d0 = Mth.lerp(t0, inner, outer);
+            float d1 = Mth.lerp(t1, inner, outer);
+
+            float alpha = ringAlpha((t0 + t1) * 0.5F);
+            if (alpha <= 0.12F) continue; // 薄すぎる帯は捨てられるので最初から出さない
+
+            for (int s = 0; s < RING_SEGMENTS; s++) {
+                float a0 = (float) (Math.PI * 2.0 * s / RING_SEGMENTS) + spin;
+                float a1 = (float) (Math.PI * 2.0 * (s + 1) / RING_SEGMENTS) + spin;
+
+                float c0 = Mth.cos(a0), n0 = Mth.sin(a0);
+                float c1 = Mth.cos(a1), n1 = Mth.sin(a1);
+
+                // 傾きは行列ではなく座標へ直接掛ける(Z軸まわり)
+                float x00 = c0 * d0 * cosT, y00 = c0 * d0 * sinT, z00 = n0 * d0;
+                float x10 = c1 * d0 * cosT, y10 = c1 * d0 * sinT, z10 = n1 * d0;
+                float x01 = c0 * d1 * cosT, y01 = c0 * d1 * sinT, z01 = n0 * d1;
+                float x11 = c1 * d1 * cosT, y11 = c1 * d1 * sinT, z11 = n1 * d1;
+
+                // 表と裏。円盤は薄いので、両側から見えないと消えたように見える
+                VfxRenderUtil.quadLit(pose, vc, 0.96F, 0.92F, 0.74F, alpha,
+                        VfxRenderUtil.FULL_BRIGHT,
+                        x00, y00, z00, FILL_U0, FILL_U0,
+                        x10, y10, z10, FILL_U1, FILL_U0,
+                        x11, y11, z11, FILL_U1, FILL_U1,
+                        x01, y01, z01, FILL_U0, FILL_U1);
+                VfxRenderUtil.quadLit(pose, vc, 0.96F, 0.92F, 0.74F, alpha,
+                        VfxRenderUtil.FULL_BRIGHT,
+                        x01, y01, z01, FILL_U0, FILL_U1,
+                        x11, y11, z11, FILL_U1, FILL_U1,
+                        x10, y10, z10, FILL_U1, FILL_U0,
+                        x00, y00, z00, FILL_U0, FILL_U0);
+            }
+        }
+    }
+
+    /** 円盤の濃淡。同心の縞と数本の暗い隙間、内外の縁の薄まりを合わせたもの */
+    private static float ringAlpha(float t) {
+        float band = 0.62F + 0.38F * Mth.sin(t * 26.0F);
+        float gap = Mth.abs(Mth.sin(t * 7.3F + 1.2F)) < 0.10F ? 0.30F : 1.0F;
+        float edge = Mth.sin((float) Math.PI * Mth.clamp(t, 0.0F, 1.0F));
+        return band * gap * (0.30F + 0.70F * edge);
+    }
+
+    /**
+     * 円盤の上にまぶすザラつきの粒。
+     * 面だけだとのっぺりするので、土星の環らしい粒立ちを足している。
      */
     private static void drawRingGrains(PoseStack.Pose pose, VertexConsumer vc, float radius,
                                        float time, Vector3f right, Vector3f up) {
         float inner = radius * RING_INNER;
         float outer = radius * RING_OUTER;
         float spin = time * 0.004F;
-
         float sinT = Mth.sin(RING_TILT), cosT = Mth.cos(RING_TILT);
 
         for (int i = 0; i < RING_GRAINS; i++) {
@@ -230,24 +325,17 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             float dist = Mth.lerp(t, inner, outer);
             float ang = RING_A[i] + spin;
 
-            // 濃淡の帯。同心の縞と、数本の暗い隙間で土星らしくする
-            float band = 0.55F + 0.45F * Mth.sin(t * 26.0F);
-            float gap = Mth.abs(Mth.sin(t * 7.3F + 1.2F)) < 0.10F ? 0.25F : 1.0F;
-            // 内外の縁はなめらかに薄くする
-            float edge = Mth.sin((float) Math.PI * Mth.clamp(t, 0.0F, 1.0F));
-            float alpha = RING_BRIGHT[i] * band * gap * (0.35F + 0.65F * edge);
+            float alpha = RING_BRIGHT[i] * ringAlpha(t) * 0.8F;
 
-            // 円盤の面(傾き込み)での位置。回転は行列ではなく座標で直接付ける
             float fx = Mth.cos(ang) * dist;
             float fz = Mth.sin(ang) * dist;
             float fy = RING_Y[i] * radius;
 
-            // 傾きをZ軸まわりに掛ける
             float x = fx * cosT - fy * sinT;
             float y = fx * sinT + fy * cosT;
 
             spark(pose, vc, x, y, fz, RING_SIZE[i] * radius, right, up,
-                    0.96F, 0.92F, 0.74F, alpha);
+                    1.0F, 0.96F, 0.80F, alpha);
         }
     }
 
@@ -333,8 +421,9 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
             // 現れるところと吸い込まれるところで急に出入りしないようにする
             float alpha = Mth.clamp(t * 6.0F, 0.0F, 1.0F) * Mth.clamp((1.0F - t) * 8.0F, 0.0F, 1.0F);
+            float[] col = LIGHT_COLORS[LIGHT_COLOR[i]];
             spark(pose, vc, x, y, z, LIGHT_SIZE[i] * radius, right, up,
-                    1.0F, 0.95F, 0.82F, alpha);
+                    col[0], col[1], col[2], alpha);
         }
     }
 
@@ -374,8 +463,9 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             float twinkle = 0.6F + 0.4F * Mth.sin(time * 0.7F + i);
             float alpha = (1.0F - bang) * (1.0F - bang) * twinkle;
 
+            float[] col = LIGHT_COLORS[BANG_COLOR[i]];
             spark(pose, vc, x, y, z, BANG_SIZE[i] * radius, right, up,
-                    1.0F, 0.94F, 0.80F, alpha);
+                    col[0], col[1], col[2], alpha);
         }
     }
 
