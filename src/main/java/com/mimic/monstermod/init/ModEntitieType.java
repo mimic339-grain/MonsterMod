@@ -64,6 +64,17 @@ public class ModEntitieType {
                             .build(new ResourceLocation(MonsterMod.MOD_ID, "beam").toString())
             );
 
+    // 竜巻(見た目専用)。その場から動かないので更新頻度は低くてよい
+    public static final RegistryObject<EntityType<VortexEntity>> VORTEX =
+            ENTITY_TYPES.register("vortex",
+                    () -> EntityType.Builder.<VortexEntity>of(VortexEntity::new, MobCategory.MISC)
+                            .sized(1.0f, 1.0f)
+                            .clientTrackingRange(12)
+                            .updateInterval(20)
+                            .fireImmune()
+                            .build(new ResourceLocation(MonsterMod.MOD_ID, "vortex").toString())
+            );
+
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
     }

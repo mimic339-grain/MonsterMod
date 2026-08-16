@@ -4,6 +4,7 @@ import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.item.BeamWandItem;
 import com.mimic.monstermod.item.DialogueEditorItem;
 import com.mimic.monstermod.item.NpcToolItem;
+import com.mimic.monstermod.item.VortexWandItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -28,6 +29,10 @@ public class ModItems {
     // ビーム確認用の杖(見た目と当たり判定のテスト用)
     public static final RegistryObject<Item> BEAM_WAND =
             ITEMS.register("beam_wand", BeamWandItem::new);
+
+    // 竜巻確認用の杖
+    public static final RegistryObject<Item> VORTEX_WAND =
+            ITEMS.register("vortex_wand", VortexWandItem::new);
 
 
     // 登録処理

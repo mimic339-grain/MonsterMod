@@ -5,17 +5,13 @@ import com.mimic.monstermod.entity.obj.BeamEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 
 /**
  * ビームの描画。
@@ -50,7 +46,6 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static final int SIDES = 12;
     /** テクスチャ1枚がビーム何ブロックぶんに相当するか(小さいほど筋が細かく流れる) */
     private static final float TEX_BLOCKS = 4.0F;
-    private static final int FULL_BRIGHT = LightTexture.pack(15, 15);
 
     public BeamRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -82,8 +77,8 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
 
         // アニメーションの位相はワールド時間を基準にする(全プレイヤーで揃うため)
         float time = (float) (entity.level().getGameTime() % 24000L) + partialTick;
-        // 明滅。生きた炎のように少しだけ太さを揺らす
-        float pulse = 1.0F + 0.08F * Mth.sin(time * 0.9F);
+        // 太さの揺らぎ。目立つと安っぽくなるのでごくわずかに留める
+        float pulse = 1.0F + 0.015F * Mth.sin(time * 0.9F);
 
         float radius = entity.getRadius() * fade * pulse;
 
@@ -100,9 +95,9 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         drawCylinder(pose, vc, length, radius * 2.0F, radius * 2.6F,
                 baseR, baseG * 0.45F, baseB * 0.15F, 0.30F * fade, time * 0.20F);
         drawCylinder(pose, vc, length, radius * 1.15F, radius * 1.5F,
-                baseR, baseG, baseB, 0.55F * fade, time * 0.45F);
+                baseR, baseG, baseB, 0.80F * fade, time * 0.45F);
         drawCylinder(pose, vc, length, radius * 0.45F, radius * 0.6F,
-                1.0F, 0.98F, 0.86F, 0.95F * fade, time * 0.85F);
+                1.0F, 0.98F, 0.86F, 1.00F * fade, time * 0.85F);
 
         pose.popPose();
 
@@ -113,7 +108,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
                 1.0F, 0.85F, 0.55F, 0.85F * fade);
 
         Vec3 hitPos = origin.add(dir.scale(length)).subtract(entityPos);
-        drawBillboard(pose, glow, hitPos, radius * 4.0F * (1.0F + 0.15F * Mth.sin(time * 1.7F)),
+        drawBillboard(pose, glow, hitPos, radius * 4.0F * (1.0F + 0.03F * Mth.sin(time * 1.7F)),
                 baseR, baseG, baseB, 0.7F * fade);
     }
 
@@ -125,8 +120,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static void drawCylinder(PoseStack pose, VertexConsumer vc, float length,
                                      float startRadius, float endRadius,
                                      float r, float g, float b, float a, float vScroll) {
-        Matrix4f m = pose.last().pose();
-        Matrix3f n = pose.last().normal();
+        PoseStack.Pose last = pose.last();
 
         float v0 = -vScroll;
         float v1 = v0 + length / TEX_BLOCKS;
@@ -147,18 +141,11 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
             float x01 = c0 * endRadius,   y01 = s0 * endRadius;
             float x11 = c1 * endRadius,   y11 = s1 * endRadius;
 
-            // 表向き
-            quad(m, n, vc, r, g, b, a,
+            VfxRenderUtil.quadBothSides(last, vc, r, g, b, a,
                     x00, y00, 0, u0, v0,
                     x10, y10, 0, u1, v0,
                     x11, y11, length, u1, v1,
                     x01, y01, length, u0, v1);
-            // 裏向き(この描画設定は裏面を捨てるため、逆順でもう1枚出す)
-            quad(m, n, vc, r, g, b, a,
-                    x01, y01, length, u0, v1,
-                    x11, y11, length, u1, v1,
-                    x10, y10, 0, u1, v0,
-                    x00, y00, 0, u0, v0);
         }
     }
 
@@ -169,42 +156,14 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         pose.translate(offset.x, offset.y, offset.z);
         pose.mulPose(this.entityRenderDispatcher.cameraOrientation());
 
-        Matrix4f m = pose.last().pose();
-        Matrix3f n = pose.last().normal();
         float h = size * 0.5F;
-
-        quad(m, n, vc, r, g, b, a,
+        VfxRenderUtil.quad(pose.last(), vc, r, g, b, a,
                 -h, -h, 0, 0, 0,
                  h, -h, 0, 1, 0,
                  h,  h, 0, 1, 1,
                 -h,  h, 0, 0, 1);
 
         pose.popPose();
-    }
-
-    /** 頂点フォーマット NEW_ENTITY に合わせて四角を1枚流し込む */
-    private static void quad(Matrix4f m, Matrix3f n, VertexConsumer vc,
-                             float r, float g, float b, float a,
-                             float x1, float y1, float z1, float u1, float v1,
-                             float x2, float y2, float z2, float u2, float v2,
-                             float x3, float y3, float z3, float u3, float v3,
-                             float x4, float y4, float z4, float u4, float v4) {
-        vertex(m, n, vc, r, g, b, a, x1, y1, z1, u1, v1);
-        vertex(m, n, vc, r, g, b, a, x2, y2, z2, u2, v2);
-        vertex(m, n, vc, r, g, b, a, x3, y3, z3, u3, v3);
-        vertex(m, n, vc, r, g, b, a, x4, y4, z4, u4, v4);
-    }
-
-    private static void vertex(Matrix4f m, Matrix3f n, VertexConsumer vc,
-                               float r, float g, float b, float a,
-                               float x, float y, float z, float u, float v) {
-        vc.vertex(m, x, y, z)
-                .color(r, g, b, a)
-                .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(FULL_BRIGHT)
-                .normal(n, 0.0F, 0.0F, 1.0F)
-                .endVertex();
     }
 
     @Override

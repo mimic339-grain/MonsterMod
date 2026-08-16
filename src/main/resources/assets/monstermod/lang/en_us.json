@@ -5,5 +5,7 @@
   "item.monstermod.dialogue_editor": "Dialogue Editor",
   "item.monstermod.npc_tool": "NPC Tool",
   "item.monstermod.beam_wand": "Beam Wand",
-  "entity.monstermod.beam": "Beam"
+  "item.monstermod.vortex_wand": "Vortex Wand",
+  "entity.monstermod.beam": "Beam",
+  "entity.monstermod.vortex": "Vortex"
 }

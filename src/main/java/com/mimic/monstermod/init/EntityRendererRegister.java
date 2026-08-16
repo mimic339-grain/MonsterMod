@@ -4,6 +4,7 @@ import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.render.BeamRenderer;
 import com.mimic.monstermod.entity.render.OnibiRenderer;
 import com.mimic.monstermod.entity.render.TornadoRenderer;
+import com.mimic.monstermod.entity.render.VortexRenderer;
 import com.mimic.monstermod.geo.renderer.MimicRenderer;
 import com.mimic.monstermod.geo.renderer.YatagarasuRenderer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -21,6 +22,7 @@ public class EntityRendererRegister {
         event.registerEntityRenderer(ModEntitieType.SPIRALONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.TORNADO.get(), TornadoRenderer::new);
         event.registerEntityRenderer(ModEntitieType.BEAM.get(), BeamRenderer::new);
+        event.registerEntityRenderer(ModEntitieType.VORTEX.get(), VortexRenderer::new);
         //event.registerEntityRenderer(ModEntitieType.BIGTORNADO.get(), TornadoRenderer::new);
 
         // 今後、他のモンスター（PRO_HERO等）が増えたらここに追加していけばOK！

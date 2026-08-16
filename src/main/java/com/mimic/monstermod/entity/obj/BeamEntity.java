@@ -100,6 +100,26 @@ public class BeamEntity extends Entity {
         this.setPos(muzzleOf(shooter, 1.0F));
     }
 
+    /**
+     * 射手に追従しない、その場に固定されたビームとして置く。
+     * 撃っている様子を自分で歩き回って好きな角度から見たいとき用。
+     * 射手がいないので、向きは同期した yaw/pitch から決まる。
+     */
+    public void placeStatic(Vec3 pos, float yaw, float pitch, float maxLength, float radius,
+                            float damage, int damageInterval, int life) {
+        this.owner = null;
+        this.maxLength = maxLength;
+        this.damage = damage;
+        this.damageInterval = damageInterval;
+
+        this.entityData.set(DATA_OWNER, -1);
+        this.entityData.set(DATA_LIFE, life);
+        this.entityData.set(DATA_RADIUS, radius);
+        this.entityData.set(DATA_LENGTH, maxLength);
+        syncRotationFrom(yaw, pitch);
+        this.setPos(pos);
+    }
+
     public void setColor(int rgb) { this.entityData.set(DATA_COLOR, rgb); }
     public void setLife(int ticks) { this.entityData.set(DATA_LIFE, ticks); }
 
