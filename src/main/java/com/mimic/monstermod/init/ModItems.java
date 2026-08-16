@@ -1,6 +1,7 @@
 package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.item.BeamWandItem;
 import com.mimic.monstermod.item.DialogueEditorItem;
 import com.mimic.monstermod.item.NpcToolItem;
 import net.minecraft.world.item.Item;
@@ -23,6 +24,10 @@ public class ModItems {
     // NPC作成ツール(任意のMobをNPC化・設置する)
     public static final RegistryObject<Item> NPC_TOOL =
             ITEMS.register("npc_tool", NpcToolItem::new);
+
+    // ビーム確認用の杖(見た目と当たり判定のテスト用)
+    public static final RegistryObject<Item> BEAM_WAND =
+            ITEMS.register("beam_wand", BeamWandItem::new);
 
 
     // 登録処理

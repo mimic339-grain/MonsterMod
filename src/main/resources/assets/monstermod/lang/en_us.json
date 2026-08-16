@@ -3,5 +3,7 @@
   "mod.monstermod.title": "MonsterMod",
   "key.monstermod.transform": "Transform",
   "item.monstermod.dialogue_editor": "Dialogue Editor",
-  "item.monstermod.npc_tool": "NPC Tool"
+  "item.monstermod.npc_tool": "NPC Tool",
+  "item.monstermod.beam_wand": "Beam Wand",
+  "entity.monstermod.beam": "Beam"
 }

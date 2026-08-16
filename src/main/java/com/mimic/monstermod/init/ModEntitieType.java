@@ -52,6 +52,18 @@ public class ModEntitieType {
             );
     public static final RegistryObject<EntityType<TornadoEntity>> TORNADO = ENTITY_TYPES.register("tornado", () -> EntityType.Builder.<TornadoEntity>of(TornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("tornado"));
     public static final RegistryObject<EntityType<BigTornadoEntity>> BIGTORNADO = ENTITY_TYPES.register("bigtornado", () -> EntityType.Builder.<BigTornadoEntity>of(BigTornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("bigtornado"));
+
+    // ビーム。射手に追従して毎tick向きが変わるので updateInterval は1(遅らせると見た目がカクつく)
+    public static final RegistryObject<EntityType<BeamEntity>> BEAM =
+            ENTITY_TYPES.register("beam",
+                    () -> EntityType.Builder.<BeamEntity>of(BeamEntity::new, MobCategory.MISC)
+                            .sized(0.2f, 0.2f)
+                            .clientTrackingRange(16)   // 単位はチャンク。長いビームでも見切れないように
+                            .updateInterval(1)
+                            .fireImmune()
+                            .build(new ResourceLocation(MonsterMod.MOD_ID, "beam").toString())
+            );
+
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
     }

@@ -1,0 +1,214 @@
+package com.mimic.monstermod.entity.render;
+
+import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.entity.obj.BeamEntity;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+
+/**
+ * ビームの描画。
+ *
+ * 【作り方の考え方】
+ * 太さの違う円柱を3本重ねて描く。中心ほど白く細く、外側ほど橙色で薄い。
+ * これだけで「中心が焼き付くように明るく、まわりに炎のような光がまとわりつく」
+ * 見た目になる(参考画像と同じ構造)。1本だとどうしてものっぺりする。
+ *
+ * 【UVスクロール】
+ * 円柱のUVは 横(U)=円周方向 / 縦(V)=進行方向 で貼っている。
+ * 毎フレーム V をずらして頂点を作り直すことで、
+ * テクスチャの縦筋がビームに沿って流れていくように見える。
+ * 層ごとに流れる速さを変えているので、単調な繰り返しに見えない。
+ *
+ * 【RenderType.eyes を使う理由】
+ * エンダーマンの目などに使われている描画設定で、
+ *   ・加算合成(暗い部分は何も描かれない = 光っているように見える)
+ *   ・明るさ計算を無視して常に最大の明るさ(夜でも光る)
+ *   ・深度バッファに書き込まない(重ねても互いに欠けない)
+ * とビームに欲しい性質が全部そろっている。自前のRenderTypeを作る必要がない。
+ * ただし裏面が消える設定なので、面は表裏どちらの向きでも1回ずつ描いている。
+ */
+public class BeamRenderer extends EntityRenderer<BeamEntity> {
+
+    private static final ResourceLocation BEAM_TEX =
+            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam.png");
+    private static final ResourceLocation GLOW_TEX =
+            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
+
+    /** 円柱の分割数。増やすほど丸くなるが重くなる。8〜16で十分きれいに見える */
+    private static final int SIDES = 12;
+    /** テクスチャ1枚がビーム何ブロックぶんに相当するか(小さいほど筋が細かく流れる) */
+    private static final float TEX_BLOCKS = 4.0F;
+    private static final int FULL_BRIGHT = LightTexture.pack(15, 15);
+
+    public BeamRenderer(EntityRendererProvider.Context context) {
+        super(context);
+    }
+
+    @Override
+    public void render(BeamEntity entity, float entityYaw, float partialTick,
+                       PoseStack pose, MultiBufferSource buffer, int packedLight) {
+
+        float fade = entity.getFade(partialTick);
+        if (fade <= 0.0F) return;
+
+        float length = entity.getLength();
+        if (length <= 0.05F) return;
+
+        Vec3 origin = entity.getBeamOrigin(partialTick);
+        Vec3 dir = entity.getBeamDirection(partialTick).normalize();
+
+        // PoseStack はエンティティの補間座標にいるので、そこから銃口までずらす
+        Vec3 entityPos = new Vec3(
+                Mth.lerp(partialTick, entity.xo, entity.getX()),
+                Mth.lerp(partialTick, entity.yo, entity.getY()),
+                Mth.lerp(partialTick, entity.zo, entity.getZ()));
+
+        int rgb = entity.getColor();
+        float baseR = ((rgb >> 16) & 0xFF) / 255.0F;
+        float baseG = ((rgb >> 8) & 0xFF) / 255.0F;
+        float baseB = (rgb & 0xFF) / 255.0F;
+
+        // アニメーションの位相はワールド時間を基準にする(全プレイヤーで揃うため)
+        float time = (float) (entity.level().getGameTime() % 24000L) + partialTick;
+        // 明滅。生きた炎のように少しだけ太さを揺らす
+        float pulse = 1.0F + 0.08F * Mth.sin(time * 0.9F);
+
+        float radius = entity.getRadius() * fade * pulse;
+
+        pose.pushPose();
+        pose.translate(origin.x - entityPos.x, origin.y - entityPos.y, origin.z - entityPos.z);
+
+        // ローカルの +Z 軸がビームの向きになるように回す
+        pose.mulPose(Axis.YP.rotation((float) Math.atan2(dir.x, dir.z)));
+        pose.mulPose(Axis.XP.rotation((float) -Math.asin(Mth.clamp(dir.y, -1.0, 1.0))));
+
+        VertexConsumer vc = buffer.getBuffer(RenderType.eyes(BEAM_TEX));
+
+        // 外側の光 → 中間 → 芯 の順に重ねる
+        drawCylinder(pose, vc, length, radius * 2.0F, radius * 2.6F,
+                baseR, baseG * 0.45F, baseB * 0.15F, 0.30F * fade, time * 0.20F);
+        drawCylinder(pose, vc, length, radius * 1.15F, radius * 1.5F,
+                baseR, baseG, baseB, 0.55F * fade, time * 0.45F);
+        drawCylinder(pose, vc, length, radius * 0.45F, radius * 0.6F,
+                1.0F, 0.98F, 0.86F, 0.95F * fade, time * 0.85F);
+
+        pose.popPose();
+
+        // 銃口と着弾点の丸い光はカメラの方を向かせる(円柱の回転の外で描く)
+        VertexConsumer glow = buffer.getBuffer(RenderType.eyes(GLOW_TEX));
+        float muzzleSize = radius * 6.0F;
+        drawBillboard(pose, glow, origin.subtract(entityPos), muzzleSize,
+                1.0F, 0.85F, 0.55F, 0.85F * fade);
+
+        Vec3 hitPos = origin.add(dir.scale(length)).subtract(entityPos);
+        drawBillboard(pose, glow, hitPos, radius * 4.0F * (1.0F + 0.15F * Mth.sin(time * 1.7F)),
+                baseR, baseG, baseB, 0.7F * fade);
+    }
+
+    /**
+     * ローカル +Z 方向に伸びる円柱を1本描く。
+     * startRadius→endRadius で先に向かって少しずつ太くしている(参考画像と同じく広がる形)。
+     * vScroll ぶんUVを縦にずらすことで、筋が流れて見える。
+     */
+    private static void drawCylinder(PoseStack pose, VertexConsumer vc, float length,
+                                     float startRadius, float endRadius,
+                                     float r, float g, float b, float a, float vScroll) {
+        Matrix4f m = pose.last().pose();
+        Matrix3f n = pose.last().normal();
+
+        float v0 = -vScroll;
+        float v1 = v0 + length / TEX_BLOCKS;
+
+        for (int i = 0; i < SIDES; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / SIDES);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / SIDES);
+
+            float c0 = Mth.cos(a0), s0 = Mth.sin(a0);
+            float c1 = Mth.cos(a1), s1 = Mth.sin(a1);
+
+            float u0 = (float) i / SIDES;
+            float u1 = (float) (i + 1) / SIDES;
+
+            // 手前(z=0)は startRadius、先(z=length)は endRadius
+            float x00 = c0 * startRadius, y00 = s0 * startRadius;
+            float x10 = c1 * startRadius, y10 = s1 * startRadius;
+            float x01 = c0 * endRadius,   y01 = s0 * endRadius;
+            float x11 = c1 * endRadius,   y11 = s1 * endRadius;
+
+            // 表向き
+            quad(m, n, vc, r, g, b, a,
+                    x00, y00, 0, u0, v0,
+                    x10, y10, 0, u1, v0,
+                    x11, y11, length, u1, v1,
+                    x01, y01, length, u0, v1);
+            // 裏向き(この描画設定は裏面を捨てるため、逆順でもう1枚出す)
+            quad(m, n, vc, r, g, b, a,
+                    x01, y01, length, u0, v1,
+                    x11, y11, length, u1, v1,
+                    x10, y10, 0, u1, v0,
+                    x00, y00, 0, u0, v0);
+        }
+    }
+
+    /** カメラの方を向く四角い光。銃口の閃光と着弾点に使う */
+    private void drawBillboard(PoseStack pose, VertexConsumer vc, Vec3 offset, float size,
+                               float r, float g, float b, float a) {
+        pose.pushPose();
+        pose.translate(offset.x, offset.y, offset.z);
+        pose.mulPose(this.entityRenderDispatcher.cameraOrientation());
+
+        Matrix4f m = pose.last().pose();
+        Matrix3f n = pose.last().normal();
+        float h = size * 0.5F;
+
+        quad(m, n, vc, r, g, b, a,
+                -h, -h, 0, 0, 0,
+                 h, -h, 0, 1, 0,
+                 h,  h, 0, 1, 1,
+                -h,  h, 0, 0, 1);
+
+        pose.popPose();
+    }
+
+    /** 頂点フォーマット NEW_ENTITY に合わせて四角を1枚流し込む */
+    private static void quad(Matrix4f m, Matrix3f n, VertexConsumer vc,
+                             float r, float g, float b, float a,
+                             float x1, float y1, float z1, float u1, float v1,
+                             float x2, float y2, float z2, float u2, float v2,
+                             float x3, float y3, float z3, float u3, float v3,
+                             float x4, float y4, float z4, float u4, float v4) {
+        vertex(m, n, vc, r, g, b, a, x1, y1, z1, u1, v1);
+        vertex(m, n, vc, r, g, b, a, x2, y2, z2, u2, v2);
+        vertex(m, n, vc, r, g, b, a, x3, y3, z3, u3, v3);
+        vertex(m, n, vc, r, g, b, a, x4, y4, z4, u4, v4);
+    }
+
+    private static void vertex(Matrix4f m, Matrix3f n, VertexConsumer vc,
+                               float r, float g, float b, float a,
+                               float x, float y, float z, float u, float v) {
+        vc.vertex(m, x, y, z)
+                .color(r, g, b, a)
+                .uv(u, v)
+                .overlayCoords(OverlayTexture.NO_OVERLAY)
+                .uv2(FULL_BRIGHT)
+                .normal(n, 0.0F, 0.0F, 1.0F)
+                .endVertex();
+    }
+
+    @Override
+    public ResourceLocation getTextureLocation(BeamEntity entity) {
+        return BEAM_TEX;
+    }
+}

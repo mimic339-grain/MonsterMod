@@ -32,6 +32,7 @@ public class ModCreativeTabs {
                                 .displayItems((params, output) -> {
                                     output.accept(ModItems.DIALOGUE_EDITOR.get());
                                     output.accept(ModItems.NPC_TOOL.get());
+                                    output.accept(ModItems.BEAM_WAND.get());
                                 })
                                 .build()
                 )
