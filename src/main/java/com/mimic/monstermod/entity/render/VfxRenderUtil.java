@@ -35,12 +35,28 @@ public final class VfxRenderUtil {
                             float x2, float y2, float z2, float u2, float v2,
                             float x3, float y3, float z3, float u3, float v3,
                             float x4, float y4, float z4, float u4, float v4) {
+        quadLit(pose, vc, r, g, b, a, FULL_BRIGHT,
+                x1, y1, z1, u1, v1, x2, y2, z2, u2, v2,
+                x3, y3, z3, u3, v3, x4, y4, z4, u4, v4);
+    }
+
+    /**
+     * 明るさを指定して四角を1枚。
+     * 加算合成の描画設定は明るさを見ないが、通常の半透明(entityNoOutline など)は
+     * 周囲の明るさの影響を受けるので、その場合はエンティティ位置の明るさを渡す。
+     */
+    public static void quadLit(PoseStack.Pose pose, VertexConsumer vc,
+                               float r, float g, float b, float a, int light,
+                               float x1, float y1, float z1, float u1, float v1,
+                               float x2, float y2, float z2, float u2, float v2,
+                               float x3, float y3, float z3, float u3, float v3,
+                               float x4, float y4, float z4, float u4, float v4) {
         Matrix4f m = pose.pose();
         Matrix3f n = pose.normal();
-        vertex(m, n, vc, r, g, b, a, x1, y1, z1, u1, v1);
-        vertex(m, n, vc, r, g, b, a, x2, y2, z2, u2, v2);
-        vertex(m, n, vc, r, g, b, a, x3, y3, z3, u3, v3);
-        vertex(m, n, vc, r, g, b, a, x4, y4, z4, u4, v4);
+        vertex(m, n, vc, r, g, b, a, light, x1, y1, z1, u1, v1);
+        vertex(m, n, vc, r, g, b, a, light, x2, y2, z2, u2, v2);
+        vertex(m, n, vc, r, g, b, a, light, x3, y3, z3, u3, v3);
+        vertex(m, n, vc, r, g, b, a, light, x4, y4, z4, u4, v4);
     }
 
     /**
@@ -64,13 +80,13 @@ public final class VfxRenderUtil {
 
     /** 頂点フォーマット NEW_ENTITY(座標・色・UV・オーバーレイ・明るさ・法線)に合わせて1点流す */
     private static void vertex(Matrix4f m, Matrix3f n, VertexConsumer vc,
-                               float r, float g, float b, float a,
+                               float r, float g, float b, float a, int light,
                                float x, float y, float z, float u, float v) {
         vc.vertex(m, x, y, z)
                 .color(r, g, b, a)
                 .uv(u, v)
                 .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(FULL_BRIGHT)
+                .uv2(light)
                 .normal(n, 0.0F, 0.0F, 1.0F)
                 .endVertex();
     }

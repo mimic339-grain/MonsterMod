@@ -52,8 +52,8 @@ public class VortexEntity extends Entity {
 
     @Override
     protected void defineSynchedData() {
-        this.entityData.define(DATA_HEIGHT, 14.0F);
-        this.entityData.define(DATA_TOP_RADIUS, 6.5F);
+        this.entityData.define(DATA_HEIGHT, 28.0F);
+        this.entityData.define(DATA_TOP_RADIUS, 22.0F);
         this.entityData.define(DATA_BOTTOM_RADIUS, 3.0F);
         // 白のままだと加算合成で飛びやすいので、少し落ち着いた青灰色を既定にする
         this.entityData.define(DATA_COLOR, 0x9CC4DE);

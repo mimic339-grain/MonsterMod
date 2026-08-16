@@ -16,81 +16,101 @@ import java.util.Random;
 /**
  * 竜巻(渦)の描画。
  *
- * 【構造】外側が「風切りの弧」、内側が「うっすらした円錐」。
+ * 【構造】内側に「煙の柱」、外側に「風切りの弧」。
  *
  * 竜巻の形は円錐そのものを見せて作るのではなく、
- * 大きさも高さもバラバラな弧(風切り)をたくさん重ねることで
- * 「だいたいこの形」と分かる程度に象る。
- * こうすると見るたびに形が変わり、定型の円錐に見えなくなる。
- * 弧は一部が本体より外へはみ出すようにしてあり、
- * 外周に時々スラッシュが走るように見える。
+ * 大きさも高さもバラバラな弧(風切り)をたくさん重ねて
+ * 「だいたいこの形」と分かる程度に象る。こうすると定型の円錐に見えない。
+ * 弧の一部は煙の柱より外へはみ出すので、外周に時々スラッシュが走るように見える。
  *
- * 内側の円錐は「中身がある」ことを示すためだけの薄い層で、
- * 弧より内側(BODY_SCALE)に置く。多角形に見えないよう分割数は多めに取っている。
+ * 【形】下は細い柱、上へ行くほど急に広がり、頂上は皿のように開く。
+ * 半径は r = 下半径 + (上半径 - 下半径) * t^FLARE で決まる。
+ * FLARE を大きくすると下半分がほとんど広がらず、上で一気に開く
+ * (この形にしないと、ただのコップに見えてしまう)。
+ * さらに頂上付近には広がりを強調する専用の弧(皿の部分)を置いている。
  *
- * 【動き】
- *  ・弧は下から湧いて上へ昇り、上で消える(昇りながら半径も大きくなる)
- *  ・弧ごとに回る速さが違うので、全体がねじれて見える
- *  ・弧のUVを長さ方向へ流して、中を光が走るようにする
- * 位相はワールド時間基準なので全プレイヤーで同じ動きになる。
- *
- * 【明るさについて】
- * 加算合成なので、重なった枚数だけ明るさが足し算される。
- * 弧は視点によっては10枚以上重なるため、1枚あたりの濃さはかなり低くしないと
- * すぐ真っ白に飽和する(ALPHA_SLASH / ALPHA_BODY が小さいのはそのため)。
+ * 【明るさ・色】
+ * 煙の柱だけは加算合成ではなく通常の半透明({@code RenderType.entityNoOutline})で描く。
+ * 加算合成は光を足すことしかできないため背景より暗くできず、
+ * 昼間はどうしても白飛びしてしまうため。
+ * この描画設定は「半透明・裏面も描く・周囲の明るさの影響を受ける・
+ * 深度バッファに書き込まない」という条件がそろっており、
+ * 濃い灰色で背景を覆いつつ、層を重ねても描画順が崩れない。
+ * 光って見せたい風切りの弧のほうは、これまで通り加算合成で描く。
  */
 public class VortexRenderer extends EntityRenderer<VortexEntity> {
 
     private static final ResourceLocation SLASH_TEX =
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/vortex.png");
-    private static final ResourceLocation BODY_TEX =
-            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam.png");
+    private static final ResourceLocation SMOKE_TEX =
+            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/smoke.png");
 
-    /** 風切りの弧の枚数 */
-    private static final int SLASHES = 28;
+    /** 風切りの弧の枚数。うち末尾 CAP_SLASHES 枚は頂上の「皿」を作る */
+    private static final int SLASHES = 40;
+    private static final int CAP_SLASHES = 12;
     /** 弧1枚の分割数。少ないと折れ線に見える */
-    private static final int ARC_STEPS = 18;
+    private static final int ARC_STEPS = 20;
 
-    /** 内側の円錐の分割数。多角形に見えないよう多めに取る */
-    private static final int BODY_SIDES = 28;
-    private static final int BODY_RINGS = 10;
-    /** 内側の円錐は弧より内側に置く */
+    /** 煙の柱の分割数。多角形に見えないよう多めに取る */
+    private static final int BODY_SIDES = 32;
+    private static final int BODY_RINGS = 14;
+    /** 煙の柱は弧より内側に置く */
     private static final float BODY_SCALE = 0.72F;
 
-    /** 円錐のすぼまり具合。1に近いほど素直な円錐、大きいほど下がくびれる */
-    private static final float FLARE = 1.35F;
+    /**
+     * 上へ向かう広がり方。大きいほど下が細長く、頂上で一気に開く。
+     * 既存の TornadoParticle が pow(4) で竜巻らしい形になっていたので、それに近づけている。
+     */
+    private static final float FLARE = 3.6F;
 
-    // 加算合成なので1枚あたりはごく薄くする(重なって初めて濃く見える)
-    private static final float ALPHA_SLASH = 0.20F;
-    private static final float ALPHA_BODY = 0.05F;
+    /** 加算合成なので1枚あたりはごく薄くする(重なって初めて濃く見える) */
+    private static final float ALPHA_SLASH = 0.22F;
+    /** 煙の柱の濃さ。こちらは通常の半透明なので、上げるほど背景が暗く隠れる */
+    private static final float ALPHA_BODY = 0.30F;
 
     // 弧ごとのばらつき。毎フレーム同じ形になるよう固定の種から先に作っておく
     private static final float[] PHASE = new float[SLASHES];   // 開始角
     private static final float[] SPAN = new float[SLASHES];    // 弧の長さ(ラジアン)
     private static final float[] RAD = new float[SLASHES];     // 本体に対する半径の倍率
-    private static final float[] WIDTH = new float[SLASHES];   // 弧の厚み(本体半径に対する割合)
+    private static final float[] WIDTH = new float[SLASHES];   // 弧の厚み(上半径に対する割合)
     private static final float[] RISE = new float[SLASHES];    // 昇る速さ
     private static final float[] SPIN = new float[SLASHES];    // 回る速さ
-    private static final float[] Y0 = new float[SLASHES];      // 初期の高さ
+    private static final float[] Y0 = new float[SLASHES];      // 高さ(昇る弧では初期位置)
     private static final float[] TILT = new float[SLASHES];    // 弧に沿って昇る量(螺旋の強さ)
     private static final float[] BRIGHT = new float[SLASHES];
     private static final float[] FLOW = new float[SLASHES];    // UVが流れる速さ
 
+    /** 頂上の皿を作る弧かどうか。こちらは昇らず、その高さに留まって回る */
+    private static boolean isCap(int i) { return i >= SLASHES - CAP_SLASHES; }
+
     static {
-        Random rng = new Random(20260817L);
+        Random rng = new Random(20260818L);
         for (int i = 0; i < SLASHES; i++) {
             PHASE[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            SPAN[i] = 1.8F + rng.nextFloat() * 3.8F;           // 約100〜320度
-            // 1.0を超えるものが本体からはみ出して「外に走るスラッシュ」になる
-            RAD[i] = 0.82F + rng.nextFloat() * 0.55F;
-            WIDTH[i] = 0.020F + rng.nextFloat() * 0.075F;
-            RISE[i] = 0.004F + rng.nextFloat() * 0.010F;
-            SPIN[i] = 0.10F + rng.nextFloat() * 0.22F;
-            if (rng.nextBoolean()) SPIN[i] *= 0.55F;           // 遅い弧を混ぜて動きを単調にしない
-            Y0[i] = rng.nextFloat();
-            TILT[i] = 0.02F + rng.nextFloat() * 0.10F;
             BRIGHT[i] = 0.45F + rng.nextFloat() * 0.55F;
             FLOW[i] = 0.02F + rng.nextFloat() * 0.06F;
+
+            if (isCap(i)) {
+                // 皿の部分: 頂上付近で、大きく広がった、ほぼ水平の弧
+                SPAN[i] = 3.4F + rng.nextFloat() * 2.6F;       // 約195〜345度
+                RAD[i] = 0.95F + rng.nextFloat() * 0.45F;
+                WIDTH[i] = 0.012F + rng.nextFloat() * 0.030F;
+                RISE[i] = 0.0F;                                 // 昇らず頂上に留まる
+                SPIN[i] = 0.05F + rng.nextFloat() * 0.10F;      // 皿はゆっくり回す
+                Y0[i] = 0.84F + rng.nextFloat() * 0.18F;
+                TILT[i] = -0.02F + rng.nextFloat() * 0.06F;     // わずかに上下する程度
+            } else {
+                // 柱に巻き付く部分: 下から湧いて上へ昇る
+                SPAN[i] = 1.8F + rng.nextFloat() * 3.8F;        // 約100〜320度
+                // 1.0を超えるものが柱からはみ出して「外に走るスラッシュ」になる
+                RAD[i] = 0.85F + rng.nextFloat() * 0.55F;
+                WIDTH[i] = 0.010F + rng.nextFloat() * 0.045F;
+                RISE[i] = 0.004F + rng.nextFloat() * 0.010F;
+                SPIN[i] = 0.10F + rng.nextFloat() * 0.22F;
+                if (rng.nextBoolean()) SPIN[i] *= 0.55F;        // 遅い弧を混ぜて動きを単調にしない
+                Y0[i] = rng.nextFloat();
+                TILT[i] = 0.02F + rng.nextFloat() * 0.10F;
+            }
         }
     }
 
@@ -119,11 +139,11 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
 
         pose.pushPose();
 
-        // 内側のうっすらした円錐(中身があるように見せるだけの層)
-        VertexConsumer body = buffer.getBuffer(RenderType.eyes(BODY_TEX));
-        drawBody(pose, body, height, rBottom, rTop, cr, cg, cb, ALPHA_BODY * fade, time);
+        // 内側の煙の柱(半透明。背景を暗く覆う)
+        VertexConsumer body = buffer.getBuffer(RenderType.entityNoOutline(SMOKE_TEX));
+        drawBody(pose, body, height, rBottom, rTop, cr, cg, cb, ALPHA_BODY * fade, time, packedLight);
 
-        // 外側の風切り
+        // 外側の風切り(加算合成。光って見える)
         VertexConsumer slash = buffer.getBuffer(RenderType.eyes(SLASH_TEX));
         for (int i = 0; i < SLASHES; i++) {
             drawSlash(pose, slash, i, height, rBottom, rTop, cr, cg, cb, fade, time);
@@ -141,22 +161,28 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
     /**
      * 風切りの弧を1枚描く。
      *
-     * 弧は下から湧いて上へ昇り、上端で消える。
-     * 高さが上がるにつれて半径も自然に大きくなるので、
-     * 「巻き上がりながら広がっていく」動きになる。
+     * 柱に巻き付く弧は下から湧いて上へ昇り、上端で消える。
+     * 昇るにつれて半径も大きくなるので「巻き上がりながら広がる」動きになる。
+     * 皿の弧は昇らず、頂上でゆっくり回り続ける。
      */
     private static void drawSlash(PoseStack pose, VertexConsumer vc, int i,
                                   float height, float rBottom, float rTop,
                                   float cr, float cg, float cb, float fade, float time) {
 
-        // 高さは時間で循環させる。0〜1を繰り返し、下で現れて上で消える
-        float yNorm = (Y0[i] + time * RISE[i]) % 1.0F;
-        if (yNorm < 0) yNorm += 1.0F;
+        float yNorm;
+        float env;
 
-        // 現れる/消えるところで急に出ないよう、上下で薄くする
-        float env = Mth.clamp(yNorm / 0.12F, 0.0F, 1.0F)
-                * Mth.clamp((1.0F - yNorm) / 0.30F, 0.0F, 1.0F);
-        if (env <= 0.001F) return;
+        if (isCap(i)) {
+            yNorm = Y0[i];
+            env = 1.0F; // 頂上に留まるので出入りのフェードは不要
+        } else {
+            // 高さは時間で循環させる。下で現れて上で消える
+            yNorm = (Y0[i] + time * RISE[i]) % 1.0F;
+            if (yNorm < 0) yNorm += 1.0F;
+            env = Mth.clamp(yNorm / 0.12F, 0.0F, 1.0F)
+                    * Mth.clamp((1.0F - yNorm) / 0.30F, 0.0F, 1.0F);
+            if (env <= 0.001F) return;
+        }
 
         float baseAlpha = ALPHA_SLASH * BRIGHT[i] * env * fade;
         float spin = time * SPIN[i];
@@ -169,9 +195,9 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
         for (int s = 0; s <= ARC_STEPS; s++) {
             float f = (float) s / ARC_STEPS;
 
-            // 弧に沿って少しずつ高さが上がる(完全な水平の輪にしない)
+            // 弧に沿って少しずつ高さが変わる(完全な水平の輪にしない)
             float t = yNorm + TILT[i] * f;
-            float y = Mth.clamp(t, 0.0F, 1.0F) * height;
+            float y = Mth.clamp(t, 0.0F, 1.05F) * height;
             float r = radiusAt(t, rBottom, rTop) * RAD[i];
 
             float ang = PHASE[i] + spin + SPAN[i] * f;
@@ -197,16 +223,23 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
     }
 
     /**
-     * 内側のうっすらした円錐。
-     * 弧の隙間から向こう側が丸見えになるのを抑えるだけの層なので、かなり薄い。
-     * 弧より内側(BODY_SCALE)に置き、分割数を多くして多角形に見えないようにしている。
+     * 内側の煙の柱。通常の半透明で描くので、濃い灰色で背景を暗く覆える。
+     *
+     * この描画設定は裏面も描く(NO_CULL)ので、面は1回ずつ出せばよい。
+     * 表裏2回出すと不透明度が二重になり、灰色の塊に見えてしまう。
      */
     private static void drawBody(PoseStack pose, VertexConsumer vc,
                                  float height, float rBottom, float rTop,
-                                 float cr, float cg, float cb, float alpha, float time) {
+                                 float cr, float cg, float cb, float alpha,
+                                 float time, int packedLight) {
         PoseStack.Pose last = pose.last();
         float spin = time * 0.04F;
-        float vScroll = time * 0.04F;
+        float vScroll = time * 0.05F;
+
+        // 煙なので、色味はほんの少しだけ残して大きく暗くする
+        float br = 0.09F + cr * 0.20F;
+        float bg = 0.09F + cg * 0.20F;
+        float bb = 0.10F + cb * 0.22F;
 
         for (int ring = 0; ring < BODY_RINGS; ring++) {
             float t0 = (float) ring / BODY_RINGS;
@@ -216,8 +249,9 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
             float r1 = radiusAt(t1, rBottom, rTop) * BODY_SCALE;
 
             // 上端は空へ、下端は地面へ溶けるように薄くする
-            float a = alpha * Mth.sin((float) Math.PI * Mth.clamp((t0 + t1) * 0.5F, 0.0F, 1.0F));
-            if (a <= 0.001F) continue;
+            float mid = (t0 + t1) * 0.5F;
+            float a = alpha * Mth.sin((float) Math.PI * Mth.clamp(mid * 0.92F + 0.08F, 0.0F, 1.0F));
+            if (a <= 0.002F) continue;
 
             for (int i = 0; i < BODY_SIDES; i++) {
                 float ang0 = (float) (Math.PI * 2.0 * i / BODY_SIDES) + spin;
@@ -230,10 +264,10 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
 
                 float u0 = (float) i / BODY_SIDES;
                 float u1 = (float) (i + 1) / BODY_SIDES;
-                float v0 = t0 * 2.0F - vScroll;
-                float v1 = t1 * 2.0F - vScroll;
+                float v0 = t0 * 2.5F - vScroll;
+                float v1 = t1 * 2.5F - vScroll;
 
-                VfxRenderUtil.quadBothSides(last, vc, cr, cg, cb, a,
+                VfxRenderUtil.quadLit(last, vc, br, bg, bb, a, packedLight,
                         x00, y0, z00, u0, v0,
                         x10, y0, z10, u1, v0,
                         x11, y1, z11, u1, v1,
