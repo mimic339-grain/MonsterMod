@@ -134,9 +134,15 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         drawBillboard(pose, glow, origin.subtract(entityPos), muzzleSize,
                 1.0F, 0.85F, 0.55F, 0.85F * fade);
 
-        // 着弾点。壁で途切れるだけだと当たった感じがしないので、そこで弾けるようにする
+        // 着弾点。壁で途切れるだけだと当たった感じがしないので、そこで弾けるようにする。
+        //
+        // 【壁から手前へずらす理由】
+        // この描画設定は深度テストが効いているため、壁の面ぴったりに置くと
+        // 光がブロックと同じ奥行きになり、ほぼ全部が弾かれて何も見えなくなる。
+        // 撃った側へ少し浮かせることで、壁の手前に確実に描かれるようにしている。
         Vec3 end = origin.add(dir.scale(length));
-        drawImpactBurst(pose, glow, end.subtract(entityPos), radius, time, baseR, baseG, baseB, fade);
+        Vec3 burstAt = end.subtract(dir.scale(Math.max(0.4, radius * 2.5)));
+        drawImpactBurst(pose, glow, burstAt.subtract(entityPos), radius, time, baseR, baseG, baseB, fade);
 
         // 貫いている相手の位置でも弾けさせる。壁だけだと人に当たった手応えが無い
         drawEntityHits(entity, pose, glow, origin, end, entityPos, radius, time,
@@ -162,8 +168,12 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
             Optional<Vec3> hit = target.getBoundingBox().inflate(radius).clip(origin, end);
             if (hit.isEmpty()) continue;
 
+            // 相手の体に埋まらないよう、こちらも手前へ少し浮かせる
+            Vec3 back = origin.subtract(end).normalize().scale(radius * 1.5F);
+            Vec3 at = hit.get().add(back);
+
             // 壁より控えめにする。人を貫くたびに壁と同じ大きさで光ると画面が埋まる
-            drawImpactBurst(pose, vc, hit.get().subtract(entityPos), radius * 0.7F,
+            drawImpactBurst(pose, vc, at.subtract(entityPos), radius * 0.7F,
                     time, r, g, b, fade * 0.85F);
         }
     }
