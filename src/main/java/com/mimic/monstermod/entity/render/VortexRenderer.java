@@ -29,14 +29,19 @@ import java.util.Random;
  * (この形にしないと、ただのコップに見えてしまう)。
  * さらに頂上付近には広がりを強調する専用の弧(皿の部分)を置いている。
  *
- * 【明るさ・色】
- * 煙の柱だけは加算合成ではなく通常の半透明({@code RenderType.entityNoOutline})で描く。
+ * 【明るさ・色】加算合成は一切使わず、柱も弧も通常の半透明で描く。
  * 加算合成は光を足すことしかできないため背景より暗くできず、
- * 昼間はどうしても白飛びしてしまうため。
- * この描画設定は「半透明・裏面も描く・周囲の明るさの影響を受ける・
- * 深度バッファに書き込まない」という条件がそろっており、
- * 濃い灰色で背景を覆いつつ、層を重ねても描画順が崩れない。
- * 光って見せたい風切りの弧のほうは、これまで通り加算合成で描く。
+ * 何枚も重なると必ず白飛びしてしまうため。
+ * 色はほぼ黒に近い灰色で、ほとんど透けない濃さにしてある。
+ *
+ * 【描画設定の使い分け】
+ *  柱 = {@code entityTranslucent}  … 深度バッファに書き込む
+ *  弧 = {@code entityNoOutline}    … 深度バッファに書き込まない
+ * 柱が深度を書き、弧はその後に描かれるので、
+ * 柱の裏側にある弧は自動的に隠れる(濃い柱の向こうが透けて見えない)。
+ * 弧同士は深度を書かないぶん重ね合わせが自由だが、
+ * どちらの設定も奥から手前へ並べ替えてから描かれるので順番は破綻しない。
+ * どちらも裏面を描く設定(NO_CULL)なので、面は1回ずつ出せばよい。
  */
 public class VortexRenderer extends EntityRenderer<VortexEntity> {
 
@@ -63,10 +68,13 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
      */
     private static final float FLARE = 3.6F;
 
-    /** 加算合成なので1枚あたりはごく薄くする(重なって初めて濃く見える) */
-    private static final float ALPHA_SLASH = 0.22F;
-    /** 煙の柱の濃さ。こちらは通常の半透明なので、上げるほど背景が暗く隠れる */
-    private static final float ALPHA_BODY = 0.30F;
+    /**
+     * 濃さ。どちらも通常の半透明なので、この値がそのまま不透明度になる。
+     * 柱は手前の壁と奥の壁の2枚を通るので、0.85でも合わせるとほぼ透けない
+     * (手前で85%隠れ、残りの15%も奥の壁で85%隠れる)。
+     */
+    private static final float ALPHA_BODY = 0.85F;
+    private static final float ALPHA_SLASH = 0.95F;
 
     // 弧ごとのばらつき。毎フレーム同じ形になるよう固定の種から先に作っておく
     private static final float[] PHASE = new float[SLASHES];   // 開始角
@@ -87,7 +95,8 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
         Random rng = new Random(20260818L);
         for (int i = 0; i < SLASHES; i++) {
             PHASE[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            BRIGHT[i] = 0.45F + rng.nextFloat() * 0.55F;
+            // ほとんど透けない濃さで揃える(薄い弧が混ざると白っぽく霞んで見えるため)
+            BRIGHT[i] = 0.80F + rng.nextFloat() * 0.20F;
             FLOW[i] = 0.02F + rng.nextFloat() * 0.06F;
 
             if (isCap(i)) {
@@ -139,14 +148,14 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
 
         pose.pushPose();
 
-        // 内側の煙の柱(半透明。背景を暗く覆う)
-        VertexConsumer body = buffer.getBuffer(RenderType.entityNoOutline(SMOKE_TEX));
+        // 先に柱を描く。こちらは深度を書くので、あとで描く弧のうち柱の裏側にある分は隠れる
+        VertexConsumer body = buffer.getBuffer(RenderType.entityTranslucent(SMOKE_TEX));
         drawBody(pose, body, height, rBottom, rTop, cr, cg, cb, ALPHA_BODY * fade, time, packedLight);
 
-        // 外側の風切り(加算合成。光って見える)
-        VertexConsumer slash = buffer.getBuffer(RenderType.eyes(SLASH_TEX));
+        // 外側の風切り
+        VertexConsumer slash = buffer.getBuffer(RenderType.entityNoOutline(SLASH_TEX));
         for (int i = 0; i < SLASHES; i++) {
-            drawSlash(pose, slash, i, height, rBottom, rTop, cr, cg, cb, fade, time);
+            drawSlash(pose, slash, i, height, rBottom, rTop, cr, cg, cb, fade, time, packedLight);
         }
 
         pose.popPose();
@@ -167,7 +176,8 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
      */
     private static void drawSlash(PoseStack pose, VertexConsumer vc, int i,
                                   float height, float rBottom, float rTop,
-                                  float cr, float cg, float cb, float fade, float time) {
+                                  float cr, float cg, float cb, float fade, float time,
+                                  int packedLight) {
 
         float yNorm;
         float env;
@@ -187,6 +197,11 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
         float baseAlpha = ALPHA_SLASH * BRIGHT[i] * env * fade;
         float spin = time * SPIN[i];
         float uScroll = time * FLOW[i];
+
+        // 弧は柱よりわずかに明るい灰色にして、暗い柱の上でも風の筋として見分けられるようにする
+        float sr = 0.16F + cr * 0.20F;
+        float sg = 0.16F + cg * 0.20F;
+        float sb = 0.17F + cb * 0.21F;
 
         PoseStack.Pose last = pose.last();
 
@@ -210,8 +225,9 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
             float u = f * SPAN[i] * 0.35F - uScroll;
 
             if (s > 0) {
-                float a = baseAlpha * (0.15F + 0.85F * taper);
-                VfxRenderUtil.quadBothSides(last, vc, cr, cg, cb, a,
+                // 裏面も描かれる設定なので1回でよい
+                float a = baseAlpha * (0.20F + 0.80F * taper);
+                VfxRenderUtil.quadLit(last, vc, sr, sg, sb, a, packedLight,
                         px, py - pw, pz, pu, 0.0F,
                         x,  y  - w,  z,  u,  0.0F,
                         x,  y  + w,  z,  u,  1.0F,
@@ -236,10 +252,10 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
         float spin = time * 0.04F;
         float vScroll = time * 0.05F;
 
-        // 煙なので、色味はほんの少しだけ残して大きく暗くする
-        float br = 0.09F + cr * 0.20F;
-        float bg = 0.09F + cg * 0.20F;
-        float bb = 0.10F + cb * 0.22F;
+        // ほぼ黒。色味はごくわずかに残す程度にする
+        float br = 0.035F + cr * 0.055F;
+        float bg = 0.035F + cg * 0.055F;
+        float bb = 0.040F + cb * 0.060F;
 
         for (int ring = 0; ring < BODY_RINGS; ring++) {
             float t0 = (float) ring / BODY_RINGS;
@@ -248,10 +264,11 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
             float r0 = radiusAt(t0, rBottom, rTop) * BODY_SCALE;
             float r1 = radiusAt(t1, rBottom, rTop) * BODY_SCALE;
 
-            // 上端は空へ、下端は地面へ溶けるように薄くする
+            // 上端と下端をわずかに薄くする程度に留める。
+            // ここで薄くしすぎると柱が透けてしまうし、この描画設定は
+            // 不透明度が0.1を下回った部分を捨てるため、縁がギザギザに欠ける
             float mid = (t0 + t1) * 0.5F;
-            float a = alpha * Mth.sin((float) Math.PI * Mth.clamp(mid * 0.92F + 0.08F, 0.0F, 1.0F));
-            if (a <= 0.002F) continue;
+            float a = alpha * (0.55F + 0.45F * Mth.sin((float) Math.PI * Mth.clamp(mid, 0.0F, 1.0F)));
 
             for (int i = 0; i < BODY_SIDES; i++) {
                 float ang0 = (float) (Math.PI * 2.0 * i / BODY_SIDES) + spin;
