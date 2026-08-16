@@ -90,6 +90,20 @@ public class BomberIdentity extends BaseIdentity {
         setArmed(index, true);
     }
 
+    /**
+     * 武装状態をクライアントへ送る。
+     *
+     * 【毎回明示的に送る必要がある理由】
+     * Identityの中身がクライアントへ流れるのは変身したときだけで、
+     * スキルを押しただけでは同期されない。
+     * 送らないとHUDの枠が緑のまま変わらず、武装しているかが本人にも分からない。
+     */
+    public static void sync(Player player) {
+        if (!(player instanceof net.minecraft.server.level.ServerPlayer sp)) return;
+        sp.getCapability(com.mimic.monstermod.variable.CapabilityRegistry.PLAYER_TRANSFORMATION)
+                .ifPresent(trans -> trans.syncToClient(sp));
+    }
+
     // ---------------- 保存・同期 ----------------
     // 武装状態はHUDの色に直結するので、クライアントにも届く必要がある。
     // Identityのserialize/deserializeはCapabilityの同期にそのまま乗るため、ここに入れておく。

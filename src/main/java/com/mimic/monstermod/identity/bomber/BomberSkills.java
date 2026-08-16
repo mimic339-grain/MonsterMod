@@ -59,13 +59,21 @@ public final class BomberSkills {
     /** アイテム・ブロックに仕込むボムの爆発半径 */
     public static final float TRAP_RADIUS = 4.5F;
 
-    /** ボマーのスキルは全て予兆なしの即時発動。共通の形をここで作る */
+    /**
+     * ボマーのスキルは全て予兆なしの即時発動で、効果は自分に付く。
+     *
+     * 【MOVEMENT にしている理由】
+     * STRIKE にすると、SkillUtil は範囲内に対象がいるときしか効果を実行しない
+     * (対象ごとに apply を呼ぶ作りのため)。
+     * ボマーのスキルは相手を必要としない自分への付与なので、
+     * 対象がいなくても必ず実行される MOVEMENT を使う。
+     */
     private static SkillLead.Builder base(SkillId id) {
         return new SkillLead.Builder(id)
                 .category(SkillType.Category.UNIQUE)
                 .shape(MathMain.Shape.SPHERE)
                 .sphere(0.5f)
-                .attackType(SkillType.STRIKE)
+                .attackType(SkillType.MOVEMENT)
                 .followCaster(true)
                 .totalPreviewTicks(0)  // 予兆を出すと仕掛けが相手にバレる
                 .effectTicks(1)
@@ -107,6 +115,7 @@ public final class BomberSkills {
             // 殴る系(1と6)は同時に武装できない。どちらが出るか分からないと事故るため
             if (melee) bomber.armExclusiveMelee(slot);
             else bomber.setArmed(slot, true);
+            BomberIdentity.sync(player); // 送らないとHUDの枠が青に変わらない
 
             player.displayClientMessage(Component.literal(message).withStyle(ChatFormatting.AQUA), true);
             player.level().playSound(null, player.getX(), player.getY(), player.getZ(),

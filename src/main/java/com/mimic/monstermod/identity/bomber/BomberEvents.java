@@ -64,11 +64,13 @@ public class BomberEvents {
 
             notifyPlanted(player, "仕掛けた (" + BombTiming.format(fuse) + ")");
             playPlantSound(level, target);
+            BomberIdentity.sync(player); // 武装が解けたことをHUDへ反映する
             return;
         }
 
         if (bomber.consumeArmed(BomberIdentity.SLOT_RELAY)) {
             handoverRelay(player, target, level);
+            BomberIdentity.sync(player);
         }
     }
 
@@ -122,6 +124,7 @@ public class BomberEvents {
                 BombTiming.rollTimedFuse(level), BomberSkills.TRAP_RADIUS, false));
 
         notifyPlanted(player, "ブロックに仕掛けた");
+        BomberIdentity.sync(player);
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
     }

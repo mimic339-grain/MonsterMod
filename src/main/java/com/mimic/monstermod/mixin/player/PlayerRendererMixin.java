@@ -28,7 +28,9 @@ public class PlayerRendererMixin {
         var monsterXform = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION).orElse(null);
         if (monsterXform != null && monsterXform.isTransformed()) {
             BaseIdentity identity = monsterXform.getIdentity();
-            if (identity != null) {
+            // ボマーのように変身先の体を持たない役職は、プレイヤーの見た目のまま描く。
+            // ここで cancel すると、モデルが無いので姿ごと消えてしまう
+            if (identity != null && identity.hasOwnBody()) {
                 renderAndCancel(identity, player, partialTicks, poseStack, buffer, packedLight, ci);
                 return;
             }

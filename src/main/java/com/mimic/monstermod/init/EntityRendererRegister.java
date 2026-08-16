@@ -22,6 +22,10 @@ public class EntityRendererRegister {
         event.registerEntityRenderer(ModEntitieType.BEAM.get(), BeamRenderer::new);
         event.registerEntityRenderer(ModEntitieType.VORTEX.get(), VortexRenderer::new);
 
+        // 設置ボム。爆発半径の球はここで描く(中身がクライアントにも同期されているため)
+        event.registerBlockEntityRenderer(ModBlockEntities.PLACED_BOMB.get(),
+                com.mimic.monstermod.client.PlacedBombRenderer::new);
+
         // 今後、他のモンスター（PRO_HERO等）が増えたらここに追加していけばOK！
     }
 }

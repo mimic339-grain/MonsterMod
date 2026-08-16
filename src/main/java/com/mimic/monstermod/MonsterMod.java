@@ -35,6 +35,7 @@ public class MonsterMod {
         ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
         com.mimic.monstermod.init.ModBlocks.register(modEventBus);
+        com.mimic.monstermod.init.ModBlockEntities.register(modEventBus);
         ModMessages.register();
         ModEffects.MOB_EFFECTS.register(modEventBus);
 

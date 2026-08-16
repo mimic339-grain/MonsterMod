@@ -59,6 +59,8 @@ public class ModMessages {
         registerMessage(C2S_SaveNpcSettingsPacket.class, C2S_SaveNpcSettingsPacket::encode, C2S_SaveNpcSettingsPacket::decode, C2S_SaveNpcSettingsPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2C_OpenTradePacket.class, S2C_OpenTradePacket::encode, S2C_OpenTradePacket::decode, S2C_OpenTradePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(C2S_ExecuteTradePacket.class, C2S_ExecuteTradePacket::encode, C2S_ExecuteTradePacket::decode, C2S_ExecuteTradePacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerMessage(S2C_OpenBombTimerPacket.class, S2C_OpenBombTimerPacket::encode, S2C_OpenBombTimerPacket::decode, S2C_OpenBombTimerPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(C2S_SetBombTimerPacket.class, C2S_SetBombTimerPacket::encode, C2S_SetBombTimerPacket::decode, C2S_SetBombTimerPacket::handle, NetworkDirection.PLAY_TO_SERVER);
     }
 
 
