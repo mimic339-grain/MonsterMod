@@ -168,7 +168,8 @@ public class MegiddoEntity extends Entity {
     /** 円盤や飛び散る光まで含めた大きさで描画対象にする */
     @Override
     public AABB getBoundingBoxForCulling() {
-        double r = Math.max(getRingRadius(), getBlastRadius() * 1.6) + 8.0;
+        // 飛び散る光は巻き込み範囲の3倍近くまで広がるので、その分まで描画対象にする
+        double r = Math.max(getRingRadius(), getBlastRadius() * 3.0) + 8.0;
         double cy = getY() + getCenterOffset();
         return new AABB(getX() - r, cy - r, getZ() - r, getX() + r, cy + r, getZ() + r);
     }

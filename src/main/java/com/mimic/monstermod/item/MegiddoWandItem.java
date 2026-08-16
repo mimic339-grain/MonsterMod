@@ -30,11 +30,15 @@ public class MegiddoWandItem extends Item {
 
     private static final String TAG_SIZE = "megiddo_size";
 
-    /** 球の半径 / ためる時間(秒) / 爆発の巻き込み範囲 / 威力 */
+    /**
+     * 球の半径 / ためる時間(秒) / 爆発の巻き込み範囲 / 威力。
+     * 飛び散る光はこの範囲の2.9倍あたりまで広がるので、
+     * 中でも半径90m近くまで光が届く。
+     */
     private static final float[][] SIZES = {
-            { 2.0F, 6.0F,  14.0F, 20.0F },  // 小
-            { 3.5F, 10.0F, 26.0F, 40.0F },  // 中
-            { 6.0F, 16.0F, 45.0F, 70.0F }   // 大
+            { 2.0F, 6.0F,  18.0F, 20.0F },  // 小
+            { 3.5F, 10.0F, 32.0F, 40.0F },  // 中
+            { 6.0F, 16.0F, 55.0F, 70.0F }   // 大
     };
 
     private static final String[] SIZE_NAMES = { "小", "中", "大" };
