@@ -1,7 +1,7 @@
 package com.mimic.monstermod.identity.monster.yatagarasu;
 
 import com.mimic.monstermod.Math.MathMain;
-import com.mimic.monstermod.entity.obj.TornadoEntity;
+import com.mimic.monstermod.entity.obj.VortexEntity;
 import com.mimic.monstermod.init.ModEntitieType;
 import com.mimic.monstermod.skill.*;
 import net.minecraft.world.entity.LivingEntity;
@@ -56,27 +56,30 @@ public class TornadoSkill extends SkillEffectSpec {
     }
 
     
+    /**
+     * 【注意】以前は TornadoEntity が吸い上げ・打ち上げ・持続ダメージを持っていたが、
+     * 見た目が良くないため削除した。現在は見た目専用の VortexEntity を出すだけで、
+     * 引き寄せは上の onPreviewTick が受け持っている。
+     * 持続ダメージや打ち上げが必要になったら VortexEntity 側に持たせ直すこと。
+     */
     @Override
     protected void applyToCaster(LivingEntity attacker) {
         if (attacker.level().isClientSide) return;
 
         // 中心（大）
-        spawnTornadoEntity(attacker, attacker.position(), 7.5f, 15.0f, true);
+        spawnVortex(attacker, attacker.position(), 20.0f, 2.5f, 14.0f);
 
-        // 四隅（小・追尾・打ち上げ）
+        // 四隅（小）
         Vec3[] pos = { new Vec3(5,0,5), new Vec3(-5,0,5), new Vec3(5,0,-5), new Vec3(-5,0,-5) };
         for (Vec3 offset : pos) {
-            spawnTornadoEntity(attacker, attacker.position().add(offset), 5.0f, 10.0f, false);
+            spawnVortex(attacker, attacker.position().add(offset), 12.0f, 1.5f, 8.0f);
         }
     }
 
-    private void spawnTornadoEntity(LivingEntity owner, Vec3 pos, float size, float damage, boolean isCenter) {
-        if (!owner.level().isClientSide) {
-            TornadoEntity tornado = new TornadoEntity(ModEntitieType.TORNADO.get(), owner.level());
-            tornado.setPos(pos.x, pos.y, pos.z);
-            tornado.setProperties(owner, 100, size, damage, isCenter);
-
-            owner.level().addFreshEntity(tornado);
-        }
+    private void spawnVortex(LivingEntity owner, Vec3 pos, float height, float rBottom, float rTop) {
+        VortexEntity vortex = new VortexEntity(ModEntitieType.VORTEX.get(), owner.level());
+        vortex.setPos(pos.x, pos.y, pos.z);
+        vortex.configure(height, rBottom, rTop, 100);
+        owner.level().addFreshEntity(vortex);
     }
 }

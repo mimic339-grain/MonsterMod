@@ -1,5 +1,14 @@
 package com.mimic.monstermod.particle.Tornado;
 
+/*
+ * 【停止中】TornadoParticle に渡すパラメータ。
+ *
+ * パーティクル版の竜巻を止めた(VortexEntity に置き換えた)ため、
+ * 登録先の ModParticles.TORNADO ごとコメントアウトしてある。
+ * 復活させる場合は TornadoParticle / ModParticles / ModClientEvents も戻すこと。
+ */
+/*
+
 import com.mimic.monstermod.init.ModParticles;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -55,3 +64,4 @@ public class TornadoParticleOptions implements ParticleOptions {
         return String.format("tornado %.2f", this.size);
     }
 }
+*/

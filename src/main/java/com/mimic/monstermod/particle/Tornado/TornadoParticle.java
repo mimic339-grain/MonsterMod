@@ -1,5 +1,17 @@
 package com.mimic.monstermod.particle.Tornado;
 
+/*
+ * 【停止中】パーティクルで作っていた竜巻。
+ *
+ * 見た目が良くなかったため、現在は VortexEntity / VortexRenderer に置き換えている。
+ * 依存していた TornadoEntity も削除済みなので、このままではコンパイルできない。
+ * 半径の高さごとの変化 (3.0 + pow(h/height, 4) * 12) など、
+ * 竜巻らしい形の作り方の参考になるので、消さずに残してある。
+ *
+ * 復活させる場合は ModParticles / ModClientEvents の登録も戻すこと。
+ */
+/*
+
 import com.mimic.monstermod.entity.obj.TornadoEntity;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
@@ -137,3 +149,4 @@ public class TornadoParticle extends TextureSheetParticle {
         }
     }
 }
+*/

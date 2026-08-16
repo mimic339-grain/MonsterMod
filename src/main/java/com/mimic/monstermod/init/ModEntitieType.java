@@ -50,9 +50,6 @@ public class ModEntitieType {
                             .setUpdateInterval(1)
                             .build(new ResourceLocation(MonsterMod.MOD_ID, "spiralonibi").toString())
             );
-    public static final RegistryObject<EntityType<TornadoEntity>> TORNADO = ENTITY_TYPES.register("tornado", () -> EntityType.Builder.<TornadoEntity>of(TornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("tornado"));
-    public static final RegistryObject<EntityType<BigTornadoEntity>> BIGTORNADO = ENTITY_TYPES.register("bigtornado", () -> EntityType.Builder.<BigTornadoEntity>of(BigTornadoEntity::new, MobCategory.MISC).sized(1.0f, 1.0f).clientTrackingRange(128).updateInterval(3).build("bigtornado"));
-
     // ビーム。射手に追従して毎tick向きが変わるので updateInterval は1(遅らせると見た目がカクつく)
     public static final RegistryObject<EntityType<BeamEntity>> BEAM =
             ENTITY_TYPES.register("beam",
@@ -84,7 +81,6 @@ public class ModEntitieType {
         if (ENTITY_MAP.isEmpty()) {
             ENTITY_MAP.put(MIMIC.getId(), MIMIC.get());
             ENTITY_MAP.put(YATAGARASU.getId(), YATAGARASU.get()); // ★八咫烏を追加
-            ENTITY_MAP.put(TORNADO.getId(), (EntityType<? extends BaseEntity>) (Object) TORNADO.get());
         }
         return ENTITY_MAP.get(id);
     }

@@ -68,13 +68,9 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
      */
     private static final float FLARE = 3.6F;
 
-    /**
-     * 濃さ。どちらも通常の半透明なので、この値がそのまま不透明度になる。
-     * 柱は手前の壁と奥の壁の2枚を通るので、0.85でも合わせるとほぼ透けない
-     * (手前で85%隠れ、残りの15%も奥の壁で85%隠れる)。
-     */
-    private static final float ALPHA_BODY = 0.85F;
-    private static final float ALPHA_SLASH = 0.95F;
+    /** 濃さ。通常の半透明なのでこの値がそのまま不透明度になる。1.0 = 完全に不透明 */
+    private static final float ALPHA_BODY = 1.0F;
+    private static final float ALPHA_SLASH = 1.0F;
 
     // 弧ごとのばらつき。毎フレーム同じ形になるよう固定の種から先に作っておく
     private static final float[] PHASE = new float[SLASHES];   // 開始角
@@ -95,15 +91,16 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
         Random rng = new Random(20260818L);
         for (int i = 0; i < SLASHES; i++) {
             PHASE[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            // ほとんど透けない濃さで揃える(薄い弧が混ざると白っぽく霞んで見えるため)
-            BRIGHT[i] = 0.80F + rng.nextFloat() * 0.20F;
+            // 透けさせない。薄い弧が混ざると全体が白っぽく霞んで見えるため
+            BRIGHT[i] = 1.0F;
             FLOW[i] = 0.02F + rng.nextFloat() * 0.06F;
 
             if (isCap(i)) {
                 // 皿の部分: 頂上付近で、大きく広がった、ほぼ水平の弧
                 SPAN[i] = 3.4F + rng.nextFloat() * 2.6F;       // 約195〜345度
                 RAD[i] = 0.95F + rng.nextFloat() * 0.45F;
-                WIDTH[i] = 0.012F + rng.nextFloat() * 0.030F;
+                // 縦に太いと帯に見えてしまうので、風切りらしく薄くする
+                WIDTH[i] = 0.006F + rng.nextFloat() * 0.015F;
                 RISE[i] = 0.0F;                                 // 昇らず頂上に留まる
                 SPIN[i] = 0.05F + rng.nextFloat() * 0.10F;      // 皿はゆっくり回す
                 Y0[i] = 0.84F + rng.nextFloat() * 0.18F;
@@ -113,7 +110,8 @@ public class VortexRenderer extends EntityRenderer<VortexEntity> {
                 SPAN[i] = 1.8F + rng.nextFloat() * 3.8F;        // 約100〜320度
                 // 1.0を超えるものが柱からはみ出して「外に走るスラッシュ」になる
                 RAD[i] = 0.85F + rng.nextFloat() * 0.55F;
-                WIDTH[i] = 0.010F + rng.nextFloat() * 0.045F;
+                // 縦に太いと帯に見えてしまうので、風切りらしく薄くする
+                WIDTH[i] = 0.005F + rng.nextFloat() * 0.022F;
                 RISE[i] = 0.004F + rng.nextFloat() * 0.010F;
                 SPIN[i] = 0.10F + rng.nextFloat() * 0.22F;
                 if (rng.nextBoolean()) SPIN[i] *= 0.55F;        // 遅い弧を混ぜて動きを単調にしない
