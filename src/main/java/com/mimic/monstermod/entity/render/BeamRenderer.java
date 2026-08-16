@@ -46,6 +46,8 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static final int SIDES = 12;
     /** テクスチャ1枚がビーム何ブロックぶんに相当するか(小さいほど筋が細かく流れる) */
     private static final float TEX_BLOCKS = 4.0F;
+    /** 着弾点から伸びる光の筋の本数 */
+    private static final int BURST_RAYS = 14;
 
     public BeamRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -107,9 +109,67 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         drawBillboard(pose, glow, origin.subtract(entityPos), muzzleSize,
                 1.0F, 0.85F, 0.55F, 0.85F * fade);
 
+        // 着弾点。壁で途切れるだけだと当たった感じがしないので、そこで弾けるようにする
         Vec3 hitPos = origin.add(dir.scale(length)).subtract(entityPos);
-        drawBillboard(pose, glow, hitPos, radius * 4.0F * (1.0F + 0.03F * Mth.sin(time * 1.7F)),
-                baseR, baseG, baseB, 0.7F * fade);
+        drawImpactBurst(pose, glow, hitPos, radius, time, baseR, baseG, baseB, fade);
+    }
+
+    /**
+     * 着弾点で弾ける閃光。
+     *
+     * 中心の白い塊と、そこから四方へ伸びる光の筋でできている。
+     * 筋は長さも太さもバラバラにして、放射状に散った感じを出す。
+     * 筋は常に同じ向きだと板に見えるので、カメラの方を向く面の中で
+     * ゆっくり回しながら描いている。
+     */
+    private void drawImpactBurst(PoseStack pose, VertexConsumer vc, Vec3 offset, float radius,
+                                 float time, float r, float g, float b, float fade) {
+        pose.pushPose();
+        pose.translate(offset.x, offset.y, offset.z);
+        pose.mulPose(this.entityRenderDispatcher.cameraOrientation());
+
+        PoseStack.Pose last = pose.last();
+
+        // 中心の塊。ここだけ白く飛ばして「焼けている」感じにする
+        float coreSize = radius * 7.0F;
+        float h = coreSize * 0.5F;
+        VfxRenderUtil.quad(last, vc, 1.0F, 0.95F, 0.85F, 0.95F * fade,
+                -h, -h, 0, 0, 0,
+                 h, -h, 0, 1, 0,
+                 h,  h, 0, 1, 1,
+                -h,  h, 0, 0, 1);
+
+        // 放射状の筋
+        for (int i = 0; i < BURST_RAYS; i++) {
+            float ang = (float) (Math.PI * 2.0 * i / BURST_RAYS) + time * 0.02F;
+
+            // 長さと太さを1本ずつ変える。均一だと歯車のように見えてしまう
+            float variance = 0.45F + 0.55F * Mth.abs(Mth.sin(i * 12.9898F));
+            float len = radius * 26.0F * variance;
+            float halfWidth = radius * 1.6F * variance;
+
+            float cos = Mth.cos(ang), sin = Mth.sin(ang);
+            // 筋の向き(外向き)と、それに垂直な向き(太さ方向)
+            float px = -sin * halfWidth, py = cos * halfWidth;
+            float ex = cos * len, ey = sin * len;
+
+            // 根元は白く、先へ行くほどビームの色に寄せて消えていく
+            drawRay(last, vc, px, py, ex, ey, r, g, b, 0.8F * fade * variance);
+        }
+
+        pose.popPose();
+    }
+
+    /** 中心から外へ伸びる1本の筋。根元が太く、先が尖った形にする */
+    private static void drawRay(PoseStack.Pose pose, VertexConsumer vc,
+                                float px, float py, float ex, float ey,
+                                float r, float g, float b, float alpha) {
+        // 根元(中心付近)の2点と、先端の1点をつぶした四角で三角形のように見せる
+        VfxRenderUtil.quad(pose, vc, 1.0F, 0.98F, 0.9F, alpha,
+                px, py, 0, 0.0F, 0.0F,
+                -px, -py, 0, 0.0F, 1.0F,
+                ex - px * 0.15F, ey - py * 0.15F, 0, 1.0F, 1.0F,
+                ex + px * 0.15F, ey + py * 0.15F, 0, 1.0F, 0.0F);
     }
 
     /**

@@ -38,6 +38,8 @@ public class PlacedBombBlockEntity extends BlockEntity {
     private float radius;
     private boolean armed;
     private UUID owner;
+    /** どの種類のボムとして爆発するか。見た目は同じでも中身が違う */
+    private BombKind kind = BombKind.PLACED;
 
     public PlacedBombBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.PLACED_BOMB.get(), pos, state);
@@ -53,6 +55,13 @@ public class PlacedBombBlockEntity extends BlockEntity {
     public void setOwner(UUID owner) {
         this.owner = owner;
         setChanged();
+    }
+
+    public BombKind getKind() { return kind; }
+
+    public void setKind(BombKind kind) {
+        this.kind = kind;
+        sync();
     }
 
     /** 時間を決めてカウントを開始する。長いほど爆発半径が大きい */
@@ -97,12 +106,12 @@ public class PlacedBombBlockEntity extends BlockEntity {
             // 残したまま爆発させると、破壊不可の設定のせいでその場に残ってしまう
             level.removeBlock(pos, false);
             BombExplosion.explodeAt(serverLevel, pos,
-                    new BombInstance(BombKind.PLACED, be.owner, 1, be.radius, true));
+                    new BombInstance(be.kind, be.owner, 1, be.radius, true));
             return;
         }
 
         // 音は残りが減るほど詰まっていく。BombInstance と同じ間隔の決め方を使う
-        BombInstance view = new BombInstance(BombKind.PLACED, be.owner, be.fuseTicks, be.radius, true);
+        BombInstance view = new BombInstance(be.kind, be.owner, be.fuseTicks, be.radius, true);
         if (be.fuseTicks == 20) {
             BombExplosion.playFinalWarning(level, at, be.radius);
         } else if (shouldBeep(be)) {
@@ -131,6 +140,7 @@ public class PlacedBombBlockEntity extends BlockEntity {
         tag.putInt("total", totalTicks);
         tag.putFloat("radius", radius);
         tag.putBoolean("armed", armed);
+        tag.putString("kind", kind.name());
         if (owner != null) tag.putUUID("owner", owner);
     }
 
@@ -141,6 +151,7 @@ public class PlacedBombBlockEntity extends BlockEntity {
         totalTicks = Math.max(1, tag.getInt("total"));
         radius = tag.getFloat("radius");
         armed = tag.getBoolean("armed");
+        kind = BombKind.byName(tag.getString("kind"));
         owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null;
     }
 

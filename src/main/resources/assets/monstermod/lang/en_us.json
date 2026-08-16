@@ -11,5 +11,9 @@
   "item.monstermod.placed_bomb": "Placed Bomb",
   "block.monstermod.placed_bomb": "Placed Bomb",
   "entity.monstermod.beam": "Beam",
-  "entity.monstermod.vortex": "Vortex"
+  "entity.monstermod.vortex": "Vortex",
+  "item.monstermod.chain_bomb": "Chain Bomb",
+  "item.monstermod.dummy_bomb": "Dummy Bomb",
+  "item.monstermod.megiddo_wand": "Megiddo Wand",
+  "entity.monstermod.megiddo": "Megiddo"
 }

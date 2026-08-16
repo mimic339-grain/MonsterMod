@@ -50,6 +50,8 @@ public final class BomberSkills {
     public static final SkillId VANISH = new SkillId(new ResourceLocation(MODID, "bomb_vanish"));
     public static final SkillId PLACE  = new SkillId(new ResourceLocation(MODID, "bomb_place"));
     public static final SkillId RELAY  = new SkillId(new ResourceLocation(MODID, "bomb_relay"));
+    public static final SkillId CHAIN  = new SkillId(new ResourceLocation(MODID, "bomb_chain"));
+    public static final SkillId DUMMY  = new SkillId(new ResourceLocation(MODID, "bomb_dummy"));
 
     /** 透明化の長さ */
     public static final int VANISH_TICKS = 30 * BombTiming.TICKS_PER_SECOND;
@@ -87,6 +89,8 @@ public final class BomberSkills {
         com.mimic.monstermod.skill.SkillLeadRegistry.register(base(VANISH).build());
         com.mimic.monstermod.skill.SkillLeadRegistry.register(base(PLACE).build());
         com.mimic.monstermod.skill.SkillLeadRegistry.register(base(RELAY).build());
+        com.mimic.monstermod.skill.SkillLeadRegistry.register(base(CHAIN).build());
+        com.mimic.monstermod.skill.SkillLeadRegistry.register(base(DUMMY).build());
     }
 
     // ---------------- 効果の中身 ----------------
@@ -223,16 +227,33 @@ public final class BomberSkills {
 
     /** 5: 設置用の大型ボムを手に入れる。置いてから時間を選ぶ形になる */
     public static SkillEffectSpec place() {
+        return giveBomb(ModItems.PLACED_BOMB, "設置ボムを取り出した");
+    }
+
+    /** 7: 連鎖ボムを手に入れる。仕掛けを繋げておくと芋づる式に誘爆する */
+    public static SkillEffectSpec chain() {
+        return giveBomb(ModItems.CHAIN_BOMB, "連鎖ボムを取り出した");
+    }
+
+    /** 8: 偽ボムを手に入れる。解除させて相手のキットを無駄遣いさせる */
+    public static SkillEffectSpec dummy() {
+        return giveBomb(ModItems.DUMMY_BOMB, "偽ボムを取り出した");
+    }
+
+    /** 設置系のボムを1個渡すだけの共通処理 */
+    private static SkillEffectSpec giveBomb(
+            net.minecraftforge.registries.RegistryObject<net.minecraft.world.item.Item> item,
+            String message) {
         return new SkillEffectSpec(0, DamageType.MAGIC, SkillType.STRIKE, List.of()) {
             @Override
             protected void applyToCaster(LivingEntity attacker) {
                 if (attacker.level().isClientSide) return;
                 if (!(attacker instanceof Player player)) return;
 
-                ItemStack bomb = new ItemStack(ModItems.PLACED_BOMB.get());
+                ItemStack bomb = new ItemStack(item.get());
                 if (!player.getInventory().add(bomb)) player.drop(bomb, false);
 
-                player.displayClientMessage(Component.literal("設置ボムを取り出した")
+                player.displayClientMessage(Component.literal(message)
                         .withStyle(ChatFormatting.AQUA), true);
             }
         };

@@ -26,6 +26,8 @@ public final class SkillEffectRegistry {
         register(BomberSkills.VANISH, BomberSkills.vanish());
         register(BomberSkills.PLACE,  BomberSkills.place());
         register(BomberSkills.RELAY,  BomberSkills.relay());
+        register(BomberSkills.CHAIN,  BomberSkills.chain());
+        register(BomberSkills.DUMMY,  BomberSkills.dummy());
         // ① test_2d: 物理ダメージ + STRIKE挙動
         register(SkillId.of("monstermod", "test_2d"), new SkillEffectSpec(
                 5.0f, DamageType.PHYSICAL, SkillType.STRIKE, List.of()

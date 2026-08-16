@@ -35,6 +35,10 @@ public class ModItems {
     public static final RegistryObject<Item> VORTEX_WAND =
             ITEMS.register("vortex_wand", VortexWandItem::new);
 
+    // メギド確認用の杖
+    public static final RegistryObject<Item> MEGIDDO_WAND =
+            ITEMS.register("megiddo_wand", com.mimic.monstermod.item.MegiddoWandItem::new);
+
     // ボムの解除キット(付けられたボムを外す)
     public static final RegistryObject<Item> BOMB_DEFUSER =
             ITEMS.register("bomb_defuser", BombDefuserItem::new);
@@ -45,7 +49,21 @@ public class ModItems {
 
     // 設置する大型ボム(ボマーのスキル5で手に入る)
     public static final RegistryObject<Item> PLACED_BOMB =
-            ITEMS.register("placed_bomb", com.mimic.monstermod.item.PlacedBombItem::new);
+            ITEMS.register("placed_bomb",
+                    () -> new com.mimic.monstermod.item.PlacedBombItem(
+                            com.mimic.monstermod.bomb.BombKind.PLACED));
+
+    // 連鎖ボム。爆発すると範囲内の他のボムを誘爆させる
+    public static final RegistryObject<Item> CHAIN_BOMB =
+            ITEMS.register("chain_bomb",
+                    () -> new com.mimic.monstermod.item.PlacedBombItem(
+                            com.mimic.monstermod.bomb.BombKind.CHAIN));
+
+    // 偽物のボム。見た目も音も本物だが、地形は壊れず解除しても残骸が出ない
+    public static final RegistryObject<Item> DUMMY_BOMB =
+            ITEMS.register("dummy_bomb",
+                    () -> new com.mimic.monstermod.item.PlacedBombItem(
+                            com.mimic.monstermod.bomb.BombKind.DUMMY));
 
 
     // 登録処理

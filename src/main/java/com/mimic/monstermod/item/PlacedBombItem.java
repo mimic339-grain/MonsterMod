@@ -31,8 +31,15 @@ import java.util.List;
  */
 public class PlacedBombItem extends Item {
 
-    public PlacedBombItem() {
+    /**
+     * このアイテムを置いたとき、どの種類のボムになるか。
+     * 見た目は同じでも、連鎖・偽物といった中身の違いをここで持たせている。
+     */
+    private final com.mimic.monstermod.bomb.BombKind kind;
+
+    public PlacedBombItem(com.mimic.monstermod.bomb.BombKind kind) {
         super(new Item.Properties().stacksTo(1));
+        this.kind = kind;
     }
 
     @Override
@@ -52,6 +59,7 @@ public class PlacedBombItem extends Item {
         level.setBlockAndUpdate(pos, ModBlocks.PLACED_BOMB.get().defaultBlockState());
         if (level.getBlockEntity(pos) instanceof PlacedBombBlockEntity be) {
             be.setOwner(player.getUUID());
+            be.setKind(kind);
         }
 
         level.playSound(null, pos, SoundEvents.STONE_PLACE, SoundSource.BLOCKS, 1.0F, 0.8F);
@@ -64,6 +72,13 @@ public class PlacedBombItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
+        switch (kind) {
+            case CHAIN -> tooltip.add(Component.literal("爆発時、範囲内の他のボムを誘爆させる")
+                    .withStyle(ChatFormatting.GOLD));
+            case DUMMY -> tooltip.add(Component.literal("偽物。地形は壊れず、解除しても残骸は出ない")
+                    .withStyle(ChatFormatting.GOLD));
+            default -> { }
+        }
         tooltip.add(Component.literal("ブロックに右クリック: 設置").withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.literal("設置後に右クリック: 起爆時間を決める").withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.literal("火打ち石で右クリック: 即爆").withStyle(ChatFormatting.DARK_GRAY));

@@ -61,6 +61,17 @@ public class ModEntitieType {
                             .build(new ResourceLocation(MonsterMod.MOD_ID, "beam").toString())
             );
 
+    // メギド。その場から動かないので更新頻度は低くてよい
+    public static final RegistryObject<EntityType<MegiddoEntity>> MEGIDDO =
+            ENTITY_TYPES.register("megiddo",
+                    () -> EntityType.Builder.<MegiddoEntity>of(MegiddoEntity::new, MobCategory.MISC)
+                            .sized(1.0f, 1.0f)
+                            .clientTrackingRange(16)
+                            .updateInterval(20)
+                            .fireImmune()
+                            .build(new ResourceLocation(MonsterMod.MOD_ID, "megiddo").toString())
+            );
+
     // 竜巻(見た目専用)。その場から動かないので更新頻度は低くてよい
     public static final RegistryObject<EntityType<VortexEntity>> VORTEX =
             ENTITY_TYPES.register("vortex",

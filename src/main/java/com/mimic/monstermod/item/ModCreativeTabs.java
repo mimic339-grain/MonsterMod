@@ -34,9 +34,12 @@ public class ModCreativeTabs {
                                     output.accept(ModItems.NPC_TOOL.get());
                                     output.accept(ModItems.BEAM_WAND.get());
                                     output.accept(ModItems.VORTEX_WAND.get());
+                                    output.accept(ModItems.MEGIDDO_WAND.get());
                                     output.accept(ModItems.BOMB_DEFUSER.get());
                                     output.accept(ModItems.BOMB_REMNANT.get());
                                     output.accept(ModItems.PLACED_BOMB.get());
+                                    output.accept(ModItems.CHAIN_BOMB.get());
+                                    output.accept(ModItems.DUMMY_BOMB.get());
                                 })
                                 .build()
                 )

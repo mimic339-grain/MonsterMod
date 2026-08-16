@@ -36,6 +36,8 @@ public class BomberIdentity extends BaseIdentity {
     public static final int SLOT_VANISH = 3;  // 透明化
     public static final int SLOT_PLACE = 4;   // 設置用のボムを手に入れる
     public static final int SLOT_RELAY = 5;   // 受け渡しボム
+    public static final int SLOT_CHAIN = 6;   // 連鎖ボムを入手
+    public static final int SLOT_DUMMY = 7;   // 偽ボムを入手
 
     private static final SkillId[] SKILLS = {
             BomberSkills.TOUCH,
@@ -43,11 +45,13 @@ public class BomberIdentity extends BaseIdentity {
             BomberSkills.BLOCK,
             BomberSkills.VANISH,
             BomberSkills.PLACE,
-            BomberSkills.RELAY
+            BomberSkills.RELAY,
+            BomberSkills.CHAIN,
+            BomberSkills.DUMMY
     };
 
     /** クールダウン(tick)。仕掛け系は回転を速めに、透明化と設置ボムは重めにしてある */
-    private static final int[] COOLDOWNS = { 120, 200, 160, 600, 400, 200 };
+    private static final int[] COOLDOWNS = { 120, 200, 160, 600, 400, 200, 500, 300 };
 
     /** 武装中のスキル。次の行動で消費される */
     private final boolean[] armed = new boolean[SKILLS.length];

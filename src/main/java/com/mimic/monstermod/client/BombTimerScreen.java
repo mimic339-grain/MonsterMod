@@ -21,10 +21,12 @@ import net.minecraft.network.chat.Component;
 public class BombTimerScreen extends Screen {
 
     /**
-     * 選べる時間(秒)。0は即爆。
-     * 半径は BombTiming が決めており、即爆6 / 10秒12 / 30秒25 / 1分50 になる。
+     * 選べる時間(秒)。
+     * 即爆はここに入れない。火打ち石で起爆する手段が別にあり、
+     * 画面からも選べると「自爆覚悟の早撃ち」という位置づけが崩れるため。
+     * 半径は BombTiming が決めており、10秒12 / 30秒25 / 1分50 になる。
      */
-    private static final int[] CHOICES = { 0, 10, 30, 60 };
+    private static final int[] CHOICES = { 10, 30, 60 };
 
     private final BlockPos pos;
 
