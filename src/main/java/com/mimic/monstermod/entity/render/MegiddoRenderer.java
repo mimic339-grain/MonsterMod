@@ -108,20 +108,23 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             LIGHT_PHASE[i] = rng.nextFloat();
             LIGHT_SPEED[i] = 0.7F + rng.nextFloat() * 0.7F;
             LIGHT_START[i] = 3.6F + rng.nextFloat() * 3.4F; // 球の半径に対する倍率
-            LIGHT_SIZE[i] = 0.06F + rng.nextFloat() * 0.10F;
+            // 遠くから寄ってくるので、小さすぎると点にもならず見えない
+            LIGHT_SIZE[i] = 0.14F + rng.nextFloat() * 0.22F;
         }
         for (int i = 0; i < STARS; i++) {
             STAR_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
             STAR_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
             STAR_BLINK[i] = rng.nextFloat() * 20.0F;
-            STAR_SIZE[i] = 0.020F + rng.nextFloat() * 0.045F;
+            // 黒い球の上で瞬いていると分かる大きさにする(小さすぎると真っ黒に見える)
+            STAR_SIZE[i] = 0.05F + rng.nextFloat() * 0.13F;
         }
         for (int i = 0; i < BANG_MOTES; i++) {
             BANG_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
             BANG_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
             // 到達距離をばらけさせる。揃えると境界に丸い線が見えてしまう
             BANG_DIST[i] = 0.25F + rng.nextFloat() * rng.nextFloat() * 1.35F;
-            BANG_SIZE[i] = 0.05F + rng.nextFloat() * 0.13F;
+            // 30m以上に散らばるので、小さすぎると点にもならず「大量の光」に見えない
+            BANG_SIZE[i] = 0.12F + rng.nextFloat() * 0.30F;
             BANG_FALL[i] = 0.5F + rng.nextFloat() * 1.2F;
         }
     }
@@ -162,24 +165,31 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private void drawCharging(PoseStack pose, MultiBufferSource buffer, float radius,
                               float charge, float time, Vector3f right, Vector3f up) {
 
-        // 1. 黒い球。半透明で不透明に描くので、背景より暗い穴に見える
+        // --- 1. 黒い球と、円盤に沿って流れ込む黒い粒 ---
+        // この2つは同じ描画設定なので、必ずひとまとめに出し切る。
+        // 【重要】バニラは描画設定ごとに別のバッファを持っているわけではなく、
+        // 大半の設定で1つの入れ物を使い回している。
+        // そのため getBuffer で別の設定に切り替えたあと、前に受け取った入れ物へ書くと、
+        // その頂点は切り替え先のバッチに混ざってしまう(別のテクスチャで描かれる)。
+        // 受け取った入れ物は、次の getBuffer までの間に使い切ること。
         VertexConsumer solid = buffer.getBuffer(RenderType.entityTranslucent(GLOW_TEX));
         drawBlackSphere(pose.last(), solid, radius);
 
-        // 2. 円盤。
-        // 深度を書かない設定にしているのは、書くと自分の面同士や球と干渉して
-        // 輪が欠けて見えるため。球より後に描くので、球の裏側だけは正しく隠れる
-        VertexConsumer ring = buffer.getBuffer(RenderType.entityNoOutline(RING_TEX));
         pose.pushPose();
         pose.mulPose(Axis.ZP.rotationDegrees(RING_TILT_DEG));
-        pose.mulPose(Axis.YP.rotation(time * 0.004F)); // ゆっくり回す
-        drawRing(pose.last(), ring, radius);
-
-        // 3. 円盤の面に沿って流れ込む黒い粒
         drawDust(pose.last(), solid, radius, charge, time, right, up);
         pose.popPose();
 
-        // 4. 球の表面の星と、全方向から集まる光
+        // --- 2. 円盤 ---
+        // 深度を書かない設定にしているのは、書くと自分の面同士で干渉して
+        // 輪が欠けて見えるため。球より後に描くので、球の裏側だけは正しく隠れる
+        pose.pushPose();
+        pose.mulPose(Axis.ZP.rotationDegrees(RING_TILT_DEG));
+        pose.mulPose(Axis.YP.rotation(time * 0.004F)); // ゆっくり回す
+        drawRing(pose.last(), buffer.getBuffer(RenderType.entityNoOutline(RING_TEX)), radius);
+        pose.popPose();
+
+        // --- 3. 球の表面の星と、全方向から集まる光 ---
         VertexConsumer glow = buffer.getBuffer(RenderType.eyes(GLOW_TEX));
         drawStars(pose.last(), glow, radius, charge, time, right, up);
         drawIncomingLights(pose.last(), glow, radius, charge, time, right, up);
@@ -281,9 +291,10 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
      */
     private static void drawStars(PoseStack.Pose pose, VertexConsumer vc, float radius,
                                   float charge, float time, Vector3f right, Vector3f up) {
-        // 最初から少しだけ瞬いていないと、ただの黒い玉に見えてしまう
-        int count = Mth.clamp(Mth.floor(STARS * (0.08F + charge * charge * 0.92F)), 8, STARS);
-        float d = radius * 1.006F;
+        // 最初から結構な数が瞬いていないと、ただの黒い玉にしか見えない
+        int count = Mth.clamp(Mth.floor(STARS * (0.30F + charge * charge * 0.70F)), 40, STARS);
+        // 球のすぐ外側。中に置くと球に隠れて1粒も見えなくなる
+        float d = radius * 1.01F;
 
         for (int i = 0; i < count; i++) {
             float cy = Mth.cos(STAR_PITCH[i]);
