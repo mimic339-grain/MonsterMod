@@ -28,7 +28,17 @@ public final class VfxRenderUtil {
     /** 常に最大の明るさ。頂点フォーマットが要求するので値だけ渡す(シェーダは使わない) */
     public static final int FULL_BRIGHT = LightTexture.pack(15, 15);
 
-    /** 四角を1枚。頂点は時計回り/反時計回りのどちらか一方だけ描かれる */
+    /**
+     * 四角を1枚。頂点の順番によっては裏面と判定されて消える。
+     *
+     * 【使い分けの注意】
+     * 裏面を捨てる描画設定({@code RenderType.eyes} など)でこちらを使うと、
+     * 向きが合っていない面は1枚も残らず消える。
+     * カメラの方を向く板は特に事故が起きやすいので、
+     * そういう設定では {@link #quadBothSides} を使うこと。
+     * 裏面も描く設定({@code entityTranslucent} / {@code entityNoOutline})なら
+     * こちらで問題ない。
+     */
     public static void quad(PoseStack.Pose pose, VertexConsumer vc,
                             float r, float g, float b, float a,
                             float x1, float y1, float z1, float u1, float v1,

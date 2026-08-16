@@ -255,7 +255,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
             float sb = 0.92F + (b - 0.92F) * mix;
 
             float h = radius * SPARK_SIZE[i] * (1.0F - travel * 0.4F);
-            VfxRenderUtil.quad(pose, vc, sr, sg, sb, alpha,
+            VfxRenderUtil.quadBothSides(pose, vc, sr, sg, sb, alpha,
                     x - h, y - h, 0, 0, 0,
                     x + h, y - h, 0, 1, 0,
                     x + h, y + h, 0, 1, 1,
@@ -267,7 +267,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static void drawFlatQuad(PoseStack.Pose pose, VertexConsumer vc, float size,
                                      float r, float g, float b, float a) {
         float h = size * 0.5F;
-        VfxRenderUtil.quad(pose, vc, r, g, b, a,
+        VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
                 -h, -h, 0, 0, 0,
                  h, -h, 0, 1, 0,
                  h,  h, 0, 1, 1,
@@ -279,7 +279,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
                                 float px, float py, float ex, float ey,
                                 float r, float g, float b, float alpha) {
         // 根元(中心付近)の2点と、先端の1点をつぶした四角で三角形のように見せる
-        VfxRenderUtil.quad(pose, vc, 1.0F, 0.98F, 0.9F, alpha,
+        VfxRenderUtil.quadBothSides(pose, vc, 1.0F, 0.98F, 0.9F, alpha,
                 px, py, 0, 0.0F, 0.0F,
                 -px, -py, 0, 0.0F, 1.0F,
                 ex - px * 0.15F, ey - py * 0.15F, 0, 1.0F, 1.0F,
@@ -331,7 +331,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         pose.mulPose(this.entityRenderDispatcher.cameraOrientation());
 
         float h = size * 0.5F;
-        VfxRenderUtil.quad(pose.last(), vc, r, g, b, a,
+        VfxRenderUtil.quadBothSides(pose.last(), vc, r, g, b, a,
                 -h, -h, 0, 0, 0,
                  h, -h, 0, 1, 0,
                  h,  h, 0, 1, 1,
