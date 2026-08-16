@@ -7,6 +7,8 @@
   "item.monstermod.vortex_wand": "竜巻の杖",
   "item.monstermod.bomb_defuser": "ボム解除キット",
   "item.monstermod.bomb_remnant": "解除したボムの残骸",
+  "item.monstermod.placed_bomb": "設置ボム",
+  "block.monstermod.placed_bomb": "設置ボム",
   "entity.monstermod.beam": "ビーム",
   "entity.monstermod.vortex": "竜巻"
 }

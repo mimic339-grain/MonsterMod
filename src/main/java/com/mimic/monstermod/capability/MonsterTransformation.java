@@ -135,6 +135,12 @@ public void startTransformation(Player player, ResourceLocation mobId) {
 
             this.isTransformed = true;
             player.setHealth((float) Math.min(savedHP, player.getMaxHealth()));
+
+        } else if (identity != null && !identity.hasOwnBody()) {
+            // ボマーや人狼のように、変身先の体を持たない役職。
+            // 見た目・体格・HPはプレイヤーのままなので、属性のコピーもHPの入れ替えも行わない。
+            // スキルを使えるようにするために変身状態だけを立てる
+            this.isTransformed = true;
         }
     }
 
@@ -289,21 +295,30 @@ public void startTransformation(Player player, ResourceLocation mobId) {
     private BaseIdentity ensureIdentity(Level level, BaseEntity ent, Player player) {
         // 修正: 既存のidentityが存在しても、IDが異なる場合は古いものを破棄して再作成する
         if (identity != null) {
-            // 【修正】以前は identity.getId()("entity.monstermod.yatagarasu") と
-            // transformedMobId.toString()("monstermod:yatagarasu") を比較しており、
-            // 形式が違うため一度も一致せず、毎回Identityを作り直していた
-            // (クールダウン等の状態が保持されない原因)。EntityTypeで直接比較する。
-            var expectedType = ModEntitieType.getEntityType(transformedMobId);
-            if (expectedType != null && identity.getEntity() != null
-                    && identity.getEntity().getType() == expectedType) {
-                return identity;
-            } else {
-                // 変身先が変わっている場合は破棄
+            if (!identity.hasOwnBody()) {
+                // ボマーなど実体を持たない役職は EntityType で比較できないので、IDで見る
+                if (transformedMobId != null && transformedMobId.toString().equals(identity.getId())) {
+                    return identity;
+                }
                 identity = null;
+            } else {
+                // 【修正】以前は identity.getId()("entity.monstermod.yatagarasu") と
+                // transformedMobId.toString()("monstermod:yatagarasu") を比較しており、
+                // 形式が違うため一度も一致せず、毎回Identityを作り直していた
+                // (クールダウン等の状態が保持されない原因)。EntityTypeで直接比較する。
+                var expectedType = ModEntitieType.getEntityType(transformedMobId);
+                if (expectedType != null && identity.getEntity() != null
+                        && identity.getEntity().getType() == expectedType) {
+                    return identity;
+                } else {
+                    // 変身先が変わっている場合は破棄
+                    identity = null;
+                }
             }
         }
 
-        if (transformedMobId != null && ent != null) {
+        // ent が null でも生成する。実体を持たない役職(ボマーなど)はこちらで作られる
+        if (transformedMobId != null) {
             var type = IdentityType.fromId(transformedMobId);
             if (type != null) {
                 identity = type.createIdentity(ent);

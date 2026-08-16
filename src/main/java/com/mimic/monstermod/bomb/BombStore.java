@@ -25,6 +25,19 @@ public class BombStore extends SavedData {
 
     private final Map<BlockPos, BombInstance> bombs = new HashMap<>();
 
+    /**
+     * コマンドで固定したタイマーの長さ(tick)。0以下ならランダム。
+     * 「今日は30秒固定でやろう」のように、遊ぶ側でテンポを決められるようにするためのもの。
+     */
+    private int fixedFuse = 0;
+
+    public int getFixedFuse() { return fixedFuse; }
+
+    public void setFixedFuse(int ticks) {
+        this.fixedFuse = Math.max(0, ticks);
+        setDirty();
+    }
+
     public static BombStore get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(BombStore::load, BombStore::new, NAME);
     }
@@ -62,11 +75,13 @@ public class BombStore extends SavedData {
             list.add(entry);
         });
         tag.put("bombs", list);
+        tag.putInt("fixedFuse", fixedFuse);
         return tag;
     }
 
     public static BombStore load(CompoundTag tag) {
         BombStore store = new BombStore();
+        store.fixedFuse = tag.getInt("fixedFuse");
         ListTag list = tag.getList("bombs", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             CompoundTag entry = list.getCompound(i);

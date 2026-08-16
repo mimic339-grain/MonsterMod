@@ -43,6 +43,10 @@ public class ModItems {
     public static final RegistryObject<Item> BOMB_REMNANT =
             ITEMS.register("bomb_remnant", () -> new Item(new Item.Properties()));
 
+    // 設置する大型ボム(ボマーのスキル5で手に入る)
+    public static final RegistryObject<Item> PLACED_BOMB =
+            ITEMS.register("placed_bomb", com.mimic.monstermod.item.PlacedBombItem::new);
+
 
     // 登録処理
     public static void register(IEventBus eventBus) {

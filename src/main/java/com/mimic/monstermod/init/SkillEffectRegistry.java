@@ -2,6 +2,7 @@ package com.mimic.monstermod.init;
 
 import com.mimic.monstermod.effect.ModEffects;
 import com.mimic.monstermod.identity.monster.YatagarasuIdentity;
+import com.mimic.monstermod.identity.bomber.BomberSkills;
 import com.mimic.monstermod.identity.monster.yatagarasu.*;
 import com.mimic.monstermod.skill.*;
 import net.minecraft.world.effect.MobEffects;
@@ -17,6 +18,14 @@ public final class SkillEffectRegistry {
         register(YatagarasuIdentity.ONIBI, new OnibiSkill());
         register(YatagarasuIdentity.SPIRAL, new OnibiSpiralSkill());
         register(YatagarasuIdentity.TORNADO, new TornadoSkill());
+
+        // ボマー(見た目を変えない役職)の6スキル
+        register(BomberSkills.TOUCH,  BomberSkills.touch());
+        register(BomberSkills.ITEM,   BomberSkills.itemTrap());
+        register(BomberSkills.BLOCK,  BomberSkills.blockTrap());
+        register(BomberSkills.VANISH, BomberSkills.vanish());
+        register(BomberSkills.PLACE,  BomberSkills.place());
+        register(BomberSkills.RELAY,  BomberSkills.relay());
         // ① test_2d: 物理ダメージ + STRIKE挙動
         register(SkillId.of("monstermod", "test_2d"), new SkillEffectSpec(
                 5.0f, DamageType.PHYSICAL, SkillType.STRIKE, List.of()

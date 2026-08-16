@@ -77,6 +77,17 @@ public class BaseIdentity {
         return true;
     }
 
+    /**
+     * そのスキルが「武装中(押したがまだ発動していない)」か。
+     *
+     * ボマーの「殴った相手にボムを付ける」のように、
+     * 押した瞬間ではなく次の行動で効果が出るスキル用。
+     * HUDはこれが true の間、枠を青(使用中)で描く。
+     */
+    public boolean isArmed(int index) {
+        return false;
+    }
+
     public SkillId[] getSkillIds() {
         return this.skillIds;
     }

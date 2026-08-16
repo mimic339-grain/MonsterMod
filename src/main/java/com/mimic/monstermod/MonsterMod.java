@@ -34,6 +34,7 @@ public class MonsterMod {
         // 1. 各種レジストリの登録（これはコンストラクタでOK）
         ModEntitieType.register(modEventBus);
         ModItems.register(modEventBus);
+        com.mimic.monstermod.init.ModBlocks.register(modEventBus);
         ModMessages.register();
         ModEffects.MOB_EFFECTS.register(modEventBus);
 
@@ -51,6 +52,7 @@ public class MonsterMod {
         event.enqueueWork(() -> {
             // すべての RegistryObject が get() 可能になった状態で初期化
             com.mimic.monstermod.identity.monster.YatagarasuIdentity.initSkillRegistry();
+            com.mimic.monstermod.identity.bomber.BomberSkills.registerLeads();
             com.mimic.monstermod.identity.util.MimicSkillLeads.registerAll();
             LOGGER.info("MonsterMod: Skills and Leads have been initialized.");
         });

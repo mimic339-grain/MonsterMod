@@ -36,6 +36,7 @@ public class ModCreativeTabs {
                                     output.accept(ModItems.VORTEX_WAND.get());
                                     output.accept(ModItems.BOMB_DEFUSER.get());
                                     output.accept(ModItems.BOMB_REMNANT.get());
+                                    output.accept(ModItems.PLACED_BOMB.get());
                                 })
                                 .build()
                 )

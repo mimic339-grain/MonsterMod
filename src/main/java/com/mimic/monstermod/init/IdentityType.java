@@ -65,7 +65,9 @@ public class IdentityType {
                                 Class<? extends BaseEntity> entityClass,
                                 IdentityFactory factory) {
         IdentityType type = new IdentityType(id, entityClass, factory);
-        ENTITY_MAP.put(entityClass, type);
+        // ボマーのように変身先の実体を持たない役職は entityClass が null になる。
+        // その場合はエンティティからの逆引きには載せない(nullキーで誤ヒットするため)
+        if (entityClass != null) ENTITY_MAP.put(entityClass, type);
         ID_MAP.put(id, type);
     }
 
@@ -98,6 +100,13 @@ public class IdentityType {
                 new ResourceLocation("monstermod", "yatagarasu"),
                 YatagarasuEntity.class,
                 YatagarasuIdentity::new
+        );
+        // ボマー: 見た目は変えず、固定スキルだけを与える役職。
+        // 変身先の実体が無いので entityClass は null
+        register(
+                new ResourceLocation("monstermod", "bomber"),
+                null,
+                com.mimic.monstermod.identity.bomber.BomberIdentity::new
         );
     }
 

@@ -58,7 +58,10 @@ public class MonsterSkillOverlay {
 
         int currentCd = identity.getCooldown(index);
         int defaultCd = identity.getDefaultCooldown(index);
-        boolean isEffectActive = identity.isEffectActive(index);
+        // 「武装中」もスキル発動中と同じ青枠で見せる。
+        // ボマーの殴打ボムのように、押しただけでは何も起きず次の行動で効くスキルがあるため、
+        // 今その状態かどうかが分からないと使いようがない
+        boolean isEffectActive = identity.isEffectActive(index) || identity.isArmed(index);
         boolean isAnyActive = identity.isAnySkillActive();
         boolean isComboWindow = identity.isComboWindowActive();
         int lockTime = identity.getLockTime(index);
