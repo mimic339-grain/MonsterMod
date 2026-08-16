@@ -4,7 +4,6 @@ import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.obj.MegiddoEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -19,49 +18,56 @@ import java.util.Random;
 /**
  * メギドの描画。土星のような「黒い球 + 傾いた円盤」。
  *
- * 【構成】
- *  黒い球   … 光を通さない不透明の球。通常の半透明で描くので背景より暗くなり、
- *              穴が空いているように見える。
- *  星       … 球の表面すれすれに散らした細かい光。エンドの星空のような見え方。
- *              ためが進むほど数が増えていく。
- *  円盤     … 地面に近い角度で傾けた輪。土星の環のようにザラついた薄い黄色。
- *  黒い粒   … 円盤の面に沿って外から球へ流れ込む砂粒。
- *  光の粒   … 全方向(360度)から球へ集まってくる光。
- *              最初は無く、ためが進むにつれて数が増え、動きも加速していく。
- *  はじける … 集めた光が一気に外へばらまかれ、減速しながら粉雪のように落ちて消える。
+ * 【すべてを1つの描画設定・1枚のテクスチャで描く理由】
+ * 以前は球・円盤・光をそれぞれ別の描画設定で出していたが、
+ * 円盤の手前半分が描かれない、光が1粒も出ない、という不具合が取れなかった。
+ * バニラは大半の描画設定で1つの入れ物を使い回しており、
+ * 設定を切り替えるたびにそこまでの内容を描いて入れ物を作り直す作りになっている。
+ * その切り替えが絡むと再現しづらい取りこぼしが起きるため、
+ * 切り替えを一切行わない形に作り直した。
  *
- * 【粒を実体で出さない理由】
- * 千個単位の粒をエンティティやパーティクルで出すと重く、同期もばらつく。
- * ここでは「何番目の粒か」と時間から位置を毎フレーム計算しているので、
- * 数を増やしても負担が小さく、全員に同じ動きが見える。
+ * 【円盤を面ではなく粒で作る理由】
+ * 大きな面を並べる方式で手前半分が消えていたのに対し、
+ * 同じ場所に出していた粒(板)は問題なく描けていた。
+ * 粒で作れば確実に描けるうえ、土星の環のようなザラついた質感にも合う。
+ *
+ * 【構成】
+ *  黒い球   … 光を通さない不透明の球。背景より暗くなり、穴が空いているように見える。
+ *  星       … 球の表面すれすれに散らした細かい光。エンドの星空のような見え方。
+ *  円盤     … 浅く傾けた輪。細かい粒の集まりで、内外に濃淡の帯がある。
+ *  黒い粒   … 円盤の面に沿って外から球へ流れ込む砂粒。
+ *  光の粒   … 全方向(360度)から球へ集まってくる光。ためが進むほど増えて速くなる。
+ *  はじける … 集めた光が一気に外へばらまかれ、減速しながら粉雪のように落ちて消える。
  */
 public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
-    private static final ResourceLocation RING_TEX =
-            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/ring.png");
-    private static final ResourceLocation GLOW_TEX =
+    /** 粒1つぶんの絵。中心が白く外へ向かって消える丸 */
+    private static final ResourceLocation TEX =
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
 
-    /** 円盤の傾き。土星のように、地面に近い浅い角度にする */
-    private static final float RING_TILT_DEG = 14.0F;
+    /** 円盤の傾き。土星のように地面に近い浅い角度にする */
+    private static final float RING_TILT = (float) Math.toRadians(14.0);
 
     /** 球の分割数 */
     private static final int SPHERE_LON = 30;
     private static final int SPHERE_LAT = 16;
 
-    /** 円盤の分割数と、内側/外側の半径(球の半径に対する倍率) */
-    private static final int RING_SEGMENTS = 72;
+    /** 円盤の粒の数と、内側/外側の半径(球の半径に対する倍率) */
+    private static final int RING_GRAINS = 3000;
     private static final float RING_INNER = 1.6F;
     private static final float RING_OUTER = 3.4F;
 
-    /** 円盤の面に沿って流れ込む黒い粒 */
-    private static final int DUST = 200;
-    /** 全方向から集まってくる光の粒 */
-    private static final int LIGHTS = 420;
-    /** 球の表面に散らす星 */
-    private static final int STARS = 300;
-    /** はじけたときにばらまく光の粒 */
-    private static final int BANG_MOTES = 1500;
+    private static final int DUST = 200;    // 円盤沿いに流れ込む黒い粒
+    private static final int LIGHTS = 420;  // 全方向から集まる光
+    private static final int STARS = 300;   // 球の表面の星
+    private static final int BANG = 1500;   // はじけたときにばらまく光
+
+    // --- 円盤の粒 ---
+    private static final float[] RING_R = new float[RING_GRAINS];      // 半径(内外の割合)
+    private static final float[] RING_A = new float[RING_GRAINS];      // 角度
+    private static final float[] RING_Y = new float[RING_GRAINS];      // 厚みのばらつき
+    private static final float[] RING_SIZE = new float[RING_GRAINS];
+    private static final float[] RING_BRIGHT = new float[RING_GRAINS];
 
     // --- 黒い粒(円盤沿い) ---
     private static final float[] DUST_ANGLE = new float[DUST];
@@ -85,15 +91,23 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
     private static final float[] STAR_SIZE = new float[STARS];
 
     // --- はじけたときの粒 ---
-    private static final float[] BANG_YAW = new float[BANG_MOTES];
-    private static final float[] BANG_PITCH = new float[BANG_MOTES];
-    private static final float[] BANG_DIST = new float[BANG_MOTES];
-    private static final float[] BANG_SIZE = new float[BANG_MOTES];
-    private static final float[] BANG_FALL = new float[BANG_MOTES];
+    private static final float[] BANG_YAW = new float[BANG];
+    private static final float[] BANG_PITCH = new float[BANG];
+    private static final float[] BANG_DIST = new float[BANG];
+    private static final float[] BANG_SIZE = new float[BANG];
+    private static final float[] BANG_FALL = new float[BANG];
 
     static {
         Random rng = new Random(20260819L);
 
+        for (int i = 0; i < RING_GRAINS; i++) {
+            // 面積あたりの密度が均一になるよう、半径は平方根で散らす
+            RING_R[i] = Mth.sqrt(rng.nextFloat());
+            RING_A[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
+            RING_Y[i] = (rng.nextFloat() - 0.5F) * 0.06F;
+            RING_SIZE[i] = 0.10F + rng.nextFloat() * 0.16F;
+            RING_BRIGHT[i] = 0.55F + rng.nextFloat() * 0.45F;
+        }
         for (int i = 0; i < DUST; i++) {
             DUST_ANGLE[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
             DUST_HEIGHT[i] = (rng.nextFloat() - 0.5F) * 0.35F;
@@ -107,23 +121,20 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             LIGHT_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
             LIGHT_PHASE[i] = rng.nextFloat();
             LIGHT_SPEED[i] = 0.7F + rng.nextFloat() * 0.7F;
-            LIGHT_START[i] = 3.6F + rng.nextFloat() * 3.4F; // 球の半径に対する倍率
-            // 遠くから寄ってくるので、小さすぎると点にもならず見えない
-            LIGHT_SIZE[i] = 0.14F + rng.nextFloat() * 0.22F;
+            LIGHT_START[i] = 3.6F + rng.nextFloat() * 3.4F;
+            LIGHT_SIZE[i] = 0.16F + rng.nextFloat() * 0.24F;
         }
         for (int i = 0; i < STARS; i++) {
             STAR_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
             STAR_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
             STAR_BLINK[i] = rng.nextFloat() * 20.0F;
-            // 黒い球の上で瞬いていると分かる大きさにする(小さすぎると真っ黒に見える)
-            STAR_SIZE[i] = 0.05F + rng.nextFloat() * 0.13F;
+            STAR_SIZE[i] = 0.06F + rng.nextFloat() * 0.14F;
         }
-        for (int i = 0; i < BANG_MOTES; i++) {
+        for (int i = 0; i < BANG; i++) {
             BANG_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
             BANG_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
             // 到達距離をばらけさせる。揃えると境界に丸い線が見えてしまう
             BANG_DIST[i] = 0.25F + rng.nextFloat() * rng.nextFloat() * 1.35F;
-            // 30m以上に散らばるので、小さすぎると点にもならず「大量の光」に見えない
             BANG_SIZE[i] = 0.12F + rng.nextFloat() * 0.30F;
             BANG_FALL[i] = 0.5F + rng.nextFloat() * 1.2F;
         }
@@ -150,55 +161,28 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
         pose.pushPose();
         pose.translate(0.0, entity.getCenterOffset(), 0.0);
+        PoseStack.Pose p = pose.last();
+
+        // ここから最後まで、描画設定を切り替えずに一気に出し切る
+        VertexConsumer vc = buffer.getBuffer(RenderType.entityTranslucent(TEX));
 
         if (!banging) {
-            drawCharging(pose, buffer, radius, charge, time, right, up);
+            drawBlackSphere(p, vc, radius);
+            drawRingGrains(p, vc, radius, time, right, up);
+            drawDust(p, vc, radius, charge, time, right, up);
+            drawStars(p, vc, radius, charge, time, right, up);
+            drawIncomingLights(p, vc, radius, charge, time, right, up);
         } else {
-            drawBigBang(pose, buffer, entity, radius, bang, time, right, up);
+            drawBigBang(p, vc, entity, radius, bang, time, right, up);
         }
 
         pose.popPose();
     }
 
-    // ---------------- ためている間 ----------------
-
-    private void drawCharging(PoseStack pose, MultiBufferSource buffer, float radius,
-                              float charge, float time, Vector3f right, Vector3f up) {
-
-        // --- 1. 黒い球と、円盤に沿って流れ込む黒い粒 ---
-        // この2つは同じ描画設定なので、必ずひとまとめに出し切る。
-        // 【重要】バニラは描画設定ごとに別のバッファを持っているわけではなく、
-        // 大半の設定で1つの入れ物を使い回している。
-        // そのため getBuffer で別の設定に切り替えたあと、前に受け取った入れ物へ書くと、
-        // その頂点は切り替え先のバッチに混ざってしまう(別のテクスチャで描かれる)。
-        // 受け取った入れ物は、次の getBuffer までの間に使い切ること。
-        VertexConsumer solid = buffer.getBuffer(RenderType.entityTranslucent(GLOW_TEX));
-        drawBlackSphere(pose.last(), solid, radius);
-
-        pose.pushPose();
-        pose.mulPose(Axis.ZP.rotationDegrees(RING_TILT_DEG));
-        drawDust(pose.last(), solid, radius, charge, time, right, up);
-        pose.popPose();
-
-        // --- 2. 円盤 ---
-        // 深度を書かない設定にしているのは、書くと自分の面同士で干渉して
-        // 輪が欠けて見えるため。球より後に描くので、球の裏側だけは正しく隠れる
-        pose.pushPose();
-        pose.mulPose(Axis.ZP.rotationDegrees(RING_TILT_DEG));
-        pose.mulPose(Axis.YP.rotation(time * 0.004F)); // ゆっくり回す
-        drawRing(pose.last(), buffer.getBuffer(RenderType.entityNoOutline(RING_TEX)), radius);
-        pose.popPose();
-
-        // --- 3. 球の表面の星と、全方向から集まる光 ---
-        VertexConsumer glow = buffer.getBuffer(RenderType.eyes(GLOW_TEX));
-        drawStars(pose.last(), glow, radius, charge, time, right, up);
-        drawIncomingLights(pose.last(), glow, radius, charge, time, right, up);
-    }
-
     /**
      * 光を通さない黒い球。
-     * 通常の半透明で不透明に描くことで、背景より暗い「穴」に見せている
-     * (加算合成では明るくしかできないので、この見え方は作れない)。
+     * 不透明に描くことで背景より暗い「穴」に見せている。
+     * この球だけは奥行きを書き込むので、裏側にある粒はきちんと隠れる。
      */
     private static void drawBlackSphere(PoseStack.Pose pose, VertexConsumer vc, float radius) {
         for (int lat = 0; lat < SPHERE_LAT; lat++) {
@@ -216,44 +200,54 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
                 float x01 = Mth.cos(a0) * r1, z01 = Mth.sin(a0) * r1;
                 float x11 = Mth.cos(a1) * r1, z11 = Mth.sin(a1) * r1;
 
-                // 真っ黒。テクスチャの中心(不透明な部分)だけを使う
+                // 真っ黒。粒用の絵の中心(不透明な部分)だけを使う
                 VfxRenderUtil.quadLit(pose, vc, 0.015F, 0.015F, 0.025F, 1.0F,
                         VfxRenderUtil.FULL_BRIGHT,
-                        x00, y0, z00, 0.5F, 0.5F,
-                        x10, y0, z10, 0.5F, 0.5F,
-                        x11, y1, z11, 0.5F, 0.5F,
-                        x01, y1, z01, 0.5F, 0.5F);
+                        x00, y0, z00, 0.45F, 0.45F,
+                        x10, y0, z10, 0.55F, 0.45F,
+                        x11, y1, z11, 0.55F, 0.55F,
+                        x01, y1, z01, 0.45F, 0.55F);
             }
         }
     }
 
-    /** 土星の環のような円盤。帯とザラつきはテクスチャ側が持っている */
-    private static void drawRing(PoseStack.Pose pose, VertexConsumer vc, float radius) {
+    /**
+     * 土星の環のような円盤。細かい粒の集まりで作る。
+     *
+     * 半径によって明るさに濃淡を付け、暗い帯(カッシーニの間隙のようなもの)も入れている。
+     * 粒の集まりなので、近くで見るとザラついた質感になる。
+     */
+    private static void drawRingGrains(PoseStack.Pose pose, VertexConsumer vc, float radius,
+                                       float time, Vector3f right, Vector3f up) {
         float inner = radius * RING_INNER;
         float outer = radius * RING_OUTER;
+        float spin = time * 0.004F;
 
-        for (int i = 0; i < RING_SEGMENTS; i++) {
-            float a0 = (float) (Math.PI * 2.0 * i / RING_SEGMENTS);
-            float a1 = (float) (Math.PI * 2.0 * (i + 1) / RING_SEGMENTS);
-            float u0 = (float) i / RING_SEGMENTS, u1 = (float) (i + 1) / RING_SEGMENTS;
+        float sinT = Mth.sin(RING_TILT), cosT = Mth.cos(RING_TILT);
 
-            float c0 = Mth.cos(a0), s0 = Mth.sin(a0);
-            float c1 = Mth.cos(a1), s1 = Mth.sin(a1);
+        for (int i = 0; i < RING_GRAINS; i++) {
+            float t = RING_R[i];                       // 0=内側 1=外側
+            float dist = Mth.lerp(t, inner, outer);
+            float ang = RING_A[i] + spin;
 
-            // 薄い黄色。無機質に見せたいので彩度は低め
-            float r = 0.95F, g = 0.90F, b = 0.72F;
+            // 濃淡の帯。同心の縞と、数本の暗い隙間で土星らしくする
+            float band = 0.55F + 0.45F * Mth.sin(t * 26.0F);
+            float gap = Mth.abs(Mth.sin(t * 7.3F + 1.2F)) < 0.10F ? 0.25F : 1.0F;
+            // 内外の縁はなめらかに薄くする
+            float edge = Mth.sin((float) Math.PI * Mth.clamp(t, 0.0F, 1.0F));
+            float alpha = RING_BRIGHT[i] * band * gap * (0.35F + 0.65F * edge);
 
-            // 表と裏。円盤は薄いので、両側から見えないと消えたように見える
-            VfxRenderUtil.quadLit(pose, vc, r, g, b, 0.9F, VfxRenderUtil.FULL_BRIGHT,
-                    c0 * inner, 0, s0 * inner, u0, 0.0F,
-                    c1 * inner, 0, s1 * inner, u1, 0.0F,
-                    c1 * outer, 0, s1 * outer, u1, 1.0F,
-                    c0 * outer, 0, s0 * outer, u0, 1.0F);
-            VfxRenderUtil.quadLit(pose, vc, r, g, b, 0.9F, VfxRenderUtil.FULL_BRIGHT,
-                    c0 * outer, 0, s0 * outer, u0, 1.0F,
-                    c1 * outer, 0, s1 * outer, u1, 1.0F,
-                    c1 * inner, 0, s1 * inner, u1, 0.0F,
-                    c0 * inner, 0, s0 * inner, u0, 0.0F);
+            // 円盤の面(傾き込み)での位置。回転は行列ではなく座標で直接付ける
+            float fx = Mth.cos(ang) * dist;
+            float fz = Mth.sin(ang) * dist;
+            float fy = RING_Y[i] * radius;
+
+            // 傾きをZ軸まわりに掛ける
+            float x = fx * cosT - fy * sinT;
+            float y = fx * sinT + fy * cosT;
+
+            spark(pose, vc, x, y, fz, RING_SIZE[i] * radius, right, up,
+                    0.96F, 0.92F, 0.74F, alpha);
         }
     }
 
@@ -267,34 +261,38 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
                                  float charge, float time, Vector3f right, Vector3f up) {
         // ためが進むほど速く。速すぎると砂嵐に見えるので控えめにしてある
         float speed = 0.18F + charge * charge * 1.0F;
+        float sinT = Mth.sin(RING_TILT), cosT = Mth.cos(RING_TILT);
 
         for (int i = 0; i < DUST; i++) {
             float t = frac(DUST_PHASE[i] + time * 0.004F * DUST_SPEED[i] * speed);
 
             float dist = Mth.lerp(t, radius * RING_OUTER, radius * 0.95F);
-            float ang = DUST_ANGLE[i] + t * 1.6F;        // 巻き込まれながら落ちる
-            float y = DUST_HEIGHT[i] * radius * (1.0F - t); // 球に近づくほど平らになる
+            float ang = DUST_ANGLE[i] + t * 1.6F;             // 巻き込まれながら落ちる
+            float fy = DUST_HEIGHT[i] * radius * (1.0F - t);  // 球に近づくほど平らになる
+
+            float fx = Mth.cos(ang) * dist;
+            float fz = Mth.sin(ang) * dist;
+            float x = fx * cosT - fy * sinT;
+            float y = fx * sinT + fy * cosT;
 
             float alpha = Mth.clamp((1.0F - t) * 3.0F, 0.0F, 1.0F) * 0.9F;
-
-            spark(pose, vc, Mth.cos(ang) * dist, y, Mth.sin(ang) * dist,
-                    DUST_SIZE[i] * radius * 0.5F, right, up, 0.02F, 0.02F, 0.04F, alpha);
+            spark(pose, vc, x, y, fz, DUST_SIZE[i] * radius * 0.5F, right, up,
+                    0.02F, 0.02F, 0.04F, alpha);
         }
     }
 
     /**
-     * 球の表面に散らした星。
+     * 球の表面の星。
      *
-     * 球のすぐ外側に置いているので、手前側だけが見え、裏側は球に隠れる。
+     * 球の少し外側に置いているので手前側だけが見え、裏側は球に隠れる。
      * これでエンドの星空のように「黒い球の中で瞬いている」ように見える。
-     * ためが進むほど数が増え、吸い込んだものが溜まっていく感じになる。
+     * 表面に近づけすぎると奥行きの精度負けで消えるため、少し余裕を取っている。
      */
     private static void drawStars(PoseStack.Pose pose, VertexConsumer vc, float radius,
                                   float charge, float time, Vector3f right, Vector3f up) {
         // 最初から結構な数が瞬いていないと、ただの黒い玉にしか見えない
-        int count = Mth.clamp(Mth.floor(STARS * (0.30F + charge * charge * 0.70F)), 40, STARS);
-        // 球のすぐ外側。中に置くと球に隠れて1粒も見えなくなる
-        float d = radius * 1.01F;
+        int count = Mth.clamp(Mth.floor(STARS * (0.30F + charge * charge * 0.70F)), 60, STARS);
+        float d = radius * 1.06F;
 
         for (int i = 0; i < count; i++) {
             float cy = Mth.cos(STAR_PITCH[i]);
@@ -313,7 +311,6 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
      *
      * 最初は1粒も無く、ためが進むにつれて数が増えていく。
      * 動きも最初はほとんど止まって見えるほど遅く、終盤で一気に速くなる。
-     * 上下も含めた全方向から寄ってくるので、球が空間ごと吸い込んでいるように見える。
      */
     private static void drawIncomingLights(PoseStack.Pose pose, VertexConsumer vc, float radius,
                                            float charge, float time, Vector3f right, Vector3f up) {
@@ -326,9 +323,8 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
         for (int i = 0; i < count; i++) {
             float t = frac(LIGHT_PHASE[i] + time * 0.004F * LIGHT_SPEED[i] * speed);
 
-            float dist = Mth.lerp(t, radius * LIGHT_START[i], radius * 1.02F);
-            // 落ちながら少し巻き込まれる。まっすぐだと吸引に見えない
-            float yaw = LIGHT_YAW[i] + t * 1.2F;
+            float dist = Mth.lerp(t, radius * LIGHT_START[i], radius * 1.08F);
+            float yaw = LIGHT_YAW[i] + t * 1.2F; // 少し巻き込まれる。まっすぐだと吸引に見えない
             float cy = Mth.cos(LIGHT_PITCH[i]);
 
             float x = Mth.cos(yaw) * cy * dist;
@@ -337,13 +333,10 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
             // 現れるところと吸い込まれるところで急に出入りしないようにする
             float alpha = Mth.clamp(t * 6.0F, 0.0F, 1.0F) * Mth.clamp((1.0F - t) * 8.0F, 0.0F, 1.0F);
-
             spark(pose, vc, x, y, z, LIGHT_SIZE[i] * radius, right, up,
                     1.0F, 0.95F, 0.82F, alpha);
         }
     }
-
-    // ---------------- はじけた後 ----------------
 
     /**
      * ビッグバン。集めた光が一気に外へばらまかれる。
@@ -352,24 +345,22 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
      * 最後は粉雪のようにゆっくり落ちながら消えていく。
      * 到達距離を粒ごとにばらけさせているので、外周に丸い線が見えない。
      */
-    private void drawBigBang(PoseStack pose, MultiBufferSource buffer, MegiddoEntity entity,
-                             float radius, float bang, float time, Vector3f right, Vector3f up) {
-
-        VertexConsumer glow = buffer.getBuffer(RenderType.eyes(GLOW_TEX));
-        PoseStack.Pose last = pose.last();
+    private static void drawBigBang(PoseStack.Pose pose, VertexConsumer vc, MegiddoEntity entity,
+                                    float radius, float bang, float time,
+                                    Vector3f right, Vector3f up) {
         float reach = entity.getBlastRadius();
 
         // 中心の閃光。一瞬だけ強く光って消える
-        float flashAlpha = Math.max(0.0F, 1.0F - bang * 4.0F);
-        if (flashAlpha > 0.0F) {
-            spark(last, glow, 0, 0, 0, radius * (3.0F + bang * 20.0F), right, up,
-                    1.0F, 0.98F, 0.92F, flashAlpha);
+        float flash = Math.max(0.0F, 1.0F - bang * 4.0F);
+        if (flash > 0.0F) {
+            spark(pose, vc, 0, 0, 0, radius * (3.0F + bang * 20.0F), right, up,
+                    1.0F, 0.98F, 0.92F, flash);
         }
 
         // 飛び散る光。1 - e^(-kt) で「最初速く、あとは急減速」を作る
         float travel = 1.0F - (float) Math.exp(-4.5F * bang);
 
-        for (int i = 0; i < BANG_MOTES; i++) {
+        for (int i = 0; i < BANG; i++) {
             float maxDist = reach * BANG_DIST[i];
             float d = maxDist * travel;
 
@@ -383,7 +374,7 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
             float twinkle = 0.6F + 0.4F * Mth.sin(time * 0.7F + i);
             float alpha = (1.0F - bang) * (1.0F - bang) * twinkle;
 
-            spark(last, glow, x, y, z, BANG_SIZE[i] * radius, right, up,
+            spark(pose, vc, x, y, z, BANG_SIZE[i] * radius, right, up,
                     1.0F, 0.94F, 0.80F, alpha);
         }
     }
@@ -400,7 +391,8 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
                               float x, float y, float z, float size,
                               Vector3f right, Vector3f up,
                               float r, float g, float b, float a) {
-        if (a <= 0.01F || size <= 0.0F) return;
+        // この描画設定は不透明度が一定を下回った点を捨てるので、薄すぎるものは出さない
+        if (a <= 0.12F || size <= 0.0F) return;
 
         float h = size * 0.5F;
         float rx = right.x * h, ry = right.y * h, rz = right.z * h;
@@ -421,6 +413,6 @@ public class MegiddoRenderer extends EntityRenderer<MegiddoEntity> {
 
     @Override
     public ResourceLocation getTextureLocation(MegiddoEntity entity) {
-        return RING_TEX;
+        return TEX;
     }
 }
