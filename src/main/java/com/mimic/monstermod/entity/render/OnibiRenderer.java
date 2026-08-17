@@ -30,23 +30,34 @@ import java.util.Random;
  * 幅の中心を時間で横へずらすと、炎が揺らめく。
  * 上へ行くほど大きくずらすので、根元は据わったまま先だけが揺れる。
  *
- * 【色の重なり】
- * 同じ形を大きさを変えて重ねている(外から 藍 → 水色 → 紫)。
- * 加算合成は重ねるほど白へ寄るので、白や水色を強くすると
- * せっかくの藍と紫がその上から飛んで、ただの光る塊になってしまう。
- * そのため白い芯は出さず、水色も色をつなぐだけの薄さに留め、
- * 見せたい藍と紫だけを濃くしている。
+ * 【加算合成をやめた理由 = 白飛びの原因】
+ * 以前は炎全体を {@code RenderType.eyes}(加算合成)で描いていた。
+ * 加算合成は「後ろの色に足す」ので、重ねるほど必ず白へ近づき、
+ * どれだけ濃い紫や藍を指定しても最終的にただの白い光の塊になる。
+ * 濃い色・暗い色は加算合成では原理的に表現できない。
  *
- * 【横方向のぼかし】
- * 幅の方向にテクスチャの明るい中心から暗い縁までを貼っている。
- * 加算合成では暗い部分が描かれないので、これだけで縁がやわらかく溶ける。
+ * そこで竜巻の本体と同じ {@code RenderType.entityNoOutline}(通常の半透明合成)へ変更した。
+ * 半透明合成は「指定した色で塗る」ので、濃い紫は濃い紫のまま出る。
+ * 光らせるのは中心のごく小さい芯だけで、そこだけ加算合成で描いている。
  *
- * この描画設定は裏面を捨てるため、面は表裏1回ずつ描いている。
+ * 【テクスチャを spark.png に変えた理由】
+ * beam_glow.png は明暗をRGBで表現しアルファは全面255。
+ * 加算合成では黒い部分が描かれないので丸く見えるが、
+ * 半透明合成にすると「黒い四角」がそのまま出てしまう。
+ * spark.png は同じぼかしをアルファ側に持っているので半透明合成でも丸く抜ける。
+ * 左半分(u 0.0〜0.5)がやわらかいぼかし、右半分は輪郭のはっきりした版。
+ *
+ * 半透明合成は裏面も描く設定なので、面は quad(1回)でよい。
+ * 芯だけは加算合成で裏面が捨てられるため quadBothSides を使う。
  */
 public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
-    /** 中心が明るく外へ向かって消える丸。横方向のぼかしに使う */
+    /** 炎の本体。アルファ側にぼかしを持つので半透明合成でも丸く抜ける */
     private static final ResourceLocation TEX =
+            new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/spark.png");
+
+    /** 中心の芯だけに使う加算合成用のぼかし(明暗をRGBで持つ) */
+    private static final ResourceLocation CORE_TEX =
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
 
     /** 炎の高さ(ブロック) */
@@ -57,19 +68,22 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
     /** 縦の分割数。多いほど輪郭がなめらかになる */
     private static final int STEPS = 22;
 
-    // 色。外から内へ 藍 → 水色 → 紫 と変えていく。
+    // 色。外から内へ 藍 → 青 → 紫 と変えていく。
     //
-    // 【水色と白を抑えている理由】
-    // 加算合成では、白に近い色ほど重ねたときに一気に色を消してしまう。
-    // 水色を強く出すと藍も紫もその上から白飛びして、ただの光る塊になる。
-    // 色として見せたい藍と紫を強く、白へ寄せる水色は弱く、という配分にしている。
-    private static final float[] COLOR_OUTER  = { 0.12F, 0.10F, 0.75F }; // 藍
-    private static final float[] COLOR_CYAN   = { 0.25F, 0.60F, 1.00F }; // 水色
-    private static final float[] COLOR_PURPLE = { 0.60F, 0.15F, 1.00F }; // 紫
-    private static final float[] COLOR_CORE   = { 0.90F, 0.92F, 1.00F }; // 白(今は出していない)
+    // 半透明合成なのでここに書いた色がほぼそのまま画面に出る。
+    // 加算合成のときのように「重ねると白へ寄る」ことがないため、
+    // 見本の絵と同じように暗くて濃い色をそのまま指定できる。
+    private static final float[] COLOR_OUTER  = { 0.04F, 0.05F, 0.30F }; // 濃い藍(一番外)
+    private static final float[] COLOR_BLUE   = { 0.08F, 0.22F, 0.85F }; // 濃い青
+    private static final float[] COLOR_PURPLE = { 0.30F, 0.05F, 0.62F }; // 濃い紫
+    private static final float[] COLOR_CORE   = { 0.70F, 0.75F, 1.00F }; // 芯(ここだけ光る)
 
-    /** 幅の方向に貼るUV。中心が明るく、両端は暗い=透明になる */
-    private static final float U0 = 0.14F, U1 = 0.86F, V_MID = 0.5F;
+    /**
+     * 幅の方向に貼るUV。
+     * spark.png の左半分(u 0.0〜0.5)がやわらかいぼかしなので、その範囲だけを使う。
+     * u=0.25 がアルファ最大(中心)、両端に向かってアルファが0になる。
+     */
+    private static final float U0 = 0.02F, U1 = 0.48F, V_MID = 0.5F;
 
     // --- 昇っていく粒 ---
     private static final int DROPS = 12;
@@ -110,29 +124,29 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         pose.translate(0.0, -0.55, 0.0);
         PoseStack.Pose p = pose.last();
 
-        VertexConsumer vc = buffer.getBuffer(RenderType.eyes(TEX));
+        // --- 炎の本体。半透明合成なので、指定した濃い色がそのまま出る ---
+        // 後から描いたものが上に乗るので、外→内の順に描いて内側の色を手前に見せる。
+        // 背後の大きなぼんやり光は、周りまで白く染めていた原因なので出さない。
+        VertexConsumer body = buffer.getBuffer(RenderType.entityNoOutline(TEX));
 
-        // 背後のぼんやりした光。これがあると空中に浮いている感じが出る
-        blob(p, vc, 0.0F, HEIGHT * 0.28F, 0.0F, WIDTH * 3.0F, right, up,
-                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.04F);
-
-        // 炎は1つだけ。同じ形を大きさを変えて重ね、外から内へ色を変えていく。
         // 一番外が一番高く太いので、内側の層は必ずこの中に収まり、
         // アホ毛(先端)も一番外の1本だけが延長線上に伸びる
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT, WIDTH, COLOR_OUTER, 0.13F);
-        // 水色は色をつなぐだけの薄い層。上げると藍も紫も白飛びする
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.86F, WIDTH * 0.82F, COLOR_CYAN, 0.05F);
-        // 紫が主役なので、帯を広く取って濃く出す
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.74F, WIDTH * 0.70F, COLOR_PURPLE, 0.17F);
-        // 白い芯は出さない。出すと中心が白飛びして藍も紫も消えてしまうため。
-        // 戻したいときはこの濃さを 0.05 くらいから上げていく
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.13F, WIDTH * 0.10F, COLOR_CORE, 0.0F);
+        drawFlame(p, body, right, up, time, 0.0F, 0.0F,
+                HEIGHT, WIDTH, COLOR_OUTER, 0.85F, U0, U1, false);
+        drawFlame(p, body, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.88F, WIDTH * 0.80F, COLOR_BLUE, 0.90F, U0, U1, false);
+        drawFlame(p, body, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.70F, WIDTH * 0.58F, COLOR_PURPLE, 0.95F, U0, U1, false);
 
-        drawDrops(p, vc, time, right, up);
+        drawDrops(p, body, time, right, up);
+
+        // --- 芯だけ加算合成で光らせる ---
+        // 光るのはここだけ。大きくすると以前と同じ白飛びに戻るので小さく保つ。
+        // beam_glow.png は明暗をRGBで持つので、UVは中心の明るいところを含む範囲を使う。
+        // 加算合成は裏面を捨てるため表裏1回ずつ描く
+        VertexConsumer core = buffer.getBuffer(RenderType.eyes(CORE_TEX));
+        drawFlame(p, core, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.30F, WIDTH * 0.20F, COLOR_CORE, 0.30F, 0.14F, 0.86F, true);
 
         pose.popPose();
     }
@@ -148,7 +162,8 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
                                   Vector3f right, Vector3f up, float time,
                                   float baseX, float baseY,
                                   float height, float halfWidth,
-                                  float[] color, float alpha) {
+                                  float[] color, float alpha,
+                                  float u0, float u1, boolean bothSides) {
 
         float prevX = 0, prevY = 0, prevW = 0;
 
@@ -165,7 +180,7 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
             if (i > 0) {
                 quadBand(pose, vc, right, up, prevX, prevY, prevW, x, y, w,
-                        color[0], color[1], color[2], alpha);
+                        color[0], color[1], color[2], alpha, u0, u1, bothSides);
             }
             prevX = x; prevY = y; prevW = w;
         }
@@ -195,12 +210,17 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
                 * amount;
     }
 
-    /** 帯を1枚。幅の方向に明るい中心から暗い縁までを貼るので、縁がやわらかく溶ける */
+    /**
+     * 帯を1枚。幅の方向にテクスチャの中心から縁までを貼るので、横の縁がやわらかく溶ける。
+     * bothSides は加算合成(裏面が捨てられる)のときだけ true にする。
+     * 半透明合成は裏面も描くので、true にすると同じ面を2回塗って濃くなってしまう。
+     */
     private static void quadBand(PoseStack.Pose pose, VertexConsumer vc,
                                  Vector3f right, Vector3f up,
                                  float x0, float y0, float w0,
                                  float x1, float y1, float w1,
-                                 float r, float g, float b, float a) {
+                                 float r, float g, float b, float a,
+                                 float u0, float u1, boolean bothSides) {
         if (a <= 0.01F) return;
         if (w0 <= 0.0001F && w1 <= 0.0001F) return;
 
@@ -208,11 +228,20 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         float lx0 = x0 - w0, rx0 = x0 + w0;
         float lx1 = x1 - w1, rx1 = x1 + w1;
 
-        VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
-                right.x * lx0 + up.x * y0, right.y * lx0 + up.y * y0, right.z * lx0 + up.z * y0, U0, V_MID,
-                right.x * rx0 + up.x * y0, right.y * rx0 + up.y * y0, right.z * rx0 + up.z * y0, U1, V_MID,
-                right.x * rx1 + up.x * y1, right.y * rx1 + up.y * y1, right.z * rx1 + up.z * y1, U1, V_MID,
-                right.x * lx1 + up.x * y1, right.y * lx1 + up.y * y1, right.z * lx1 + up.z * y1, U0, V_MID);
+        float ax = right.x * lx0 + up.x * y0, ay = right.y * lx0 + up.y * y0, az = right.z * lx0 + up.z * y0;
+        float bx = right.x * rx0 + up.x * y0, by = right.y * rx0 + up.y * y0, bz = right.z * rx0 + up.z * y0;
+        float cx = right.x * rx1 + up.x * y1, cy = right.y * rx1 + up.y * y1, cz = right.z * rx1 + up.z * y1;
+        float dx = right.x * lx1 + up.x * y1, dy = right.y * lx1 + up.y * y1, dz = right.z * lx1 + up.z * y1;
+
+        if (bothSides) {
+            VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
+                    ax, ay, az, u0, V_MID, bx, by, bz, u1, V_MID,
+                    cx, cy, cz, u1, V_MID, dx, dy, dz, u0, V_MID);
+        } else {
+            VfxRenderUtil.quad(pose, vc, r, g, b, a,
+                    ax, ay, az, u0, V_MID, bx, by, bz, u1, V_MID,
+                    cx, cy, cz, u1, V_MID, dx, dy, dz, u0, V_MID);
+        }
     }
 
     /** 炎の先から離れて昇る粒。消えるとまた下から現れる */
@@ -226,14 +255,20 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
             float y = HEIGHT * (0.55F + t * 0.85F);
 
             // 現れるところと消えるところで急に出入りしないようにする
-            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.14F;
+            // 半透明合成になったので、以前の加算合成向けの薄さでは見えない。
+            // 濃い紫の粒がはっきり浮くくらいの濃さにしている
+            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.85F;
 
             blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.4F), right, up,
                     COLOR_PURPLE[0], COLOR_PURPLE[1], COLOR_PURPLE[2], alpha);
         }
     }
 
-    /** カメラの方を向く丸い光を1つ */
+    /**
+     * カメラの方を向く丸い粒を1つ。
+     * spark.png の左半分(u 0.0〜0.5)がやわらかいぼかしの丸なので、その範囲だけを貼る。
+     * 半透明合成の設定は裏面も描くので、面は1回でよい。
+     */
     private static void blob(PoseStack.Pose pose, VertexConsumer vc,
                              float x, float y, float z, float size,
                              Vector3f right, Vector3f up,
@@ -247,10 +282,10 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         // 位置もカメラを向いた面の中で組み立てる
         float px = right.x * x + up.x * y, py = right.y * x + up.y * y, pz = right.z * x + up.z * y;
 
-        VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
+        VfxRenderUtil.quad(pose, vc, r, g, b, a,
                 px - rx - ux, py - ry - uy, pz - rz - uz, 0.0F, 0.0F,
-                px + rx - ux, py + ry - uy, pz + rz - uz, 1.0F, 0.0F,
-                px + rx + ux, py + ry + uy, pz + rz + uz, 1.0F, 1.0F,
+                px + rx - ux, py + ry - uy, pz + rz - uz, 0.5F, 0.0F,
+                px + rx + ux, py + ry + uy, pz + rz + uz, 0.5F, 1.0F,
                 px - rx + ux, py - ry + uy, pz - rz + uz, 0.0F, 1.0F);
     }
 
