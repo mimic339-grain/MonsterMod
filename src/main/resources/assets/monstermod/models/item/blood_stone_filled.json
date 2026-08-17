@@ -1,0 +1,6 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "monstermod:item/blood_stone_filled"
+  }
+}

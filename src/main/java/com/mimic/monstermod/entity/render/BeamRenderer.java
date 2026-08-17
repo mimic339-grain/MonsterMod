@@ -152,6 +152,15 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
      * この描画設定は色を足していくので、本当の意味で不透明にはできない。
      * 代わりに芯を白のまま濃度1.0で置くと中心が完全に飽和し、
      * 見た目には抜けのない白い玉になる。
+     *
+     * 【白い玉が見えなかった原因】
+     * 面は元から表裏1回ずつ描いており({@link VfxRenderUtil#quadBothSides})、
+     * 裏面が捨てられて消えていたわけではない。
+     * 原因は玉の置き場所と大きさで、
+     *   ・玉は壁にめり込まないようビームの内側へ引っ込めて描いている
+     *   ・その大きさがビームの一番外側の層と同じだった
+     * ため、白い玉がビーム本体の白い芯とぴったり重なって埋もれていた。
+     * 基準の大きさを2倍にして、玉がビームの外へはみ出すようにしている。
      */
     private void drawImpactBurst(PoseStack pose, VertexConsumer vc, Vec3 offset, float radius,
                                  float time, float r, float g, float b, float fade) {
@@ -161,8 +170,9 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
 
         PoseStack.Pose last = pose.last();
 
-        // 基準の大きさ = ビームの一番外側の層の直径
-        float baseSize = radius * LAYER_OUTER_END * 2.0F;
+        // 基準の大きさ = ビームの一番外側の層の直径 × 2。
+        // 等倍だとビーム本体に埋もれて見えないので、はみ出す大きさにしている
+        float baseSize = radius * LAYER_OUTER_END * 2.0F * 2.0F;
         // ごくわずかに脈打たせる。止まっていると貼り付けた絵に見える
         float pulse = 1.0F + 0.04F * Mth.sin(time * 1.3F);
 

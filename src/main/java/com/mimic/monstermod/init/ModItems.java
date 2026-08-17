@@ -43,6 +43,11 @@ public class ModItems {
     public static final RegistryObject<Item> LIGHTNING_WAND =
             ITEMS.register("lightning_wand", com.mimic.monstermod.item.LightningWandItem::new);
 
+    // 血石。プレイヤーを右クリックするとその相手の血が入り、
+    // 持っている間だけ足元に相手の方角を指す矢印が出る
+    public static final RegistryObject<Item> BLOOD_STONE =
+            ITEMS.register("blood_stone", com.mimic.monstermod.item.BloodStoneItem::new);
+
     // ボムの解除キット(付けられたボムを外す)
     public static final RegistryObject<Item> BOMB_DEFUSER =
             ITEMS.register("bomb_defuser", BombDefuserItem::new);

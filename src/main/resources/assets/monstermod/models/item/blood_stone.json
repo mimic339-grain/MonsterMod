@@ -1,0 +1,12 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "monstermod:item/blood_stone"
+  },
+  "overrides": [
+    {
+      "predicate": { "monstermod:filled": 1 },
+      "model": "monstermod:item/blood_stone_filled"
+    }
+  ]
+}

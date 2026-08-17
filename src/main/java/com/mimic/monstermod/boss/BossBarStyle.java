@@ -11,10 +11,16 @@ import net.minecraft.resources.ResourceLocation;
  * 増やすときは値を足してテクスチャを同じ寸法で用意すればよい。
  *
  * 【テクスチャの作り】
- * 1枚 256x32 で、上下に2つの役割を詰め込んでいる。
- *   y  0〜15 : 枠そのもの。ゲージが減ったときに見える黒い溝も含む
- *   y 16〜31 : ゲージの中身(赤のグラデーション)。残量に応じて左から切り出して貼る
- * 高さはバニラのボスバーとほぼ同じになるよう詰めてある。
+ * 1枚 256x16 で、上下に2つの役割を詰め込んでいる。
+ *   y  0〜7  : 枠そのもの。ゲージが減ったときに見える暗い溝も含む
+ *   y  8〜15 : ゲージの中身(赤のグラデーション)。残量に応じて左から切り出して貼る
+ * 高さはバニラのボスバーより細い。太いと画面上部を占有しすぎるため。
+ *
+ * 【ゲージの一番下を黒く落としていない理由】
+ * 濃淡を付けようと下端を黒に近づけると、暗い溝と枠の影に溶けて
+ * 「どこまでゲージが残っているか」が読めなくなる。
+ * 下端も赤のまま留め、溝の側をわずかに明るい灰色にして分離している。
+ *
  * 描画は {@link com.mimic.monstermod.client.BossBarRenderer}。
  * 生成スクリプトは開発時のみ使う PowerShell(リポジトリには含めていない)。
  */
@@ -26,13 +32,13 @@ public enum BossBarStyle {
     // --- テクスチャ内の座標。描画側と生成スクリプトで必ず一致させること ---
 
     /** テクスチャ全体の大きさ */
-    public static final int TEX_W = 256, TEX_H = 32;
+    public static final int TEX_W = 256, TEX_H = 16;
     /** 枠の大きさ(画面にはこの大きさでそのまま貼る) */
-    public static final int FRAME_W = 256, FRAME_H = 16;
+    public static final int FRAME_W = 256, FRAME_H = 8;
     /** 枠の中でゲージが入る位置と大きさ */
-    public static final int BAR_X = 34, BAR_Y = 5, BAR_W = 188, BAR_H = 6;
+    public static final int BAR_X = 34, BAR_Y = 2, BAR_W = 188, BAR_H = 4;
     /** ゲージの中身がテクスチャのどこにあるか(縦位置だけ枠と違う) */
-    public static final int BAR_V = 21;
+    public static final int BAR_V = 10;
 
     private final ResourceLocation texture;
 
