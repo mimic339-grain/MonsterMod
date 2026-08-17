@@ -60,10 +60,16 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
     private static final ResourceLocation CORE_TEX =
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
 
+    // 【縦横比について】
+    // 数値上の高さ:全幅は 3.8:2.48 とそこまで極端ではなかったが、
+    // profile() が早い段階から先細りするため、上の2/3がほとんど幅を持たず、
+    // 見た目は細い槍のようになっていた。
+    // 高さを詰めて幅を広げるだけでなく、profile() 側の膨らみも合わせて広げている。
+
     /** 炎の高さ(ブロック) */
-    private static final float HEIGHT = 3.8F;
-    /** 炎の一番太いところの半幅(ブロック) */
-    private static final float WIDTH = 1.24F;
+    private static final float HEIGHT = 2.7F;
+    /** 炎の一番太いところの半幅(ブロック)。全幅はこの2倍 */
+    private static final float WIDTH = 1.45F;
 
     /** 縦の分割数。多いほど輪郭がなめらかになる */
     private static final int STEPS = 22;
@@ -121,7 +127,8 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
         pose.pushPose();
         // 炎は上へ伸びるので、当たり判定の中心より少し下から生やす
-        pose.translate(0.0, -0.55, 0.0);
+        // (炎を低くしたので、下げる量も合わせて浅くしている)
+        pose.translate(0.0, -0.40, 0.0);
         PoseStack.Pose p = pose.last();
 
         // --- 炎の本体。半透明合成なので、指定した濃い色がそのまま出る ---
@@ -192,15 +199,17 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
      * これが炎の形そのものになる。
      */
     private static float profile(float t) {
-        final float bulb = 0.32F; // ここまでが丸い部分
+        final float bulb = 0.40F; // ここまでが丸い部分。上げるほど丸い胴が長くなる
         if (t <= bulb) {
             // 円弧。下端で0になり、一気に太くなるので丸く見える
             float k = (bulb - t) / bulb;
             return Mth.sqrt(Math.max(0.0F, 1.0F - k * k));
         }
-        // 先細り。指数を1より大きくすると、上のほうで細くなって尖る
+        // 先細り。
+        // 指数を1より大きくすると早い段階から細くなって槍のようになる。
+        // 1に近づけるほど幅を保ったまま上がり、先端だけが尖った火の玉らしい形になる
         float k = (t - bulb) / (1.0F - bulb);
-        return (float) Math.pow(1.0F - k, 1.35);
+        return (float) Math.pow(1.0F - k, 0.95);
     }
 
     /** 横へのずれ。上へ行くほど大きく揺れる */
