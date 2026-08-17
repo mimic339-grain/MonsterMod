@@ -126,9 +126,13 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         // 【壁から手前へずらす理由】
         // この描画設定は深度テストが効いているため、壁の面ぴったりに置くと
         // 光がブロックと同じ奥行きになり、ほぼ全部が弾かれて何も見えなくなる。
-        // 撃った側へ少し浮かせることで、壁の手前に確実に描かれるようにしている。
+        // 撃った側へ少しだけ浮かせることで、壁の手前に確実に描かれるようにしている。
+        //
+        // ずらす量は「弾かれない最小限」に留めてある。
+        // 以前は太さに比例して大きくずらしていたため、玉がビームの途中に
+        // 埋まって見え、先端で弾けているように見えなかった。
         Vec3 end = origin.add(dir.scale(length));
-        Vec3 burstAt = end.subtract(dir.scale(Math.max(0.4, radius * 2.5)));
+        Vec3 burstAt = end.subtract(dir.scale(Math.max(0.2, radius * 0.6)));
         drawImpactBurst(pose, glow, burstAt.subtract(entityPos), radius, time, baseR, baseG, baseB, fade);
     }
 
