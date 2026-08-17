@@ -31,10 +31,11 @@ import java.util.Random;
  * 上へ行くほど大きくずらすので、根元は据わったまま先だけが揺れる。
  *
  * 【色の重なり】
- * 同じ形を大きさを変えて4回重ねている(外から 青 → 水色 → 濃い紫 → 白い芯)。
- * 加算合成なので中心ほど明るくなり、芯が白く抜けて縁が青くなる。
- * 加算は重ねるほど白へ寄るため、1枚あたりの濃さはかなり薄くしてある。
- * ここを上げると色が飛んで、ただの白い塊になってしまう。
+ * 同じ形を大きさを変えて重ねている(外から 藍 → 水色 → 紫)。
+ * 加算合成は重ねるほど白へ寄るので、白や水色を強くすると
+ * せっかくの藍と紫がその上から飛んで、ただの光る塊になってしまう。
+ * そのため白い芯は出さず、水色も色をつなぐだけの薄さに留め、
+ * 見せたい藍と紫だけを濃くしている。
  *
  * 【横方向のぼかし】
  * 幅の方向にテクスチャの明るい中心から暗い縁までを貼っている。
@@ -56,12 +57,16 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
     /** 縦の分割数。多いほど輪郭がなめらかになる */
     private static final int STEPS = 22;
 
-    // 色。外から内へ 青 → 水色 → 濃い紫 → 白 と変えていく。
-    // 加算合成は重ねるほど白へ寄るので、1枚あたりはかなり薄くしないと色が飛ぶ
-    private static final float[] COLOR_OUTER  = { 0.10F, 0.25F, 0.95F }; // 青
-    private static final float[] COLOR_CYAN   = { 0.30F, 0.75F, 1.00F }; // 水色
-    private static final float[] COLOR_PURPLE = { 0.55F, 0.20F, 0.95F }; // 濃い紫
-    private static final float[] COLOR_CORE   = { 0.90F, 0.92F, 1.00F }; // 白
+    // 色。外から内へ 藍 → 水色 → 紫 と変えていく。
+    //
+    // 【水色と白を抑えている理由】
+    // 加算合成では、白に近い色ほど重ねたときに一気に色を消してしまう。
+    // 水色を強く出すと藍も紫もその上から白飛びして、ただの光る塊になる。
+    // 色として見せたい藍と紫を強く、白へ寄せる水色は弱く、という配分にしている。
+    private static final float[] COLOR_OUTER  = { 0.12F, 0.10F, 0.75F }; // 藍
+    private static final float[] COLOR_CYAN   = { 0.25F, 0.60F, 1.00F }; // 水色
+    private static final float[] COLOR_PURPLE = { 0.60F, 0.15F, 1.00F }; // 紫
+    private static final float[] COLOR_CORE   = { 0.90F, 0.92F, 1.00F }; // 白(今は出していない)
 
     /** 幅の方向に貼るUV。中心が明るく、両端は暗い=透明になる */
     private static final float U0 = 0.14F, U1 = 0.86F, V_MID = 0.5F;
@@ -109,21 +114,23 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
         // 背後のぼんやりした光。これがあると空中に浮いている感じが出る
         blob(p, vc, 0.0F, HEIGHT * 0.28F, 0.0F, WIDTH * 3.0F, right, up,
-                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.02F);
+                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.04F);
 
-        // 炎は1つだけ。同じ形を大きさを変えて4回重ね、外から内へ色を変えていく。
-        // 加算合成なので重なった中心ほど明るくなり、芯が白く抜ける
-        // 一番外が一番高く太いので、内側の層は必ずこの中に収まる。
-        // アホ毛(先端)も一番外の1本だけが飛び出す形になる
+        // 炎は1つだけ。同じ形を大きさを変えて重ね、外から内へ色を変えていく。
+        // 一番外が一番高く太いので、内側の層は必ずこの中に収まり、
+        // アホ毛(先端)も一番外の1本だけが延長線上に伸びる
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT, WIDTH, COLOR_OUTER, 0.035F);
+                HEIGHT, WIDTH, COLOR_OUTER, 0.13F);
+        // 水色は色をつなぐだけの薄い層。上げると藍も紫も白飛びする
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.84F, WIDTH * 0.80F, COLOR_CYAN, 0.040F);
-        // 紫は帯として見せたいので、水色との差を詰めて芯との差を広く取る
+                HEIGHT * 0.86F, WIDTH * 0.82F, COLOR_CYAN, 0.05F);
+        // 紫が主役なので、帯を広く取って濃く出す
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.68F, WIDTH * 0.62F, COLOR_PURPLE, 0.065F);
+                HEIGHT * 0.74F, WIDTH * 0.70F, COLOR_PURPLE, 0.17F);
+        // 白い芯は出さない。出すと中心が白飛びして藍も紫も消えてしまうため。
+        // 戻したいときはこの濃さを 0.05 くらいから上げていく
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.26F, WIDTH * 0.20F, COLOR_CORE, 0.075F);
+                HEIGHT * 0.13F, WIDTH * 0.10F, COLOR_CORE, 0.0F);
 
         drawDrops(p, vc, time, right, up);
 
@@ -222,7 +229,7 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
             float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.14F;
 
             blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.4F), right, up,
-                    COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], alpha);
+                    COLOR_PURPLE[0], COLOR_PURPLE[1], COLOR_PURPLE[2], alpha);
         }
     }
 
