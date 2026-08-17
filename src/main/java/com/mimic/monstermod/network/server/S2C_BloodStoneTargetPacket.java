@@ -25,14 +25,17 @@ import java.util.function.Supplier;
  */
 public class S2C_BloodStoneTargetPacket {
 
+    /** 追っている相手の名前。表示に必要なものはすべてこのパケットに載せる */
+    private final String targetName;
     /** 相手が今サーバーにいるか。いなければ座標は意味を持たない */
     private final boolean online;
     /** 同じディメンションにいるか。違えば方角を指しても無意味なので分けている */
     private final boolean sameDimension;
     private final double x, y, z;
 
-    public S2C_BloodStoneTargetPacket(boolean online, boolean sameDimension,
+    public S2C_BloodStoneTargetPacket(String targetName, boolean online, boolean sameDimension,
                                       double x, double y, double z) {
+        this.targetName = targetName;
         this.online = online;
         this.sameDimension = sameDimension;
         this.x = x;
@@ -41,6 +44,7 @@ public class S2C_BloodStoneTargetPacket {
     }
 
     public static void encode(S2C_BloodStoneTargetPacket msg, FriendlyByteBuf buf) {
+        buf.writeUtf(msg.targetName, 64);
         buf.writeBoolean(msg.online);
         buf.writeBoolean(msg.sameDimension);
         buf.writeDouble(msg.x);
@@ -50,7 +54,7 @@ public class S2C_BloodStoneTargetPacket {
 
     public static S2C_BloodStoneTargetPacket decode(FriendlyByteBuf buf) {
         return new S2C_BloodStoneTargetPacket(
-                buf.readBoolean(), buf.readBoolean(),
+                buf.readUtf(64), buf.readBoolean(), buf.readBoolean(),
                 buf.readDouble(), buf.readDouble(), buf.readDouble());
     }
 
@@ -59,7 +63,7 @@ public class S2C_BloodStoneTargetPacket {
         // クライアント専用クラスに触れるためDistExecutorで隔離する
         context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
                 com.mimic.monstermod.client.BloodStoneCompass.receive(
-                        msg.online, msg.sameDimension, msg.x, msg.y, msg.z)));
+                        msg.targetName, msg.online, msg.sameDimension, msg.x, msg.y, msg.z)));
         context.setPacketHandled(true);
     }
 }

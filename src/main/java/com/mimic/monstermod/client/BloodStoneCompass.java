@@ -2,7 +2,6 @@ package com.mimic.monstermod.client;
 
 import com.mimic.monstermod.MonsterMod;
 import com.mimic.monstermod.entity.render.VfxRenderUtil;
-import com.mimic.monstermod.item.BloodStoneItem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -12,7 +11,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -28,11 +26,15 @@ import org.joml.Matrix4f;
  * 地面に置いて向きを指させると「その方向へ走ればよい」が直感的に分かる。
  * 矢印は常に自分の少し前の地面に置き、向きだけを相手のほうへ回している。
  *
- * 【表示条件】
- * ・血の入った石を手に持っている
- * ・{@link com.mimic.monstermod.item.BloodStoneEvents} からの座標が新しい
- * 石をしまうとサーバーが座標を送るのをやめるので、
- * 一定時間で自然に消える。消すためのパケットは要らない。
+ * 【表示条件は「新しい座標が届いているか」だけ】
+ * サーバーは「血の入った石を持っている人」にしか座標を送らないので、
+ * 届いているという事実だけで「持っている」ことが確定する。
+ * 石をしまえば送信が止まり、一定時間で自然に消える。消すためのパケットは要らない。
+ *
+ * 以前はここでも手持ちのアイテムのNBTを見て判定していたが、
+ * クライアント側のNBTが届いていないと矢印ごと出なくなるため、
+ * 表示に必要な情報(名前・座標)はすべてパケットに載せてもらう形に変えた。
+ * 描画はサーバーが送ってくる情報だけで完結する。
  */
 @Mod.EventBusSubscriber(modid = MonsterMod.MOD_ID, value = Dist.CLIENT)
 public final class BloodStoneCompass {
@@ -54,7 +56,8 @@ public final class BloodStoneCompass {
 
     private static final String[] DIRS = { "南", "南東", "東", "北東", "北", "北西", "西", "南西" };
 
-    // --- サーバーから届いた最新の情報 ---
+    // --- サーバーから届いた最新の情報。描画に必要なものはここに全部そろう ---
+    private static String targetName = "";
     private static boolean online;
     private static boolean sameDimension;
     private static double tx, ty, tz;
@@ -64,9 +67,10 @@ public final class BloodStoneCompass {
      * 座標を受け取る。
      * 呼び出し元: {@link com.mimic.monstermod.network.server.S2C_BloodStoneTargetPacket#handle}
      */
-    public static void receive(boolean isOnline, boolean isSameDimension,
+    public static void receive(String name, boolean isOnline, boolean isSameDimension,
                                double x, double y, double z) {
         Minecraft mc = Minecraft.getInstance();
+        targetName = name;
         online = isOnline;
         sameDimension = isSameDimension;
         tx = x; ty = y; tz = z;
@@ -81,10 +85,8 @@ public final class BloodStoneCompass {
         LocalPlayer player = mc.player;
         if (player == null || mc.level == null || mc.options.hideGui) return;
 
-        ItemStack stone = BloodStoneItem.findHeld(player);
-        if (stone == null) return;
-
-        // 石をしまったあとに残らないよう、情報が古ければ描かない
+        // 石をしまうとサーバーが送るのをやめるので、情報が古ければ描かない。
+        // 逆に言えば、新しい情報が来ている＝血の入った石を持っている、で確定する
         if (mc.level.getGameTime() - receivedAt > STALE_TICKS) return;
 
         float partial = event.getPartialTick();
@@ -101,15 +103,12 @@ public final class BloodStoneCompass {
         PoseStack pose = event.getPoseStack();
         MultiBufferSource.BufferSource buffer = mc.renderBuffers().bufferSource();
 
-        String label;
         if (!online) {
-            label = BloodStoneItem.getTargetName(stone) + " は今いない";
-            drawLabel(pose, buffer, mc, at, cam, label, 0xFF8888);
+            drawLabel(pose, buffer, mc, at, cam, targetName + " は今いない", 0xFF8888);
             return;
         }
         if (!sameDimension) {
-            label = BloodStoneItem.getTargetName(stone) + " は別の世界にいる";
-            drawLabel(pose, buffer, mc, at, cam, label, 0xFFAA55);
+            drawLabel(pose, buffer, mc, at, cam, targetName + " は別の世界にいる", 0xFFAA55);
             return;
         }
 

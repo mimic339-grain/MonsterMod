@@ -3,6 +3,8 @@ package com.mimic.monstermod.item;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -42,6 +44,11 @@ public class BloodStoneItem extends Item {
     /** 表示用に控えておく相手の名前。相手がオフラインでも名前だけは出せる */
     private static final String TAG_TARGET_NAME = "BloodTargetName";
 
+    // プレイヤーのインベントリ画面でのスロット番号。
+    // ホットバーは36〜44、左手は45と決まっている(バニラの InventoryMenu の並び)
+    private static final int INVENTORY_MENU_HOTBAR_START = 36;
+    private static final int INVENTORY_MENU_OFFHAND = 45;
+
     public BloodStoneItem() {
         // 1個しか重ねられない。まとめて持てると「どの石が誰か」が分からなくなる
         super(new Item.Properties().stacksTo(1));
@@ -66,6 +73,24 @@ public class BloodStoneItem extends Item {
         CompoundTag tag = stack.getOrCreateTag();
         tag.putUUID(TAG_TARGET, marked.getUUID());
         tag.putString(TAG_TARGET_NAME, marked.getGameProfile().getName());
+
+        // 【重要】書き換えた石をその場でクライアントへ送り直す。
+        //
+        // インベントリの中身は毎tickバニラが差分を見て送ってくれるはずだが、
+        // エンティティへの右クリックで手持ちのNBTだけを書き換えた場合、
+        // クライアント側に反映されないことがある。
+        // 反映されないと、名前も見た目も変わらず、
+        // クライアント側で「血が入っているか」を見ている処理が全部素通りしてしまう。
+        // ここで明示的に該当スロットだけ送り直しておけば、経路に関係なく必ず届く。
+        if (user instanceof ServerPlayer sp) {
+            int menuSlot = (hand == InteractionHand.MAIN_HAND)
+                    ? INVENTORY_MENU_HOTBAR_START + sp.getInventory().selected
+                    : INVENTORY_MENU_OFFHAND;
+            sp.connection.send(new ClientboundContainerSetSlotPacket(
+                    sp.inventoryMenu.containerId,
+                    sp.inventoryMenu.incrementStateId(),
+                    menuSlot, stack));
+        }
 
         user.displayClientMessage(
                 Component.literal(marked.getGameProfile().getName() + " の血を取り込んだ"), true);

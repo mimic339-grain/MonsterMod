@@ -43,16 +43,18 @@ public final class BloodStoneEvents {
         UUID targetId = BloodStoneItem.getTarget(stone);
         if (targetId == null) return;
 
+        String name = BloodStoneItem.getTargetName(stone);
+
         ServerPlayer target = holder.server.getPlayerList().getPlayer(targetId);
         if (target == null) {
             // 相手がログアウトしている。座標は無いが「見失っている」ことは伝える
             ModMessages.sendToPlayer(
-                    new S2C_BloodStoneTargetPacket(false, false, 0, 0, 0), holder);
+                    new S2C_BloodStoneTargetPacket(name, false, false, 0, 0, 0), holder);
             return;
         }
 
         boolean sameDimension = target.level() == holder.level();
         ModMessages.sendToPlayer(new S2C_BloodStoneTargetPacket(
-                true, sameDimension, target.getX(), target.getY(), target.getZ()), holder);
+                name, true, sameDimension, target.getX(), target.getY(), target.getZ()), holder);
     }
 }
