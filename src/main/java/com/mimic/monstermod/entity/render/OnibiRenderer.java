@@ -109,18 +109,21 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
         // 背後のぼんやりした光。これがあると空中に浮いている感じが出る
         blob(p, vc, 0.0F, HEIGHT * 0.28F, 0.0F, WIDTH * 3.0F, right, up,
-                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.05F);
+                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.02F);
 
         // 炎は1つだけ。同じ形を大きさを変えて4回重ね、外から内へ色を変えていく。
         // 加算合成なので重なった中心ほど明るくなり、芯が白く抜ける
+        // 一番外が一番高く太いので、内側の層は必ずこの中に収まる。
+        // アホ毛(先端)も一番外の1本だけが飛び出す形になる
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT, WIDTH, COLOR_OUTER, 0.10F);
+                HEIGHT, WIDTH, COLOR_OUTER, 0.035F);
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.80F, WIDTH * 0.72F, COLOR_CYAN, 0.11F);
+                HEIGHT * 0.84F, WIDTH * 0.80F, COLOR_CYAN, 0.040F);
+        // 紫は帯として見せたいので、水色との差を詰めて芯との差を広く取る
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.58F, WIDTH * 0.48F, COLOR_PURPLE, 0.13F);
+                HEIGHT * 0.68F, WIDTH * 0.62F, COLOR_PURPLE, 0.065F);
         drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
-                HEIGHT * 0.34F, WIDTH * 0.26F, COLOR_CORE, 0.16F);
+                HEIGHT * 0.26F, WIDTH * 0.20F, COLOR_CORE, 0.075F);
 
         drawDrops(p, vc, time, right, up);
 
@@ -145,8 +148,13 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         for (int i = 0; i <= STEPS; i++) {
             float t = (float) i / STEPS;
             float w = profile(t) * halfWidth;
-            float x = baseX + sway(t, time) * halfWidth;
             float y = baseY + t * height;
+
+            // 【重要】揺れは層ごとではなく、炎全体の高さと決まった幅を基準に求める。
+            // 層ごとの高さや幅を掛けてしまうと、層によって曲がり方が変わり、
+            // 先端がバラバラの方向へ伸びて何本もあるように見えてしまう。
+            // 同じ中心線を共有させることで、外側の層が内側をきちんと包む
+            float x = baseX + sway(y / HEIGHT, time) * WIDTH;
 
             if (i > 0) {
                 quadBand(pose, vc, right, up, prevX, prevY, prevW, x, y, w,
@@ -211,7 +219,7 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
             float y = HEIGHT * (0.55F + t * 0.85F);
 
             // 現れるところと消えるところで急に出入りしないようにする
-            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.30F;
+            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.14F;
 
             blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.4F), right, up,
                     COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], alpha);
