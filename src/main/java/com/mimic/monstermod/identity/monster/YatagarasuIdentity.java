@@ -36,6 +36,25 @@ public class YatagarasuIdentity extends BaseIdentity {
         this.defaultCooldowns = COOLDOWNS;
     }
 
+    // 八咫烏はボス扱い。変身している間、周囲50m以内の全員にHPバーが出る。
+    // 実際の表示処理は MonsterBossBars(サーバー) と BossBarRenderer(クライアント)。
+    @Override
+    public boolean isBoss() {
+        return true;
+    }
+
+    // 枠は彫金フレーム
+    @Override
+    public com.mimic.monstermod.boss.BossBarStyle getBossBarStyle() {
+        return com.mimic.monstermod.boss.BossBarStyle.ORNATE;
+    }
+
+    // ボスバーにはプレイヤー名ではなく役職名を出す
+    @Override
+    public net.minecraft.network.chat.Component getDisplayName() {
+        return net.minecraft.network.chat.Component.translatable("entity.monstermod.yatagarasu");
+    }
+
     public static void initSkillRegistry() {
         // BulletHellSkillクラスに定義したLeadを登録
         SkillLeadRegistry.register(OnibiSkill.createLead(ONIBI));

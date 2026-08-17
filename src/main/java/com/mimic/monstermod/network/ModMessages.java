@@ -62,6 +62,7 @@ public class ModMessages {
         registerMessage(S2C_OpenBombTimerPacket.class, S2C_OpenBombTimerPacket::encode, S2C_OpenBombTimerPacket::decode, S2C_OpenBombTimerPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         registerMessage(C2S_SetBombTimerPacket.class, C2S_SetBombTimerPacket::encode, C2S_SetBombTimerPacket::decode, C2S_SetBombTimerPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerMessage(S2C_BlockBombMarksPacket.class, S2C_BlockBombMarksPacket::encode, S2C_BlockBombMarksPacket::decode, S2C_BlockBombMarksPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
+        registerMessage(S2C_BossBarStylePacket.class, S2C_BossBarStylePacket::encode, S2C_BossBarStylePacket::decode, S2C_BossBarStylePacket::handle, NetworkDirection.PLAY_TO_CLIENT);
     }
 
 

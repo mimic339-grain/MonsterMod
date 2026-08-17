@@ -12,6 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
@@ -75,6 +76,36 @@ public class BaseIdentity {
      */
     public boolean hasOwnBody() {
         return true;
+    }
+
+    /**
+     * この役職が「ボス」かどうか。
+     *
+     * true を返すと、変身している間だけ周囲のプレイヤー全員に
+     * バニラのボスバーとしてHPが表示される({@link com.mimic.monstermod.boss.MonsterBossBars})。
+     * 大人数でモンハンのように1体を囲んで戦うための表示なので、
+     * ボマーのような「隠れる側」の役職は false のままにすること。
+     */
+    public boolean isBoss() {
+        return false;
+    }
+
+    /**
+     * ボスバーの枠デザイン。{@link #isBoss()} が true のときだけ使われる。
+     * 役職ごとに雰囲気を変えたいときはここを差し替える。
+     */
+    public com.mimic.monstermod.boss.BossBarStyle getBossBarStyle() {
+        return com.mimic.monstermod.boss.BossBarStyle.ORNATE;
+    }
+
+    /**
+     * ボスバーに出す名前。プレイヤー名ではなく役職名を出す。
+     *
+     * 既定では id をそのまま出すだけなので、
+     * ボスにする役職は必ず翻訳キーを使った Component を返すよう上書きすること。
+     */
+    public Component getDisplayName() {
+        return Component.literal(id);
     }
 
     /**

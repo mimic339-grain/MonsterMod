@@ -9,6 +9,8 @@
   "item.monstermod.bomb_remnant": "解除したボムの残骸",
   "item.monstermod.placed_bomb": "設置ボム",
   "block.monstermod.placed_bomb": "設置ボム",
+  "entity.monstermod.mimic": "ミミック",
+  "entity.monstermod.yatagarasu": "八咫烏",
   "entity.monstermod.beam": "ビーム",
   "entity.monstermod.vortex": "竜巻",
   "item.monstermod.chain_bomb": "連鎖ボム",
