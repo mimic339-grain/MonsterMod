@@ -11,11 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.Optional;
 
 /**
  * ビームの描画。
@@ -50,29 +46,20 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
     private static final int SIDES = 12;
     /** テクスチャ1枚がビーム何ブロックぶんに相当するか(小さいほど筋が細かく流れる) */
     private static final float TEX_BLOCKS = 4.0F;
-    /** 着弾点から伸びる光の筋の本数 */
-    private static final int BURST_RAYS = 14;
-    /** 着弾点から飛び散る粒の数 */
-    private static final int BURST_SPARKS = 34;
 
-    // 粒ごとのばらつき。毎フレーム同じ動きになるよう固定の種から先に作っておく
-    private static final float[] SPARK_ANG = new float[BURST_SPARKS];
-    private static final float[] SPARK_REACH = new float[BURST_SPARKS];
-    private static final float[] SPARK_SIZE = new float[BURST_SPARKS];
-    private static final float[] SPARK_PHASE = new float[BURST_SPARKS];
-    private static final float[] SPARK_SPEED = new float[BURST_SPARKS];
+    // --- ビーム本体の3層の太さ。着弾点の玉もこの値を基準にするので定数にしてある ---
+    /** 一番外側の層(橙)。手前→先で少し広がる */
+    private static final float LAYER_OUTER_START = 2.0F, LAYER_OUTER_END = 2.6F;
+    /** 中間の層(ビーム色) */
+    private static final float LAYER_MID_START = 1.15F, LAYER_MID_END = 1.5F;
+    /** 芯(白熱) */
+    private static final float LAYER_CORE_START = 0.45F, LAYER_CORE_END = 0.6F;
 
-    static {
-        java.util.Random rng = new java.util.Random(20260820L);
-        for (int i = 0; i < BURST_SPARKS; i++) {
-            SPARK_ANG[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            // 飛ぶ距離をばらけさせる。揃えると輪に見えてしまう
-            SPARK_REACH[i] = 4.0F + rng.nextFloat() * rng.nextFloat() * 18.0F;
-            SPARK_SIZE[i] = 0.5F + rng.nextFloat() * 1.3F;
-            SPARK_PHASE[i] = rng.nextFloat();
-            SPARK_SPEED[i] = 0.6F + rng.nextFloat() * 0.9F;
-        }
-    }
+    /**
+     * 着弾点の外側に広がる光の筋の本数。
+     * 16なら疎ではっきり、32なら密で光冠のように見える。24はその中間。
+     */
+    private static final int IMPACT_RAYS = 24;
 
     public BeamRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -119,11 +106,11 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         VertexConsumer vc = buffer.getBuffer(RenderType.eyes(BEAM_TEX));
 
         // 外側の光 → 中間 → 芯 の順に重ねる
-        drawCylinder(pose, vc, length, radius * 2.0F, radius * 2.6F,
+        drawCylinder(pose, vc, length, radius * LAYER_OUTER_START, radius * LAYER_OUTER_END,
                 baseR, baseG * 0.45F, baseB * 0.15F, 0.30F * fade, time * 0.20F);
-        drawCylinder(pose, vc, length, radius * 1.15F, radius * 1.5F,
+        drawCylinder(pose, vc, length, radius * LAYER_MID_START, radius * LAYER_MID_END,
                 baseR, baseG, baseB, 0.80F * fade, time * 0.45F);
-        drawCylinder(pose, vc, length, radius * 0.45F, radius * 0.6F,
+        drawCylinder(pose, vc, length, radius * LAYER_CORE_START, radius * LAYER_CORE_END,
                 1.0F, 0.98F, 0.86F, 1.00F * fade, time * 0.85F);
 
         pose.popPose();
@@ -134,7 +121,7 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         drawBillboard(pose, glow, origin.subtract(entityPos), muzzleSize,
                 1.0F, 0.85F, 0.55F, 0.85F * fade);
 
-        // 着弾点。壁で途切れるだけだと当たった感じがしないので、そこで弾けるようにする。
+        // 着弾点。ここだけにエフェクトを出す。
         //
         // 【壁から手前へずらす理由】
         // この描画設定は深度テストが効いているため、壁の面ぴったりに置くと
@@ -143,48 +130,28 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
         Vec3 end = origin.add(dir.scale(length));
         Vec3 burstAt = end.subtract(dir.scale(Math.max(0.4, radius * 2.5)));
         drawImpactBurst(pose, glow, burstAt.subtract(entityPos), radius, time, baseR, baseG, baseB, fade);
-
-        // 貫いている相手の位置でも弾けさせる。壁だけだと人に当たった手応えが無い
-        drawEntityHits(entity, pose, glow, origin, end, entityPos, radius, time,
-                baseR, baseG, baseB, fade);
     }
 
     /**
-     * 射線が通っている相手の位置に、小さめの弾けを出す。
+     * 終点で弾ける閃光。
      *
-     * どこに当たっているかはサーバーから送らず、クライアント側で同じ射線を引き直して求めている。
-     * 見た目だけの話なので、当たり判定と厳密に一致していなくても問題はなく、
-     * 通信を増やさずに済む。
-     */
-    private void drawEntityHits(BeamEntity beam, PoseStack pose, VertexConsumer vc,
-                                Vec3 origin, Vec3 end, Vec3 entityPos, float radius,
-                                float time, float r, float g, float b, float fade) {
-        Entity owner = beam.getOwnerEntity();
-        AABB area = new AABB(origin, end).inflate(1.0);
-
-        for (Entity target : beam.level().getEntities(beam, area,
-                e -> e != owner && e.isAlive() && e.isPickable())) {
-
-            Optional<Vec3> hit = target.getBoundingBox().inflate(radius).clip(origin, end);
-            if (hit.isEmpty()) continue;
-
-            // 相手の体に埋まらないよう、こちらも手前へ少し浮かせる
-            Vec3 back = origin.subtract(end).normalize().scale(radius * 1.5F);
-            Vec3 at = hit.get().add(back);
-
-            // 壁より控えめにする。人を貫くたびに壁と同じ大きさで光ると画面が埋まる
-            drawImpactBurst(pose, vc, at.subtract(entityPos), radius * 0.7F,
-                    time, r, g, b, fade * 0.85F);
-        }
-    }
-
-    /**
-     * 着弾点で弾ける閃光。
+     * 【ビーム本体と同じ3層で組む】
+     * 玉と筋をばらばらの大きさで置くと、ビームとつながって見えない。
+     * そこで「ビームの一番外側の層の太さ」を基準の1つに決め、
+     * ビームと同じ層構成をそのまま玉に置き換えている。
+     *   1層目(芯)   … 基準と同じ大きさ、不透明に見えるまで濃い白熱の玉
+     *   2層目       … 1層目より大きい黄色の玉
+     *   3層目       … さらに外側へ伸びる光の筋。玉の縁から生やす
+     * こうすると、ビームの断面がそのまま終点で膨らんだように見える。
      *
-     * 中心の白い塊と、そこから四方へ伸びる光の筋でできている。
-     * 筋は長さも太さもバラバラにして、放射状に散った感じを出す。
-     * 筋は常に同じ向きだと板に見えるので、カメラの方を向く面の中で
-     * ゆっくり回しながら描いている。
+     * 【筋を中心からではなく玉の縁から生やす理由】
+     * 中心から生やすと玉の上に筋が重なり、玉が汚れて濁って見える。
+     * 玉の外から生やすと玉の形が保たれ、筋は玉を縁取る光冠になる。
+     *
+     * 【加算合成なので「不透明」は明るさで作る】
+     * この描画設定は色を足していくので、本当の意味で不透明にはできない。
+     * 代わりに芯を白のまま濃度1.0で置くと中心が完全に飽和し、
+     * 見た目には抜けのない白い玉になる。
      */
     private void drawImpactBurst(PoseStack pose, VertexConsumer vc, Vec3 offset, float radius,
                                  float time, float r, float g, float b, float fade) {
@@ -194,72 +161,57 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
 
         PoseStack.Pose last = pose.last();
 
-        // 玉。外側に色の付いた光、内側に白い芯を重ねて「焼けている玉」にする
-        float halo = radius * 11.0F * (1.0F + 0.05F * Mth.sin(time * 1.3F));
-        drawFlatQuad(last, vc, halo, r, g * 0.55F, b * 0.25F, 0.55F * fade);
-        drawFlatQuad(last, vc, radius * 6.5F, 1.0F, 0.9F, 0.6F, 0.85F * fade);
-        drawFlatQuad(last, vc, radius * 3.2F, 1.0F, 0.99F, 0.95F, 1.0F * fade);
+        // 基準の大きさ = ビームの一番外側の層の直径
+        float baseSize = radius * LAYER_OUTER_END * 2.0F;
+        // ごくわずかに脈打たせる。止まっていると貼り付けた絵に見える
+        float pulse = 1.0F + 0.04F * Mth.sin(time * 1.3F);
 
-        // 放射状の筋
-        for (int i = 0; i < BURST_RAYS; i++) {
-            float ang = (float) (Math.PI * 2.0 * i / BURST_RAYS) + time * 0.02F;
+        // 3層目: 外側へ伸びる光の筋。玉に隠れないよう先に描いてから玉を重ねる
+        drawCorona(last, vc, baseSize * pulse, time, r, g, b, fade);
 
-            // 長さと太さを1本ずつ変える。均一だと歯車のように見えてしまう
-            float variance = 0.45F + 0.55F * Mth.abs(Mth.sin(i * 12.9898F));
-            float len = radius * 26.0F * variance;
-            float halfWidth = radius * 1.6F * variance;
+        // 2層目: 黄色。1層目より大きく、玉のまわりを包む
+        drawFlatQuad(last, vc, baseSize * 2.0F * pulse, 1.0F, 0.80F, 0.16F, 0.60F * fade);
 
-            float cos = Mth.cos(ang), sin = Mth.sin(ang);
-            // 筋の向き(外向き)と、それに垂直な向き(太さ方向)
-            float px = -sin * halfWidth, py = cos * halfWidth;
-            float ex = cos * len, ey = sin * len;
-
-            // 根元は白く、先へ行くほどビームの色に寄せて消えていく
-            drawRay(last, vc, px, py, ex, ey, r, g, b, 0.8F * fade * variance);
-        }
-
-        // 飛び散る粒
-        drawSparks(last, vc, radius, time, r, g, b, fade);
+        // 1層目: 芯。ビームの一番外側と同じ大きさで、中心が飽和するまで濃く置く
+        drawFlatQuad(last, vc, baseSize * pulse, 1.0F, 0.98F, 0.90F, 1.0F * fade);
 
         pose.popPose();
     }
 
     /**
-     * 着弾点から飛び散る粒。
+     * 玉の外側を縁取る光の筋。
      *
-     * 外へ向かって飛びながら薄れ、消えるとまた中心から現れる。
-     * これを粒ごとにずれた周期で回しているので、当たっている間ずっと弾け続けて見える。
-     * 飛ぶ距離をばらけさせてあるので、外周に輪ができない。
+     * 玉の縁から外へ向かって伸ばし、先へ行くほど細くして尖らせる。
+     * 長さを1本ずつ変えているのは、そろえると輪や歯車に見えてしまうため。
+     * 全体をゆっくり回して、止まった模様に見えないようにしている。
      */
-    private static void drawSparks(PoseStack.Pose pose, VertexConsumer vc, float radius,
+    private static void drawCorona(PoseStack.Pose pose, VertexConsumer vc, float baseSize,
                                    float time, float r, float g, float b, float fade) {
-        for (int i = 0; i < BURST_SPARKS; i++) {
-            float t = (SPARK_PHASE[i] + time * 0.045F * SPARK_SPEED[i]) % 1.0F;
-            if (t < 0) t += 1.0F;
+        // 筋の色はビームの一番外側の層と同じ橙にして、本体と地続きに見せる
+        float rr = r, rg = g * 0.55F, rb = b * 0.20F;
 
-            // 出だしが速く、そこから減速する
-            float travel = 1.0F - (1.0F - t) * (1.0F - t);
-            float d = radius * SPARK_REACH[i] * travel;
+        for (int i = 0; i < IMPACT_RAYS; i++) {
+            float ang = (float) (Math.PI * 2.0 * i / IMPACT_RAYS) + time * 0.015F;
 
-            float x = Mth.cos(SPARK_ANG[i]) * d;
-            float y = Mth.sin(SPARK_ANG[i]) * d;
+            // 1本ずつ長さと太さを変える
+            float variance = 0.45F + 0.55F * Mth.abs(Mth.sin(i * 12.9898F));
 
-            // 現れるところと消えるところで急に出入りしないようにする
-            float alpha = Mth.clamp(t * 8.0F, 0.0F, 1.0F) * (1.0F - t) * fade;
-            if (alpha <= 0.02F) continue;
+            float inner = baseSize * 0.42F;                    // 芯の玉の縁あたりから生やす
+            float outer = baseSize * (0.9F + 2.1F * variance); // 外へ伸びる長さ
+            float halfWidth = baseSize * 0.055F * variance;
 
-            // 飛ぶほどビームの色に寄っていく。根元は白熱している
-            float mix = travel;
-            float sr = 1.0F + (r - 1.0F) * mix;
-            float sg = 0.98F + (g - 0.98F) * mix;
-            float sb = 0.92F + (b - 0.92F) * mix;
+            float cos = Mth.cos(ang), sin = Mth.sin(ang);
+            // 筋の太さ方向(進行方向に垂直)
+            float px = -sin * halfWidth, py = cos * halfWidth;
+            float ix = cos * inner, iy = sin * inner;
+            float ox = cos * outer, oy = sin * outer;
 
-            float h = radius * SPARK_SIZE[i] * (1.0F - travel * 0.4F);
-            VfxRenderUtil.quadBothSides(pose, vc, sr, sg, sb, alpha,
-                    x - h, y - h, 0, 0, 0,
-                    x + h, y - h, 0, 1, 0,
-                    x + h, y + h, 0, 1, 1,
-                    x - h, y + h, 0, 0, 1);
+            // 根元は太く、先端はほぼ点までしぼって尖らせる
+            VfxRenderUtil.quadBothSides(pose, vc, rr, rg, rb, 0.75F * fade * variance,
+                    ix + px, iy + py, 0, 0.0F, 0.0F,
+                    ix - px, iy - py, 0, 0.0F, 1.0F,
+                    ox - px * 0.12F, oy - py * 0.12F, 0, 1.0F, 1.0F,
+                    ox + px * 0.12F, oy + py * 0.12F, 0, 1.0F, 0.0F);
         }
     }
 
@@ -272,18 +224,6 @@ public class BeamRenderer extends EntityRenderer<BeamEntity> {
                  h, -h, 0, 1, 0,
                  h,  h, 0, 1, 1,
                 -h,  h, 0, 0, 1);
-    }
-
-    /** 中心から外へ伸びる1本の筋。根元が太く、先が尖った形にする */
-    private static void drawRay(PoseStack.Pose pose, VertexConsumer vc,
-                                float px, float py, float ex, float ey,
-                                float r, float g, float b, float alpha) {
-        // 根元(中心付近)の2点と、先端の1点をつぶした四角で三角形のように見せる
-        VfxRenderUtil.quadBothSides(pose, vc, 1.0F, 0.98F, 0.9F, alpha,
-                px, py, 0, 0.0F, 0.0F,
-                -px, -py, 0, 0.0F, 1.0F,
-                ex - px * 0.15F, ey - py * 0.15F, 0, 1.0F, 1.0F,
-                ex + px * 0.15F, ey + py * 0.15F, 0, 1.0F, 0.0F);
     }
 
     /**
