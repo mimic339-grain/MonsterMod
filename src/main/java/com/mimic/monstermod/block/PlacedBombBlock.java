@@ -56,6 +56,15 @@ public class PlacedBombBlock extends Block implements EntityBlock {
             return InteractionResult.SUCCESS;
         }
 
+        // 連鎖ボムは自分では起爆できない。他の爆発を受けたときだけ動く駒として扱う
+        if (be.getKind() == com.mimic.monstermod.bomb.BombKind.CHAIN) {
+            player.displayClientMessage(Component.literal(
+                            "連鎖ボムは時間を決められない（他の爆発を受けると半径"
+                                    + (int) com.mimic.monstermod.bomb.BombKind.CHAIN_RADIUS + "で爆発）")
+                    .withStyle(ChatFormatting.GRAY), true);
+            return InteractionResult.SUCCESS;
+        }
+
         // 火打ち石は問答無用で即爆。周りに味方がいると自分も巻き込まれる
         if (player.getItemInHand(hand).is(Items.FLINT_AND_STEEL)) {
             be.detonateNow();

@@ -61,10 +61,30 @@ public class PlacedBombBlockEntity extends BlockEntity {
 
     public void setKind(BombKind kind) {
         this.kind = kind;
+        // 連鎖ボムは時間も大きさも決め打ち。置いた時点で爆発の大きさが確定する
+        if (kind == BombKind.CHAIN) this.radius = BombKind.CHAIN_RADIUS;
         sync();
     }
 
-    /** 時間を決めてカウントを開始する。長いほど爆発半径が大きい */
+    /**
+     * 他の爆発に巻き込まれて起爆する(連鎖ボム専用)。
+     *
+     * 連鎖ボムは自分では時間を持たないので、火をつける手段はこれだけ。
+     * わずかな間を置いてから爆発させるので、繋げて置くと数珠つなぎに弾けて見える。
+     */
+    public void triggerByExplosion(int delayTicks) {
+        if (armed) return;
+        this.totalTicks = Math.max(1, delayTicks);
+        this.fuseTicks = this.totalTicks;
+        this.radius = BombKind.CHAIN_RADIUS;
+        this.armed = true;
+        sync();
+    }
+
+    /**
+     * 時間を決めてカウントを開始する。長いほど爆発半径が大きい。
+     * 連鎖ボムは時間を決められないので、こちらは呼ばれない。
+     */
     public void startTimer(int seconds) {
         this.totalTicks = Math.max(1, seconds * BombTiming.TICKS_PER_SECOND);
         this.fuseTicks = this.totalTicks;
@@ -75,6 +95,8 @@ public class PlacedBombBlockEntity extends BlockEntity {
 
     /** 火打ち石での即爆。自爆覚悟の早撃ち */
     public void detonateNow() {
+        // 連鎖ボムは他の爆発を受けたときしか動かない
+        if (kind == BombKind.CHAIN) return;
         if (!armed) {
             // まだ時間を決めていない場合も、最低限の威力で爆発させる
             this.totalTicks = 1;

@@ -24,8 +24,8 @@ public enum BombKind {
     RELAY(true, true),
 
     /**
-     * 連鎖ボム。爆発したとき、範囲内の他のボムを即座に起爆させる。
-     * 仕掛けを繋げておくと芋づる式に誘爆する
+     * 連鎖ボム。自分では時間を持たず、他の爆発に巻き込まれたときだけ起爆する。
+     * 大きさは固定なので、繋げて置いて爆発を遠くまで運ぶための駒として使う
      */
     CHAIN(true, false),
 
@@ -35,6 +35,9 @@ public enum BombKind {
      * 解除しても残骸は手に入らないので、解除キットの無駄遣いを誘える
      */
     DUMMY(false, false);
+
+    /** 連鎖ボムの爆発の大きさ。時間で変わらない決め打ちの値 */
+    public static final float CHAIN_RADIUS = 6.0F;
 
     /** 地形を壊すか */
     private final boolean breaksTerrain;

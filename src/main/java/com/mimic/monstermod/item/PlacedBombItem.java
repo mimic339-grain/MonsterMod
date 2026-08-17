@@ -63,7 +63,10 @@ public class PlacedBombItem extends Item {
         }
 
         level.playSound(null, pos, SoundEvents.STONE_PLACE, SoundSource.BLOCKS, 1.0F, 0.8F);
-        player.displayClientMessage(Component.literal("設置した。右クリックで起爆時間を決める")
+        player.displayClientMessage(Component.literal(
+                        kind == com.mimic.monstermod.bomb.BombKind.CHAIN
+                                ? "設置した。他の爆発を受けると連鎖する"
+                                : "設置した。右クリックで起爆時間を決める")
                 .withStyle(ChatFormatting.YELLOW), true);
 
         if (!player.isCreative()) ctx.getItemInHand().shrink(1);
@@ -73,15 +76,22 @@ public class PlacedBombItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
         switch (kind) {
-            case CHAIN -> tooltip.add(Component.literal("爆発時、範囲内の他のボムを誘爆させる")
-                    .withStyle(ChatFormatting.GOLD));
+            case CHAIN -> {
+                tooltip.add(Component.literal("時間は決められない。他の爆発を受けると爆発する")
+                        .withStyle(ChatFormatting.GOLD));
+                tooltip.add(Component.literal("爆発の大きさは半径"
+                                + (int) com.mimic.monstermod.bomb.BombKind.CHAIN_RADIUS + "で固定")
+                        .withStyle(ChatFormatting.GOLD));
+            }
             case DUMMY -> tooltip.add(Component.literal("偽物。地形は壊れず、解除しても残骸は出ない")
                     .withStyle(ChatFormatting.GOLD));
             default -> { }
         }
         tooltip.add(Component.literal("ブロックに右クリック: 設置").withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.literal("設置後に右クリック: 起爆時間を決める").withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.literal("火打ち石で右クリック: 即爆").withStyle(ChatFormatting.DARK_GRAY));
+        if (kind != com.mimic.monstermod.bomb.BombKind.CHAIN) {
+            tooltip.add(Component.literal("設置後に右クリック: 起爆時間を決める").withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.add(Component.literal("火打ち石で右クリック: 即爆").withStyle(ChatFormatting.DARK_GRAY));
+        }
         tooltip.add(Component.literal("置いたら壊せない(解除キットのみ)").withStyle(ChatFormatting.RED));
     }
 }

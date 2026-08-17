@@ -1,6 +1,8 @@
 package com.mimic.monstermod.bomb;
 
+import com.mimic.monstermod.block.PlacedBombBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -81,9 +83,9 @@ public final class BombExplosion {
                 : Level.ExplosionInteraction.NONE;
         level.explode(null, at.x, at.y, at.z, radius, interaction);
 
-        if (kind == BombKind.CHAIN) {
-            chainNearbyBombs(level, at, radius + CHAIN_EXTRA_RANGE);
-        }
+        // どの爆発でも、巻き込まれた連鎖ボムは誘爆する。
+        // 連鎖ボム自身の爆発もここを通るので、繋げて置けば芋づる式に広がっていく
+        triggerChainBombs(level, at, radius + CHAIN_EXTRA_RANGE);
     }
 
     /**
@@ -104,29 +106,31 @@ public final class BombExplosion {
     }
 
     /**
-     * 範囲内の他のボムを起爆させる(連鎖ボム)。
-     * エンティティに付いたものとブロックに仕掛けたものの両方を巻き込む。
+     * 爆発に巻き込まれた連鎖ボムを起爆させる。
+     *
+     * 連鎖ボムは自分では時間を持たず、他の爆発を受けたときだけ動く。
+     * 誘爆までにわずかな間を置いているので、数珠つなぎに弾けて見える。
      */
-    private static void chainNearbyBombs(ServerLevel level, Vec3 at, double range) {
-        AABB area = new AABB(at.x - range, at.y - range, at.z - range,
-                at.x + range, at.y + range, at.z + range);
+    private static void triggerChainBombs(ServerLevel level, Vec3 at, double range) {
+        BlockPos center = BlockPos.containing(at);
+        int r = Mth.ceil(range);
+        boolean any = false;
 
-        for (Entity e : level.getEntities(null, area)) {
-            List<BombInstance> list = BombAttachment.get(e);
-            if (list.isEmpty()) continue;
-            for (BombInstance b : list) b.detonateIn(CHAIN_DELAY_TICKS);
-            BombAttachment.set(e, list);
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-r, -r, -r), center.offset(r, r, r))) {
+            if (Vec3.atCenterOf(pos).distanceTo(at) > range) continue;
+            if (!level.isLoaded(pos)) continue;
+
+            if (level.getBlockEntity(pos) instanceof PlacedBombBlockEntity be
+                    && be.getKind() == BombKind.CHAIN && !be.isArmed()) {
+                be.triggerByExplosion(CHAIN_DELAY_TICKS);
+                any = true;
+            }
         }
 
-        BombStore store = BombStore.get(level);
-        for (Map.Entry<BlockPos, BombInstance> entry : store.all().entrySet()) {
-            if (Vec3.atCenterOf(entry.getKey()).distanceTo(at) > range) continue;
-            entry.getValue().detonateIn(CHAIN_DELAY_TICKS);
+        if (any) {
+            level.playSound(null, at.x, at.y, at.z,
+                    SoundEvents.RESPAWN_ANCHOR_CHARGE, SoundSource.BLOCKS, 1.0F, 0.7F);
         }
-        store.setDirty();
-
-        level.playSound(null, at.x, at.y, at.z,
-                SoundEvents.RESPAWN_ANCHOR_CHARGE, SoundSource.BLOCKS, 1.0F, 0.7F);
     }
 
     /**
