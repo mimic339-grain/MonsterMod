@@ -18,95 +18,77 @@ import java.util.Random;
 /**
  * 鬼火の描画。
  *
- * 【絵を貼るのをやめた理由】
- * 用意した何枚かの絵を順番に切り替える方式では、
- *   ・絵が平らなので、どの角度から見ても板にしか見えない
- *   ・枚数ぶんの形しか出ないので、並べると同じ動きが揃って目立つ
- *   ・輪郭が絵のままなので丸みが出ない
- * という問題があった。
+ * 【粒を散らす方式をやめた理由】
+ * 丸い光を散らして重ねる方式では、輪郭がぼやけて「炎の形」にならなかった。
+ * 加算合成で中心が真っ白に飛び、色も形も失われてしまう。
  *
- * 【丸い光の粒を重ねて作る】
- * 中心が明るく外へ向かって消える丸を、たくさん重ねて炎の形にしている。
- * 丸が重なった部分は自然に太く明るくなるので、輪郭がぷっくりと丸くなる。
- * 粒はそれぞれ独立に揺れるので、同じ形が繰り返されることもない。
+ * 【炎の輪郭そのものを作る】
+ * 下から上へ「その高さでの幅」を決める関数を用意し、
+ * その幅にそって帯を積み上げることで炎の形を作っている。
+ *   下は円弧で丸く膨らませる → 火の玉らしい丸み
+ *   上は先細りにして尖らせる → 炎の舌
+ * 幅の中心を時間で横へずらすと、炎が揺らめく。
+ * 上へ行くほど大きくずらすので、根元は据わったまま先だけが揺れる。
  *
- * 【構成】
- *  芯   … 中心の白く明るい塊
- *  胴   … 芯を包む色付きの玉。鬼火の「丸さ」はここで決まる
- *  舌   … 胴から上へ伸びる炎。左右に揺れながら細く薄くなっていく
- *  飛沫 … 舌の先から離れて昇っていく小さな粒
+ * 【色の重なり】
+ * 同じ形を大きさを変えて3回重ねている(外側の青 → 中間 → 白い芯)。
+ * 加算合成なので中心ほど明るくなり、参考画像のように芯が白く縁が色付く。
  *
- * 加算合成で描いているので、重なるほど明るくなり芯が白く飛ぶ。
+ * 【横方向のぼかし】
+ * 幅の方向にテクスチャの明るい中心から暗い縁までを貼っている。
+ * 加算合成では暗い部分が描かれないので、これだけで縁がやわらかく溶ける。
+ *
  * この描画設定は裏面を捨てるため、面は表裏1回ずつ描いている。
  */
 public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
-    /** 中心が明るく外へ向かって消える丸 */
+    /** 中心が明るく外へ向かって消える丸。横方向のぼかしに使う */
     private static final ResourceLocation TEX =
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
 
-    /** 全体の大きさ(ブロック) */
-    private static final float SCALE = 0.55F;
+    /** 炎の高さ(ブロック) */
+    private static final float HEIGHT = 1.9F;
+    /** 炎の一番太いところの半幅(ブロック) */
+    private static final float WIDTH = 0.62F;
 
-    private static final int CORE = 5;      // 芯
-    private static final int BODY = 18;     // 胴
-    private static final int TONGUE = 26;   // 舌
-    private static final int DROPS = 10;    // 飛沫
+    /** 縦の分割数。多いほど輪郭がなめらかになる */
+    private static final int STEPS = 22;
+    /** 脇に生える小さな炎の数 */
+    private static final int SIDE_FLAMES = 4;
 
-    // 色。外へ向かうほど青が濃くなり、芯へ向かうほど白くなる
-    private static final float[] COLOR_OUT  = { 0.20F, 0.45F, 1.00F };
-    private static final float[] COLOR_MID  = { 0.45F, 0.75F, 1.00F };
-    private static final float[] COLOR_CORE = { 0.90F, 0.97F, 1.00F };
+    // 色。外側が濃い青、中間が水色、芯が白
+    private static final float[] COLOR_OUT  = { 0.15F, 0.40F, 1.00F };
+    private static final float[] COLOR_MID  = { 0.40F, 0.80F, 1.00F };
+    private static final float[] COLOR_CORE = { 0.95F, 1.00F, 1.00F };
 
-    // --- 粒ごとのばらつき。毎フレーム同じ配置になるよう固定の種から先に作っておく ---
-    private static final float[] BODY_YAW = new float[BODY];
-    private static final float[] BODY_PITCH = new float[BODY];
-    private static final float[] BODY_DIST = new float[BODY];
-    private static final float[] BODY_SIZE = new float[BODY];
-    private static final float[] BODY_PHASE = new float[BODY];
+    /** 幅の方向に貼るUV。中心が明るく、両端は暗い=透明になる */
+    private static final float U0 = 0.14F, U1 = 0.86F, V_MID = 0.5F;
 
-    private static final float[] CORE_X = new float[CORE];
-    private static final float[] CORE_Y = new float[CORE];
-    private static final float[] CORE_SIZE = new float[CORE];
+    // --- 脇の炎のばらつき ---
+    private static final float[] SIDE_X = new float[SIDE_FLAMES];
+    private static final float[] SIDE_Y = new float[SIDE_FLAMES];
+    private static final float[] SIDE_SCALE = new float[SIDE_FLAMES];
+    private static final float[] SIDE_PHASE = new float[SIDE_FLAMES];
 
-    private static final float[] TONGUE_T = new float[TONGUE];      // 下から上への位置
-    private static final float[] TONGUE_SIDE = new float[TONGUE];   // 横へのずれ
-    private static final float[] TONGUE_SIZE = new float[TONGUE];
-    private static final float[] TONGUE_PHASE = new float[TONGUE];
-    private static final float[] TONGUE_SWAY = new float[TONGUE];   // 揺れの大きさ
-
-    private static final float[] DROP_SIDE = new float[DROPS];
+    // --- 昇っていく粒 ---
+    private static final int DROPS = 12;
+    private static final float[] DROP_X = new float[DROPS];
     private static final float[] DROP_SIZE = new float[DROPS];
     private static final float[] DROP_PHASE = new float[DROPS];
     private static final float[] DROP_SPEED = new float[DROPS];
 
     static {
-        Random rng = new Random(20260821L);
-
-        for (int i = 0; i < BODY; i++) {
-            BODY_YAW[i] = rng.nextFloat() * (float) (Math.PI * 2.0);
-            BODY_PITCH[i] = (float) Math.asin(rng.nextFloat() * 2.0F - 1.0F);
-            // 中心寄りに集めると、外側がぼやけず丸い塊に見える
-            BODY_DIST[i] = 0.10F + rng.nextFloat() * rng.nextFloat() * 0.34F;
-            BODY_SIZE[i] = 0.40F + rng.nextFloat() * 0.32F;
-            BODY_PHASE[i] = rng.nextFloat() * 10.0F;
-        }
-        for (int i = 0; i < CORE; i++) {
-            CORE_X[i] = (rng.nextFloat() - 0.5F) * 0.14F;
-            CORE_Y[i] = (rng.nextFloat() - 0.5F) * 0.14F;
-            CORE_SIZE[i] = 0.26F + rng.nextFloat() * 0.20F;
-        }
-        for (int i = 0; i < TONGUE; i++) {
-            // 下ほど密になるようにして、根元が太く先が細い炎の形にする
-            TONGUE_T[i] = rng.nextFloat() * rng.nextFloat();
-            TONGUE_SIDE[i] = (rng.nextFloat() - 0.5F) * 0.5F;
-            TONGUE_SIZE[i] = 0.26F + rng.nextFloat() * 0.26F;
-            TONGUE_PHASE[i] = rng.nextFloat() * 10.0F;
-            TONGUE_SWAY[i] = 0.10F + rng.nextFloat() * 0.22F;
+        Random rng = new Random(20260822L);
+        for (int i = 0; i < SIDE_FLAMES; i++) {
+            // 左右に振り分けて、根元の少し上から生やす
+            SIDE_X[i] = (i % 2 == 0 ? -1.0F : 1.0F) * (0.34F + rng.nextFloat() * 0.28F);
+            SIDE_Y[i] = 0.10F + rng.nextFloat() * 0.22F;
+            SIDE_SCALE[i] = 0.34F + rng.nextFloat() * 0.24F;
+            SIDE_PHASE[i] = rng.nextFloat() * 10.0F;
         }
         for (int i = 0; i < DROPS; i++) {
-            DROP_SIDE[i] = (rng.nextFloat() - 0.5F) * 0.7F;
-            DROP_SIZE[i] = 0.10F + rng.nextFloat() * 0.14F;
+            DROP_X[i] = (rng.nextFloat() - 0.5F) * 0.55F;
+            DROP_SIZE[i] = 0.09F + rng.nextFloat() * 0.13F;
             DROP_PHASE[i] = rng.nextFloat();
             DROP_SPEED[i] = 0.6F + rng.nextFloat() * 0.7F;
         }
@@ -124,120 +106,139 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         float time = (float) (entity.level().getGameTime() % 24000L) + partialTick
                 + entity.getId() * 3.7F;
 
-        // カメラの向きは1回だけ求めて使い回す。粒ごとに行列を積むと重い
+        // カメラの向きは1回だけ求めて使い回す
         Quaternionf cam = this.entityRenderDispatcher.cameraOrientation();
         Vector3f right = new Vector3f(1, 0, 0).rotate(cam);
         Vector3f up = new Vector3f(0, 1, 0).rotate(cam);
 
         pose.pushPose();
-        // 見た目の中心を少し持ち上げる。当たり判定の足元に合わせると埋まって見える
-        pose.translate(0.0, 0.25, 0.0);
+        // 炎は上へ伸びるので、当たり判定の中心より少し下から生やす
+        pose.translate(0.0, -0.25, 0.0);
         PoseStack.Pose p = pose.last();
 
         VertexConsumer vc = buffer.getBuffer(RenderType.eyes(TEX));
 
-        // 外→内の順に重ねる。加算合成なので、重なった中心ほど白く飛ぶ
-        drawBody(p, vc, time, right, up);
-        drawTongue(p, vc, time, right, up);
-        drawCore(p, vc, time, right, up);
+        // 背後のぼんやりした光。これがあると空中に浮いている感じが出る
+        blob(p, vc, 0.0F, HEIGHT * 0.32F, 0.0F, WIDTH * 3.4F, right, up,
+                COLOR_OUT[0], COLOR_OUT[1], COLOR_OUT[2], 0.16F);
+
+        // 脇の小さな炎。本体より先に描いて、本体に食い込ませる
+        for (int i = 0; i < SIDE_FLAMES; i++) {
+            float s = SIDE_SCALE[i];
+            drawFlame(p, vc, right, up, time + SIDE_PHASE[i],
+                    SIDE_X[i] * WIDTH, SIDE_Y[i] * HEIGHT,
+                    HEIGHT * s, WIDTH * s * 0.85F,
+                    COLOR_OUT, 0.26F);
+            drawFlame(p, vc, right, up, time + SIDE_PHASE[i],
+                    SIDE_X[i] * WIDTH, SIDE_Y[i] * HEIGHT,
+                    HEIGHT * s * 0.6F, WIDTH * s * 0.5F,
+                    COLOR_MID, 0.32F);
+        }
+
+        // 本体。同じ形を大きさを変えて3回重ね、中心ほど明るくする
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT, WIDTH, COLOR_OUT, 0.30F);
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT * 0.72F, WIDTH * 0.60F,
+                COLOR_MID, 0.38F);
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT * 0.42F, WIDTH * 0.32F,
+                COLOR_CORE, 0.55F);
+
         drawDrops(p, vc, time, right, up);
 
         pose.popPose();
     }
 
     /**
-     * 胴。丸く並べた粒で、鬼火の「玉」の部分を作る。
-     * 粒ごとにゆっくり伸び縮みさせているので、輪郭がゆらゆら動いて見える。
+     * 炎を1つ描く。
+     *
+     * 下から上へ順に「その高さでの幅」を求め、帯をつないでいく。
+     * 幅の中心を時間で横へずらすと揺らめき、上へ行くほどずらす量を増やすと
+     * 根元は据わったまま先だけがなびく。
      */
-    private static void drawBody(PoseStack.Pose pose, VertexConsumer vc, float time,
-                                 Vector3f right, Vector3f up) {
-        for (int i = 0; i < BODY; i++) {
-            float breathe = 1.0F + 0.18F * Mth.sin(time * 0.22F + BODY_PHASE[i]);
-            float d = BODY_DIST[i] * SCALE * breathe;
+    private static void drawFlame(PoseStack.Pose pose, VertexConsumer vc,
+                                  Vector3f right, Vector3f up, float time,
+                                  float baseX, float baseY,
+                                  float height, float halfWidth,
+                                  float[] color, float alpha) {
 
-            float cy = Mth.cos(BODY_PITCH[i]);
-            float x = Mth.cos(BODY_YAW[i]) * cy * d;
-            float y = Mth.sin(BODY_PITCH[i]) * d;
-            float z = Mth.sin(BODY_YAW[i]) * cy * d;
+        float prevX = 0, prevY = 0, prevW = 0;
 
-            // 外側の粒ほど青く暗く、内側ほど明るい色へ寄せる
-            float t = Mth.clamp(BODY_DIST[i] / 0.44F, 0.0F, 1.0F);
-            float r = Mth.lerp(t, COLOR_MID[0], COLOR_OUT[0]);
-            float g = Mth.lerp(t, COLOR_MID[1], COLOR_OUT[1]);
-            float b = Mth.lerp(t, COLOR_MID[2], COLOR_OUT[2]);
+        for (int i = 0; i <= STEPS; i++) {
+            float t = (float) i / STEPS;
+            float w = profile(t) * halfWidth;
+            float x = baseX + sway(t, time) * halfWidth;
+            float y = baseY + t * height;
 
-            blob(pose, vc, x, y, z, BODY_SIZE[i] * SCALE * breathe, right, up,
-                    r, g, b, 0.42F);
-        }
-    }
-
-    /** 芯。ここだけほぼ白くして、玉の中心が焼けているように見せる */
-    private static void drawCore(PoseStack.Pose pose, VertexConsumer vc, float time,
-                                 Vector3f right, Vector3f up) {
-        float breathe = 1.0F + 0.12F * Mth.sin(time * 0.35F);
-        for (int i = 0; i < CORE; i++) {
-            blob(pose, vc, CORE_X[i] * SCALE, CORE_Y[i] * SCALE, 0.0F,
-                    CORE_SIZE[i] * SCALE * breathe, right, up,
-                    COLOR_CORE[0], COLOR_CORE[1], COLOR_CORE[2], 0.85F);
+            if (i > 0) {
+                quadBand(pose, vc, right, up, prevX, prevY, prevW, x, y, w,
+                        color[0], color[1], color[2], alpha);
+            }
+            prevX = x; prevY = y; prevW = w;
         }
     }
 
     /**
-     * 舌。胴から上へ伸びる炎。
-     *
-     * 上へ行くほど細く薄くなり、横揺れは大きくなる。
-     * 根元は胴と重なっているので、玉から炎が生えているように繋がって見える。
+     * その高さでの幅(0〜1)。
+     * 下は円弧で丸く膨らませ、上は先細りにして尖らせる。
+     * これが炎の形そのものになる。
      */
-    private static void drawTongue(PoseStack.Pose pose, VertexConsumer vc, float time,
-                                   Vector3f right, Vector3f up) {
-        for (int i = 0; i < TONGUE; i++) {
-            float t = TONGUE_T[i];
-
-            // 上ほど大きく揺れる。根元が揺れると玉から外れて見える
-            float sway = Mth.sin(time * 0.30F + TONGUE_PHASE[i] + t * 3.0F)
-                    * TONGUE_SWAY[i] * t;
-
-            float x = (TONGUE_SIDE[i] * (1.0F - t * 0.55F) + sway) * SCALE;
-            float y = (0.18F + t * 1.15F) * SCALE;
-            float z = TONGUE_SIDE[i] * 0.5F * (1.0F - t) * SCALE;
-
-            float size = TONGUE_SIZE[i] * (1.0F - t * 0.70F) * SCALE;
-            float alpha = 0.50F * (1.0F - t * 0.85F);
-
-            // 根元は明るく、先へ行くほど青くなって消えていく
-            float r = Mth.lerp(t, COLOR_MID[0], COLOR_OUT[0]);
-            float g = Mth.lerp(t, COLOR_MID[1], COLOR_OUT[1]);
-            float b = Mth.lerp(t, COLOR_MID[2], COLOR_OUT[2]);
-
-            blob(pose, vc, x, y, z, size, right, up, r, g, b, alpha);
+    private static float profile(float t) {
+        final float bulb = 0.32F; // ここまでが丸い部分
+        if (t <= bulb) {
+            // 円弧。下端で0になり、一気に太くなるので丸く見える
+            float k = (bulb - t) / bulb;
+            return Mth.sqrt(Math.max(0.0F, 1.0F - k * k));
         }
+        // 先細り。指数を1より大きくすると、上のほうで細くなって尖る
+        float k = (t - bulb) / (1.0F - bulb);
+        return (float) Math.pow(1.0F - k, 1.35);
     }
 
-    /** 飛沫。舌の先から離れて昇り、消えるとまた下から現れる */
+    /** 横へのずれ。上へ行くほど大きく揺れる */
+    private static float sway(float t, float time) {
+        float amount = t * t * 0.55F;
+        return (Mth.sin(time * 0.26F + t * 4.2F) + 0.4F * Mth.sin(time * 0.41F + t * 7.5F))
+                * amount;
+    }
+
+    /** 帯を1枚。幅の方向に明るい中心から暗い縁までを貼るので、縁がやわらかく溶ける */
+    private static void quadBand(PoseStack.Pose pose, VertexConsumer vc,
+                                 Vector3f right, Vector3f up,
+                                 float x0, float y0, float w0,
+                                 float x1, float y1, float w1,
+                                 float r, float g, float b, float a) {
+        if (a <= 0.01F) return;
+        if (w0 <= 0.0001F && w1 <= 0.0001F) return;
+
+        // カメラを向いた面の中で組み立てる
+        float lx0 = x0 - w0, rx0 = x0 + w0;
+        float lx1 = x1 - w1, rx1 = x1 + w1;
+
+        VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
+                right.x * lx0 + up.x * y0, right.y * lx0 + up.y * y0, right.z * lx0 + up.z * y0, U0, V_MID,
+                right.x * rx0 + up.x * y0, right.y * rx0 + up.y * y0, right.z * rx0 + up.z * y0, U1, V_MID,
+                right.x * rx1 + up.x * y1, right.y * rx1 + up.y * y1, right.z * rx1 + up.z * y1, U1, V_MID,
+                right.x * lx1 + up.x * y1, right.y * lx1 + up.y * y1, right.z * lx1 + up.z * y1, U0, V_MID);
+    }
+
+    /** 炎の先から離れて昇る粒。消えるとまた下から現れる */
     private static void drawDrops(PoseStack.Pose pose, VertexConsumer vc, float time,
                                   Vector3f right, Vector3f up) {
         for (int i = 0; i < DROPS; i++) {
-            float t = (DROP_PHASE[i] + time * 0.020F * DROP_SPEED[i]) % 1.0F;
+            float t = (DROP_PHASE[i] + time * 0.018F * DROP_SPEED[i]) % 1.0F;
             if (t < 0) t += 1.0F;
 
-            float x = (DROP_SIDE[i] + Mth.sin(time * 0.4F + i) * 0.12F * t) * SCALE;
-            float y = (0.55F + t * 1.30F) * SCALE;
+            float x = (DROP_X[i] + Mth.sin(time * 0.4F + i) * 0.20F * t) * WIDTH;
+            float y = HEIGHT * (0.55F + t * 0.85F);
 
             // 現れるところと消えるところで急に出入りしないようにする
-            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.8F;
+            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.75F;
 
-            blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.5F) * SCALE, right, up,
+            blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.4F), right, up,
                     COLOR_MID[0], COLOR_MID[1], COLOR_MID[2], alpha);
         }
     }
 
-    /**
-     * カメラの方を向く丸い光を1つ。
-     *
-     * あらかじめ求めたカメラの右方向・上方向から四隅を作っているので、
-     * 粒ごとに行列を積む必要がない。
-     * 裏面を捨てる描画設定なので、面は表裏1回ずつ描いている。
-     */
+    /** カメラの方を向く丸い光を1つ */
     private static void blob(PoseStack.Pose pose, VertexConsumer vc,
                              float x, float y, float z, float size,
                              Vector3f right, Vector3f up,
@@ -248,11 +249,14 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
         float rx = right.x * h, ry = right.y * h, rz = right.z * h;
         float ux = up.x * h, uy = up.y * h, uz = up.z * h;
 
+        // 位置もカメラを向いた面の中で組み立てる
+        float px = right.x * x + up.x * y, py = right.y * x + up.y * y, pz = right.z * x + up.z * y;
+
         VfxRenderUtil.quadBothSides(pose, vc, r, g, b, a,
-                x - rx - ux, y - ry - uy, z - rz - uz, 0.0F, 0.0F,
-                x + rx - ux, y + ry - uy, z + rz - uz, 1.0F, 0.0F,
-                x + rx + ux, y + ry + uy, z + rz + uz, 1.0F, 1.0F,
-                x - rx + ux, y - ry + uy, z - rz + uz, 0.0F, 1.0F);
+                px - rx - ux, py - ry - uy, pz - rz - uz, 0.0F, 0.0F,
+                px + rx - ux, py + ry - uy, pz + rz - uz, 1.0F, 0.0F,
+                px + rx + ux, py + ry + uy, pz + rz + uz, 1.0F, 1.0F,
+                px - rx + ux, py - ry + uy, pz - rz + uz, 0.0F, 1.0F);
     }
 
     @Override
