@@ -42,6 +42,19 @@ minecraft {
                 monstermod { source sourceSets.main }
             }
         }
+        // 2人目のクライアント。
+        // プレイヤー同士のやりとり(血石・スキル・ボスバー・ボマー)は
+        // 1人では確かめようがないので、別名・別フォルダでもう1つ立ち上げられるようにしてある。
+        // 使い方: runClient で1つ目を起動 → ワールドをLANに公開 →
+        //         runClient2 で2つ目を起動して、マルチプレイからそのLANワールドへ参加する。
+        client2 {
+            parent minecraft.runs.client
+            workingDirectory project.file('run2')
+            args '--username', 'Dev2'
+            mods {
+                monstermod { source sourceSets.main }
+            }
+        }
         server {
             workingDirectory project.file('run')
             mods {
