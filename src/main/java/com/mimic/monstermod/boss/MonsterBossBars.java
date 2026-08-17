@@ -1,6 +1,7 @@
 package com.mimic.monstermod.boss;
 
 import com.mimic.monstermod.MonsterMod;
+import com.mimic.monstermod.capability.MonsterTransformation;
 import com.mimic.monstermod.identity.BaseIdentity;
 import com.mimic.monstermod.network.ModMessages;
 import com.mimic.monstermod.network.server.S2C_BossBarStylePacket;
@@ -108,16 +109,22 @@ public final class MonsterBossBars {
     /**
      * 変身中でボス扱いの Identity を返す。そうでなければ null。
      * 死亡中はバーを出しっぱなしにしないよう除外する。
+     *
+     * 【LazyOptional#map を使わない理由】
+     * Forge の LazyOptional#map は中で Optional.of() を呼んでいるため、
+     * 渡した関数が null を返した瞬間に NullPointerException で落ちる。
+     * ここは「ボスでなければ null」を返したいので、
+     * resolve() で中身を取り出してから普通に null 判定する。
      */
     private static BaseIdentity currentBossIdentity(ServerPlayer player) {
         if (!player.isAlive()) return null;
-        return player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
-                .map(trans -> {
-                    if (!trans.isTransformed()) return null;
-                    BaseIdentity id = trans.getIdentity();
-                    return (id != null && id.isBoss()) ? id : null;
-                })
-                .orElse(null);
+
+        MonsterTransformation trans = player.getCapability(CapabilityRegistry.PLAYER_TRANSFORMATION)
+                .resolve().orElse(null);
+        if (trans == null || !trans.isTransformed()) return null;
+
+        BaseIdentity identity = trans.getIdentity();
+        return (identity != null && identity.isBoss()) ? identity : null;
     }
 
     /**
