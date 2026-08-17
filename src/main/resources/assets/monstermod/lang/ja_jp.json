@@ -14,5 +14,7 @@
   "item.monstermod.chain_bomb": "連鎖ボム",
   "item.monstermod.dummy_bomb": "偽ボム",
   "item.monstermod.megiddo_wand": "メギドの杖",
-  "entity.monstermod.megiddo": "メギド"
+  "entity.monstermod.megiddo": "メギド",
+  "item.monstermod.lightning_wand": "電撃の杖",
+  "entity.monstermod.lightning_bolt_vfx": "電撃"
 }

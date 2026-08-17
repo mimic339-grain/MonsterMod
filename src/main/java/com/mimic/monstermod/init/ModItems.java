@@ -39,6 +39,10 @@ public class ModItems {
     public static final RegistryObject<Item> MEGIDDO_WAND =
             ITEMS.register("megiddo_wand", com.mimic.monstermod.item.MegiddoWandItem::new);
 
+    // 電撃確認用の杖
+    public static final RegistryObject<Item> LIGHTNING_WAND =
+            ITEMS.register("lightning_wand", com.mimic.monstermod.item.LightningWandItem::new);
+
     // ボムの解除キット(付けられたボムを外す)
     public static final RegistryObject<Item> BOMB_DEFUSER =
             ITEMS.register("bomb_defuser", BombDefuserItem::new);

@@ -21,6 +21,8 @@ public class EntityRendererRegister {
         event.registerEntityRenderer(ModEntitieType.SPIRALONIBI.get(), OnibiRenderer::new);
         event.registerEntityRenderer(ModEntitieType.BEAM.get(), BeamRenderer::new);
         event.registerEntityRenderer(ModEntitieType.VORTEX.get(), VortexRenderer::new);
+        event.registerEntityRenderer(ModEntitieType.LIGHTNING_BOLT.get(),
+                com.mimic.monstermod.entity.render.LightningBoltRenderer::new);
         event.registerEntityRenderer(ModEntitieType.MEGIDDO.get(),
                 com.mimic.monstermod.entity.render.MegiddoRenderer::new);
 

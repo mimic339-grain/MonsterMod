@@ -15,5 +15,7 @@
   "item.monstermod.chain_bomb": "Chain Bomb",
   "item.monstermod.dummy_bomb": "Dummy Bomb",
   "item.monstermod.megiddo_wand": "Megiddo Wand",
-  "entity.monstermod.megiddo": "Megiddo"
+  "entity.monstermod.megiddo": "Megiddo",
+  "item.monstermod.lightning_wand": "Lightning Wand",
+  "entity.monstermod.lightning_bolt_vfx": "Lightning"
 }

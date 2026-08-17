@@ -83,6 +83,17 @@ public class ModEntitieType {
                             .build(new ResourceLocation(MonsterMod.MOD_ID, "vortex").toString())
             );
 
+    // 電撃。一瞬で消えるので更新頻度は最速にしておく
+    public static final RegistryObject<EntityType<LightningBoltEntity>> LIGHTNING_BOLT =
+            ENTITY_TYPES.register("lightning_bolt_vfx",
+                    () -> EntityType.Builder.<LightningBoltEntity>of(LightningBoltEntity::new, MobCategory.MISC)
+                            .sized(0.2f, 0.2f)
+                            .clientTrackingRange(12)
+                            .updateInterval(1)
+                            .fireImmune()
+                            .build(new ResourceLocation(MonsterMod.MOD_ID, "lightning_bolt_vfx").toString())
+            );
+
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
     }
