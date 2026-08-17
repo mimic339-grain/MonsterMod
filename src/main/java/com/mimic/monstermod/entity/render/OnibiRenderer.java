@@ -31,8 +31,10 @@ import java.util.Random;
  * 上へ行くほど大きくずらすので、根元は据わったまま先だけが揺れる。
  *
  * 【色の重なり】
- * 同じ形を大きさを変えて3回重ねている(外側の青 → 中間 → 白い芯)。
- * 加算合成なので中心ほど明るくなり、参考画像のように芯が白く縁が色付く。
+ * 同じ形を大きさを変えて4回重ねている(外から 青 → 水色 → 濃い紫 → 白い芯)。
+ * 加算合成なので中心ほど明るくなり、芯が白く抜けて縁が青くなる。
+ * 加算は重ねるほど白へ寄るため、1枚あたりの濃さはかなり薄くしてある。
+ * ここを上げると色が飛んで、ただの白い塊になってしまう。
  *
  * 【横方向のぼかし】
  * 幅の方向にテクスチャの明るい中心から暗い縁までを貼っている。
@@ -47,28 +49,22 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
             new ResourceLocation(MonsterMod.MOD_ID, "textures/effect/beam_glow.png");
 
     /** 炎の高さ(ブロック) */
-    private static final float HEIGHT = 1.9F;
+    private static final float HEIGHT = 3.8F;
     /** 炎の一番太いところの半幅(ブロック) */
-    private static final float WIDTH = 0.62F;
+    private static final float WIDTH = 1.24F;
 
     /** 縦の分割数。多いほど輪郭がなめらかになる */
     private static final int STEPS = 22;
-    /** 脇に生える小さな炎の数 */
-    private static final int SIDE_FLAMES = 4;
 
-    // 色。外側が濃い青、中間が水色、芯が白
-    private static final float[] COLOR_OUT  = { 0.15F, 0.40F, 1.00F };
-    private static final float[] COLOR_MID  = { 0.40F, 0.80F, 1.00F };
-    private static final float[] COLOR_CORE = { 0.95F, 1.00F, 1.00F };
+    // 色。外から内へ 青 → 水色 → 濃い紫 → 白 と変えていく。
+    // 加算合成は重ねるほど白へ寄るので、1枚あたりはかなり薄くしないと色が飛ぶ
+    private static final float[] COLOR_OUTER  = { 0.10F, 0.25F, 0.95F }; // 青
+    private static final float[] COLOR_CYAN   = { 0.30F, 0.75F, 1.00F }; // 水色
+    private static final float[] COLOR_PURPLE = { 0.55F, 0.20F, 0.95F }; // 濃い紫
+    private static final float[] COLOR_CORE   = { 0.90F, 0.92F, 1.00F }; // 白
 
     /** 幅の方向に貼るUV。中心が明るく、両端は暗い=透明になる */
     private static final float U0 = 0.14F, U1 = 0.86F, V_MID = 0.5F;
-
-    // --- 脇の炎のばらつき ---
-    private static final float[] SIDE_X = new float[SIDE_FLAMES];
-    private static final float[] SIDE_Y = new float[SIDE_FLAMES];
-    private static final float[] SIDE_SCALE = new float[SIDE_FLAMES];
-    private static final float[] SIDE_PHASE = new float[SIDE_FLAMES];
 
     // --- 昇っていく粒 ---
     private static final int DROPS = 12;
@@ -79,13 +75,6 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
     static {
         Random rng = new Random(20260822L);
-        for (int i = 0; i < SIDE_FLAMES; i++) {
-            // 左右に振り分けて、根元の少し上から生やす
-            SIDE_X[i] = (i % 2 == 0 ? -1.0F : 1.0F) * (0.34F + rng.nextFloat() * 0.28F);
-            SIDE_Y[i] = 0.10F + rng.nextFloat() * 0.22F;
-            SIDE_SCALE[i] = 0.34F + rng.nextFloat() * 0.24F;
-            SIDE_PHASE[i] = rng.nextFloat() * 10.0F;
-        }
         for (int i = 0; i < DROPS; i++) {
             DROP_X[i] = (rng.nextFloat() - 0.5F) * 0.55F;
             DROP_SIZE[i] = 0.09F + rng.nextFloat() * 0.13F;
@@ -113,34 +102,25 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
 
         pose.pushPose();
         // 炎は上へ伸びるので、当たり判定の中心より少し下から生やす
-        pose.translate(0.0, -0.25, 0.0);
+        pose.translate(0.0, -0.55, 0.0);
         PoseStack.Pose p = pose.last();
 
         VertexConsumer vc = buffer.getBuffer(RenderType.eyes(TEX));
 
         // 背後のぼんやりした光。これがあると空中に浮いている感じが出る
-        blob(p, vc, 0.0F, HEIGHT * 0.32F, 0.0F, WIDTH * 3.4F, right, up,
-                COLOR_OUT[0], COLOR_OUT[1], COLOR_OUT[2], 0.16F);
+        blob(p, vc, 0.0F, HEIGHT * 0.28F, 0.0F, WIDTH * 3.0F, right, up,
+                COLOR_OUTER[0], COLOR_OUTER[1], COLOR_OUTER[2], 0.05F);
 
-        // 脇の小さな炎。本体より先に描いて、本体に食い込ませる
-        for (int i = 0; i < SIDE_FLAMES; i++) {
-            float s = SIDE_SCALE[i];
-            drawFlame(p, vc, right, up, time + SIDE_PHASE[i],
-                    SIDE_X[i] * WIDTH, SIDE_Y[i] * HEIGHT,
-                    HEIGHT * s, WIDTH * s * 0.85F,
-                    COLOR_OUT, 0.26F);
-            drawFlame(p, vc, right, up, time + SIDE_PHASE[i],
-                    SIDE_X[i] * WIDTH, SIDE_Y[i] * HEIGHT,
-                    HEIGHT * s * 0.6F, WIDTH * s * 0.5F,
-                    COLOR_MID, 0.32F);
-        }
-
-        // 本体。同じ形を大きさを変えて3回重ね、中心ほど明るくする
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT, WIDTH, COLOR_OUT, 0.30F);
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT * 0.72F, WIDTH * 0.60F,
-                COLOR_MID, 0.38F);
-        drawFlame(p, vc, right, up, time, 0.0F, 0.0F, HEIGHT * 0.42F, WIDTH * 0.32F,
-                COLOR_CORE, 0.55F);
+        // 炎は1つだけ。同じ形を大きさを変えて4回重ね、外から内へ色を変えていく。
+        // 加算合成なので重なった中心ほど明るくなり、芯が白く抜ける
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
+                HEIGHT, WIDTH, COLOR_OUTER, 0.10F);
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.80F, WIDTH * 0.72F, COLOR_CYAN, 0.11F);
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.58F, WIDTH * 0.48F, COLOR_PURPLE, 0.13F);
+        drawFlame(p, vc, right, up, time, 0.0F, 0.0F,
+                HEIGHT * 0.34F, WIDTH * 0.26F, COLOR_CORE, 0.16F);
 
         drawDrops(p, vc, time, right, up);
 
@@ -231,10 +211,10 @@ public class OnibiRenderer extends EntityRenderer<OnibiEntity> {
             float y = HEIGHT * (0.55F + t * 0.85F);
 
             // 現れるところと消えるところで急に出入りしないようにする
-            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.75F;
+            float alpha = Mth.clamp(t * 5.0F, 0.0F, 1.0F) * (1.0F - t) * 0.30F;
 
             blob(pose, vc, x, y, 0.0F, DROP_SIZE[i] * (1.0F - t * 0.4F), right, up,
-                    COLOR_MID[0], COLOR_MID[1], COLOR_MID[2], alpha);
+                    COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], alpha);
         }
     }
 
