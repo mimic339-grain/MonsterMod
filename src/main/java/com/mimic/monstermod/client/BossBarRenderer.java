@@ -110,7 +110,7 @@ public final class BossBarRenderer {
             if (filled < BossBarStyle.BAR_W) {
                 int edgeX = x + BossBarStyle.BAR_X + filled - 1;
                 graphics.fill(edgeX, y + BossBarStyle.BAR_Y,
-                        edgeX + 1, y + BossBarStyle.BAR_Y + BossBarStyle.BAR_H, 0xFFE6F4FF);
+                        edgeX + 1, y + BossBarStyle.BAR_Y + BossBarStyle.BAR_H, 0xFFFFD8D0);
             }
         }
 
