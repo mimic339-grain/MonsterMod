@@ -94,6 +94,19 @@ public void startTransformation(Player player, ResourceLocation mobId) {
         return;
     }
 
+    // 1.5 [重要] 既に別の姿に変身している場合は、いったん内部的に変身を解除してから変身し直す。
+    //     属性(最大HP・移動速度・攻撃力・防御・ノックバック耐性)は変身先の値で「上書き」しているだけなので、
+    //     解除を挟まずに切り替えると前の姿の数値がそのまま残ってしまう。
+    //     特にボマーのような hasOwnBody()==false の役職は属性を一切書き換えないため、
+    //     直前のヤタガラス等の数値を引き継いだままになるバグの原因になっていた。
+    //     stopTransformation() が「今のIdentityのHP保存 → 属性を人間に戻す → 人間HPを復元」まで行うので、
+    //     ここを通した後は必ず素のプレイヤー状態から変身処理を始められる。
+    //     (this の状態を書き換える処理なのでサーバー側でのみ実行する)
+    if (this.isTransformed && !mobId.equals(this.transformedMobId) && !player.level().isClientSide) {
+        MonsterMod.LOGGER.info("[Transform] Switching identity: {} -> {} (internal reset)", this.transformedMobId, mobId);
+        stopTransformation(player);
+    }
+
     // 2. [重要] 現在のHPを保存（現在のIdentityがあればそれを使い、なければ人間用HPとして保存）
     double currentHP = player.getHealth();
     if (currentHP > 0) {
